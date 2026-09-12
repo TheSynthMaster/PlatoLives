@@ -9,6 +9,8 @@
 
 Built from the ground up as a pure C11 core with a hardware-accelerated Cocoa/Core Animation/Metal presentation layer, PlatoLives connects over standard TCP to active CYBIS and Cyber1 mainframes (`cyberserv.org:8005`), IRATA.ONLINE, and private PLATO nodes. It delivers an authentic, sub-pixel gas-discharge plasma display experience while maintaining 60 FPS smooth rendering and near-zero idle CPU usage.
 
+📖 **Documentation**: Read the official [User and Technical Manual v3.2 (PDF)](docs/PlatoLives-Manual-v3.2.pdf).
+
 ---
 
 ## Key Features
