@@ -19,11 +19,11 @@ Built from the ground up as a pure C11 core with a hardware-accelerated Cocoa/Co
 - **L1 Cache Optimized Blurring**: Sliding-window Box Blur with a 512-byte scanline accumulator residing entirely inside CPU L1 cache.
 - **Dynamic Plasma Decay (Persistence)**: Configurable physical neon-argon glow decay from authentic 100 ms up to 5000 ms storage-tube mode.
 
-### 2. Authentic Jack Stifle CERL 1972 Typography (M0 / M1)
-- Reconstructed pixel-for-pixel from the 1972 University of Illinois CERL hardware specifications (8-column vertical 16-bit matrices mapped into 16×8 horizontal raster).
-- **M0**: Authentic alphanumeric set including the iconic slashed zero.
-- **M1**: Complete canonical character set: lowercase Greek (alpha, beta, delta, lambda, mu, pi, rho, sigma, omega), uppercase Greek (Sigma, Delta, Theta), math operators, and vector symbols.
-- Programmable **M2 / M3** character sets dynamically loaded from host lessons.
+### 2. Canonical Typography (M0 / M1 from `pterm`)
+- **Direct Provenance**: The 8×16 font bitmaps for **M0** and **M1** were directly sourced and transcribed from Paul Koning's canonical **`pterm`** font tables (reconstructed from Jack Stifle's 1972 CERL hardware matrix), converting the vertical 16-bit column words into cache-aligned horizontal raster matrices in `plato_font.c`.
+- **M0**: Complete alphanumeric set including the iconic slashed zero.
+- **M1**: Full canonical set: lowercase Greek (alpha, beta, delta, lambda, mu, pi, rho, sigma, omega), uppercase Greek (Sigma, Delta, Theta), math operators, and vector symbols.
+- Programmable **M2 / M3** character sets dynamically loaded and compiled from host lessons.
 
 ### 3. Native macOS Integration
 - **macOS Status Bar Companion**: Live menu bar item (`NSStatusItem`) providing real-time mainframe connection status, active session slot metadata, and quick connect shortcuts.
@@ -101,12 +101,14 @@ PlatoLives maps the classic PLATO keys to modern macOS keyboards:
 
 ---
 
-## Clean Room Development & Ethics
+## Interoperability, Architecture & Heritage
 
-PlatoLives is developed strictly under **Clean Room Reverse Engineering** practices. 
-- No source code, macro libraries, or proprietary binaries from historical emulators (including `pterm` or DGI IST-III firmware) have been copied or translated.
-- Specifications and protocol values are derived purely from public technical literature, RFC-style protocol specifications, and interoperability testing against live public hosts.
-- The project is an independent homage to the University of Illinois Computer-based Education Research Laboratory (CERL) and the brilliant work of Donald Bitzer, Gene Slottow, and Jack Stifle.
+PlatoLives is an independent client written in modern C11 and native Cocoa/Metal for macOS.
+
+- **Reference & Behavioral Benchmark**: Special recognition and gratitude go to **Paul Koning**, author of **`pterm`**. His emulator served as our primary technical reference for understanding esoteric CDC IST-III protocol quirks, escape sequence timings, and resolving edge-case bugs on live Cyber1 mainframes.
+- **Font Matrix Provenance**: To guarantee absolute, pixel-perfect visual fidelity with classic lessons and games, the **M0** (alphanumeric) and **M1** (Greek and mathematical symbols) character matrices in `plato_font.c` were directly transcribed from the font tables in Paul Koning's `pterm`.
+- **Original Modern Codebase**: Aside from referencing `pterm`'s font matrices and behavioral protocol logic, PlatoLives is an original, ground-up implementation. The rendering pipeline, multi-window controller, L1-cache blur algorithms, and Metal/Cocoa UI are completely new, engineered specifically for Apple Silicon and modern macOS.
+- **Historical Heritage**: This project is an open homage to the University of Illinois Computer-based Education Research Laboratory (CERL) and the pioneering work of Donald Bitzer, Gene Slottow, and Jack Stifle (inventor of the PLATO IV flat-panel plasma display terminal).
 
 ---
 
@@ -125,5 +127,6 @@ See the [LICENSE](LICENSE) file for the full legal text.
 ## Author & Acknowledgements
 
 - **Created by**: Fabio Montarsolo (`TheSynthMaster`) — `fabio.montarsolo@gmail.com`
-- Dedicated to the members and keepers of **Cyber1.org**, preserving the legacy of PLATO for future generations.
-- Inspired by Brian Dear's definitive chronicle: *"The Friendly Orange Glow: The Untold Story of the PLATO System and the Dawn of Cyberculture"* (Pantheon Books, 2017) [1].
+- **Technical Tribute**: **Paul Koning** (`pterm`), whose software kept PLATO accessible for decades and provided the font tables and behavioral insights essential to this implementation.
+- **Community**: Dedicated to the members and keepers of **Cyber1.org** and **IRATA.ONLINE**, preserving digital history, TUTOR lessons, and classic multi-user games.
+- **Historical Inspiration**: Inspired by Brian Dear's definitive chronicle: *"The Friendly Orange Glow: The Untold Story of the PLATO System and the Dawn of Cyberculture"* (Pantheon Books, 2017) [1].
