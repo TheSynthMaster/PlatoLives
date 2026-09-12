@@ -1,0 +1,35 @@
+# Sistema operativo macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*~
+*.bak
+
+# Build e artefatti di compilazione
+build/
+bin/
+*.o
+*.a
+*.dylib
+
+# Backup locali e snapshot
+old/
+
+# Script personali e comandi remoti
+comandi-remoti.txt
+invia.sh
+lancia_remoto.sh
+merge_c_h.sh
+versioning.sh
+upgrade.py
+*.pyc
+
+# Screenshot e media locali
+screenshots/
+
+# IDE e ambienti di sviluppo
+.vscode/
+.idea/
+*.xcodeproj
+*.xcworkspace

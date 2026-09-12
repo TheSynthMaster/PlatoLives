@@ -1,0 +1,66 @@
+#import <Cocoa/Cocoa.h>
+#include <libproc.h>
+#include <sys/resource.h>
+#include <mach/mach.h>
+#include "plato/plato_terminal.h"
+#include "plato/plato_transport.h"
+#include "plato/plato_ringbuf.h"
+#include "plato/plato_graphics.h"
+
+FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
+
+typedef struct PLATOPlasmaState PLATOPlasmaState;
+
+@interface PLATOView : NSView {
+@public
+    plato_terminal_t *terminal;
+    plato_transport_t *transport;
+    plato_ringbuf_t ringbuf;
+    uint32_t *rgbaBuffer;
+    CGColorSpaceRef colorSpace;
+    pthread_t networkThread;
+    bool running;
+    NSTimer *renderTimer;
+    NSTimer *fpsTimer;
+    BOOL keyboardReferenceVisible;
+    BOOL fpsCounterVisible;
+    CFTimeInterval fpsSampleStart;
+    uint64_t fpsTotalFrames, fpsPartialFrames, fpsFullFrames;
+    double fpsTotal, fpsPartial, fpsFull;
+    uint64_t flowTickCount, flowFeedCount, flowReadBytes;
+    size_t flowRingMaximum, flowRingEnd;
+    CFTimeInterval flowSampleStart;
+    CALayer *plasmaLayer;
+    CALayer *overlayLayer;
+    dispatch_queue_t pasteQueue;
+    volatile BOOL pasteCancelled;
+    double cpuUsagePercent;
+    PLATOPlasmaState *plasma;
+}
+
+- (void)setTerminal:(plato_terminal_t *)term;
+- (void)connectToHost:(NSString *)host port:(int)port;
+- (void)disconnect;
+- (void)resetTerminal;
+- (void)clearScreen;
+- (void)displayConnectionFailedMessage:(NSString *)errorMsg host:(NSString *)host port:(int)port;
+- (void)refreshDisplay;
+- (BOOL)sendTestText:(NSString *)text error:(NSString **)error;
+- (BOOL)sendTestKey:(NSString *)name error:(NSString **)error;
+- (BOOL)saveRenderedScreenshot:(NSString *)path error:(NSString **)error;
+- (void)setDisplayCrisp;
+- (void)setDisplayRealPlasma;
+- (void)setDisplaySplit;
+- (void)setKeyboardReferenceVisible:(BOOL)visible;
+- (void)setDiagnosticLogEnabled:(BOOL)enabled;
+- (void)setPlasmaProfilePath:(NSString *)path;
+- (void)writePlasmaProfileWithTag:(NSString *)tag;
+- (void)setRendererPerformanceLogEnabled:(BOOL)enabled;
+- (void)setFPSCounterVisible:(BOOL)visible;
+- (void)setPlasmaDecayDuration:(NSTimeInterval)duration;
+- (NSTimeInterval)plasmaDecayDuration;
+- (NSInteger)currentDisplayMode;
+- (void)pasteText:(NSString *)text;
+- (void)cancelPaste;
+- (void)copyScreenToPasteboard;
+@end
