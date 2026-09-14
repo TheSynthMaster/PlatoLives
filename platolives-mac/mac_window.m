@@ -672,6 +672,16 @@ static void plato_mac_beep(void *context) {
     [rendererLogItem setTarget:self]; [rendererLogItem setState:NSControlStateValueOff]; [toolsMenu addItem:rendererLogItem];
     [toolsMenuItem setSubmenu:toolsMenu]; [mainMenu addItem:toolsMenuItem];
 
+    // Menu Window (standard macOS: Minimize Cmd+M, Zoom, window list)
+    NSMenuItem *windowMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
+    [windowMenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+    [windowMenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    [windowMenu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
+    [windowMenuItem setSubmenu:windowMenu]; [mainMenu addItem:windowMenuItem];
+    [NSApp setWindowsMenu:windowMenu];
+
     [NSApp setMainMenu:mainMenu];
     [self rebuildConnectionMenu];
 }

@@ -39,6 +39,7 @@ NSString *PLATOKeyboardReferenceText(void) {
            @"APPLICATION SHORTCUTS\n\n"
            @"NEW WINDOW    Cmd+N\n"
            @"CLOSE WINDOW  Cmd+W\n"
+           @"MINIMIZE      Cmd+M\n"
            @"PROFILES      Cmd+,\n"
            @"COPY SCREEN   Cmd+C\n"
            @"PASTE TEXT    Cmd+V (throttled)\n"
