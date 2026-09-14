@@ -57,7 +57,8 @@ static CGRect platoDisplayRect(NSRect bounds) {
 typedef NS_ENUM(NSInteger, PLATODisplayMode) {
     PLATODisplayModeCrisp = 0,
     PLATODisplayModeRealPlasma = 1,
-    PLATODisplayModeSplit = 2
+    PLATODisplayModeSplit = 2,
+    PLATODisplayModeCrispColor = 3
 };
 
 #define PLASMA_SCALE 4
@@ -122,7 +123,7 @@ static void plasmaProfileFrame(const PlasmaFrameProfile *frame, PLATODisplayMode
 }
 
 static NSString *plasmaProfileModeName(PLATODisplayMode mode) {
-    return mode == PLATODisplayModeCrisp ? @"crisp" : (mode == PLATODisplayModeSplit ? @"split" : @"real");
+    return mode == PLATODisplayModeCrisp ? @"crisp" : (mode == PLATODisplayModeCrispColor ? @"crisp-color" : (mode == PLATODisplayModeSplit ? @"split" : @"real"));
 }
 
 typedef struct {
@@ -652,6 +653,9 @@ static void* network_worker(void *arg) {
 
         pasteQueue = dispatch_queue_create("com.fabiomontarsolo.platolives.pasteQueue", DISPATCH_QUEUE_SERIAL);
         pasteCancelled = NO;
+        feedBufferLen = 0;
+        feedBufferPos = 0;
+        paceUntil = 0.0;
 
         pthread_create(&networkThread, NULL, network_worker, (__bridge void *)self);
 
@@ -696,7 +700,7 @@ static void* network_worker(void *arg) {
 
 - (void)updateLayerFilters {
     if (!plasmaLayer || !plasma) return;
-    NSString *filter = (plasma->displayMode == PLATODisplayModeCrisp) ? kCAFilterNearest : kCAFilterLinear;
+    NSString *filter = (plasma->displayMode == PLATODisplayModeCrisp || plasma->displayMode == PLATODisplayModeCrispColor) ? kCAFilterNearest : kCAFilterLinear;
     plasmaLayer.minificationFilter = filter;
     plasmaLayer.magnificationFilter = filter;
 }
@@ -746,6 +750,9 @@ static void* network_worker(void *arg) {
 
 - (void)resetTerminal {
     [self disconnect];
+    feedBufferLen = 0;
+    feedBufferPos = 0;
+    paceUntil = 0.0;
     if (terminal) {
         plato_beep_callback_t beepCb = terminal->beep_callback;
         void *beepCtx = terminal->beep_context;
@@ -824,21 +831,70 @@ static void* network_worker(void *arg) {
     });
 }
 
+- (void)processIncomingData {
+    if (!terminal || !plasma || !running) return;
+
+    CFTimeInterval now = CACurrentMediaTime();
+    if (now < self->paceUntil) return;
+
+    while (running) {
+        if (feedBufferPos >= feedBufferLen) {
+            feedBufferPos = 0;
+            feedBufferLen = plato_ringbuf_read(&ringbuf, feedBuffer, sizeof(feedBuffer));
+            if (feedBufferLen == 0) break;
+            flowFeedCount++;
+            flowReadBytes += feedBufferLen;
+        }
+
+        terminal->delay_requested = false;
+        size_t remaining = feedBufferLen - feedBufferPos;
+        size_t consumed = plato_terminal_feed(terminal, &feedBuffer[feedBufferPos], remaining);
+        feedBufferPos += consumed;
+
+        if (terminal->delay_requested) {
+            terminal->delay_requested = false;
+
+            /* Se c'è stato del disegno, forziamo il rendering del fotogramma a video */
+            if (terminal->fb.dirty) {
+                if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
+                    plasma->animateUntil = now + plasma->decayDuration;
+                }
+                [self refreshDisplay];
+            }
+
+            /* Pausa di pacing di 8 ms (conforme alla formula storica di pterm) */
+            self->paceUntil = now + 0.008;
+
+            __weak PLATOView *weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+                [weakSelf processIncomingData];
+            });
+            return;
+        }
+    }
+
+    if (terminal->fb.dirty) {
+        if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
+            plasma->animateUntil = now + plasma->decayDuration;
+        }
+        [self refreshDisplay];
+    }
+}
+
 - (void)onFrameTick:(NSTimer *)timer {
     if (!terminal || !plasma) return;
     flowTickCount++;
     size_t ringBefore = plato_ringbuf_available(&ringbuf);
     if (ringBefore > flowRingMaximum) flowRingMaximum = ringBefore;
-    uint8_t chunk[4096];
-    size_t available = plato_ringbuf_read(&ringbuf, chunk, sizeof(chunk));
+
+    /* 1. Ingestione logica asincrona disaccoppiata (si ferma solo lei se incontra NUL) */
+    [self processIncomingData];
+
     flowRingEnd = plato_ringbuf_available(&ringbuf);
     if (flowRingEnd > flowRingMaximum) flowRingMaximum = flowRingEnd;
-    if (available > 0) {
-        flowFeedCount++; flowReadBytes += available;
-        plato_terminal_feed(terminal, chunk, available);
-        if (plasma->displayMode != PLATODisplayModeCrisp) plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
-        [self refreshDisplay];
-    } else if (plasma->displayMode != PLATODisplayModeCrisp && CACurrentMediaTime() < plasma->animateUntil) {
+
+    /* 2. Il motore Real Plasma a 60 FPS NON SI FERMA MAI: calcola il decadimento gas continuamente */
+    if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor && CACurrentMediaTime() < plasma->animateUntil) {
         [self refreshDisplay];
     }
 }
@@ -883,7 +939,7 @@ static void* network_worker(void *arg) {
     if (!terminal || !plasma || !plasmaAllocState(plasma)) return;
     PlasmaFrameProfile profile = {0};
     CFTimeInterval totalStart = CACurrentMediaTime();
-    if (plasma->displayMode == PLATODisplayModeCrisp) {
+    if (plasma->displayMode == PLATODisplayModeCrisp || plasma->displayMode == PLATODisplayModeCrispColor) {
         CFTimeInterval phaseStart = CACurrentMediaTime();
         plato_terminal_render_rgba(terminal, plasma->logical);
         CFTimeInterval phaseEnd = CACurrentMediaTime();
@@ -914,9 +970,9 @@ static void* network_worker(void *arg) {
     }
     plasmaProfileFrame(&profile, plasma->displayMode);
     plasmaLiveProfileFrame(&profile, plasma->displayMode);
-    if (plasma->displayMode == PLATODisplayModeCrisp || !profile.noOp) {
+    if (plasma->displayMode == PLATODisplayModeCrisp || plasma->displayMode == PLATODisplayModeCrispColor || !profile.noOp) {
         fpsTotalFrames++;
-        if (plasma->displayMode != PLATODisplayModeCrisp) {
+        if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
             if (profile.fullFrame) fpsFullFrames++; else fpsPartialFrames++;
         }
 
@@ -938,6 +994,16 @@ static void* network_worker(void *arg) {
     if (!plasma) return;
     plasma->displayMode = PLATODisplayModeCrisp;
     plasma->animateUntil = 0.0;
+    if (terminal) plato_terminal_set_color_mode(terminal, false);
+    [self updateLayerFilters];
+    [self refreshDisplay];
+}
+
+- (void)setDisplayCrispColor {
+    if (!plasma) return;
+    plasma->displayMode = PLATODisplayModeCrispColor;
+    plasma->animateUntil = 0.0;
+    if (terminal) plato_terminal_set_color_mode(terminal, true);
     [self updateLayerFilters];
     [self refreshDisplay];
 }
@@ -948,6 +1014,7 @@ static void* network_worker(void *arg) {
     plasma->lastTime = 0.0;
     plasma->tilesInitialized = NO;
     plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
+    if (terminal) plato_terminal_set_color_mode(terminal, false);
     [self updateLayerFilters];
     [self refreshDisplay];
 }
@@ -958,6 +1025,7 @@ static void* network_worker(void *arg) {
     plasma->lastTime = 0.0;
     plasma->tilesInitialized = NO;
     plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
+    if (terminal) plato_terminal_set_color_mode(terminal, false);
     [self updateLayerFilters];
     [self refreshDisplay];
 }

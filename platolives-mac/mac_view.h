@@ -36,6 +36,10 @@ typedef struct PLATOPlasmaState PLATOPlasmaState;
     volatile BOOL pasteCancelled;
     double cpuUsagePercent;
     PLATOPlasmaState *plasma;
+    uint8_t feedBuffer[4096];
+    size_t feedBufferLen;
+    size_t feedBufferPos;
+    CFTimeInterval paceUntil;
 }
 
 - (void)setTerminal:(plato_terminal_t *)term;
@@ -51,6 +55,7 @@ typedef struct PLATOPlasmaState PLATOPlasmaState;
 - (void)setDisplayCrisp;
 - (void)setDisplayRealPlasma;
 - (void)setDisplaySplit;
+- (void)setDisplayCrispColor;
 - (void)setKeyboardReferenceVisible:(BOOL)visible;
 - (void)setDiagnosticLogEnabled:(BOOL)enabled;
 - (void)setPlasmaProfilePath:(NSString *)path;

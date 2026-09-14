@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include "plato/plato_transport.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -256,4 +257,15 @@ int plato_transport_recv(plato_transport_t *t, uint8_t *buf, size_t max_len) {
     int received = (int)recv(t->socket_fd, buf, max_len, 0);
     if (received > 0) log_traffic(t, "RX", buf, (size_t)received);
     return received;
+}
+
+void plato_transport_log_msg(plato_transport_t *t, const char *fmt, ...) {
+    if (!t || !t->logging_enabled || !t->log_file) return;
+    pthread_mutex_lock(&t->log_mutex);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(t->log_file, fmt, args);
+    va_end(args);
+    fflush(t->log_file);
+    pthread_mutex_unlock(&t->log_mutex);
 }

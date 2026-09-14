@@ -36,10 +36,14 @@ struct plato_terminal {
     char user_station[32];
     plato_metadata_callback_t metadata_callback;
     void *metadata_context;
+    bool color_mode;
+    bool delay_requested;
 };
 
+void plato_terminal_set_color_mode(plato_terminal_t *term, bool enabled);
+
 void plato_terminal_init(plato_terminal_t *term);
-void plato_terminal_feed(plato_terminal_t *term, const uint8_t *data, size_t len);
+size_t plato_terminal_feed(plato_terminal_t *term, const uint8_t *data, size_t len);
 void plato_terminal_render_rgba(const plato_terminal_t *term, uint32_t *out_rgba);
 void plato_terminal_set_palette(plato_terminal_t *term, plato_palette_t pal);
 void plato_terminal_beep(plato_terminal_t *term);

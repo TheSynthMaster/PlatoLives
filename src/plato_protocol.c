@@ -92,6 +92,8 @@ void plato_protocol_init(plato_protocol_decoder_t *dec) {
     dec->load_address = 0;
     dec->pmd_len = 0;
     dec->pmd_buf[0] = '\0';
+    dec->color_cmd = 0;
+    dec->color_idx = 0;
 }
 
 uint16_t plato_protocol_keycode_for_ascii(uint8_t ascii) {
@@ -129,10 +131,20 @@ static void coordinate_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
         plato_draw_point(&term->fb, x, y, dec->screen_mode); term->x = x; term->y = y;
     } else if (dec->data_mode == PLATO_MODE_LINE) {
         if (dec->first_line_coord) { term->x = x; term->y = y; dec->first_line_coord = false; }
-        else { plato_draw_line(&term->fb, term->x, term->y, x, y, dec->screen_mode); term->x = x; term->y = y; }
+        else {
+            plato_draw_line(&term->fb, term->x, term->y, x, y, dec->screen_mode);
+            plato_transport_log_msg(term->transport, "[LINE] (%d,%d)->(%d,%d) mode=%d fg=0x%08X\n",
+                                    term->x, term->y, x, y, dec->screen_mode, term->fb.fg_color);
+            term->x = x; term->y = y;
+        }
     } else if (dec->data_mode == PLATO_MODE_BLOCK) {
         if (dec->first_block_coord) { dec->block_x0 = x; dec->block_y0 = y; dec->first_block_coord = false; }
-        else { plato_draw_block(&term->fb, dec->block_x0, dec->block_y0, x, y, dec->screen_mode); term->x = x; term->y = y; dec->first_block_coord = true; }
+        else {
+            plato_draw_block(&term->fb, dec->block_x0, dec->block_y0, x, y, dec->screen_mode);
+            plato_transport_log_msg(term->transport, "[BLOCK] (%d,%d)->(%d,%d) mode=%d fg=0x%08X bg=0x%08X\n",
+                                    dec->block_x0, dec->block_y0, x, y, dec->screen_mode, term->fb.fg_color, term->fb.bg_color);
+            term->x = x; term->y = y; dec->first_block_coord = true;
+        }
     }
 }
 
@@ -157,9 +169,17 @@ static void echo_complete(plato_protocol_decoder_t *dec, plato_terminal_t *term)
         case 0x52: dec->flow_control = true; send_echo_key(term, 0x53); break;
         case 0x60: send_echo_key(term, 0x01); break;
         case 0x70: send_echo_key(term, 12); break;
-        case 0x71: send_echo_key(term, 1); break;
+        case 0x71: 
+            plato_transport_log_msg(term->transport, "[ECHO 0x71] Subtype Query -> reply %d (color=%d)\n",
+                                    term->color_mode ? 2 : 1, term->color_mode);
+            send_echo_key(term, term->color_mode ? 2 : 1); 
+            break;
         case 0x72: send_echo_key(term, 0); break;
-        case 0x73: send_echo_key(term, 0x40); break;
+        case 0x73: 
+            plato_transport_log_msg(term->transport, "[ECHO 0x73] Config Query -> reply 0x%02X (color=%d)\n",
+                                    term->color_mode ? 0x70 : 0x40, term->color_mode);
+            send_echo_key(term, term->color_mode ? 0x70 : 0x40); 
+            break;
         case 0x7A: plato_protocol_send_key(term, 0x3FF); break;
         case 0x7B: plato_terminal_beep(term); break;
         case 0x7D: send_echo_key(term, 0x7F); break;
@@ -277,12 +297,44 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         if (dec->word_idx >= 3) { dec->word_idx = 0; dec->state = STATE_NORMAL; echo_complete(dec, term); }
         return;
     }
+    if (dec->state == STATE_COLOR_PARAM) {
+        dec->color_buf[dec->color_idx++] = byte;
+        if (dec->color_idx >= 4) {
+            uint32_t b0 = dec->color_buf[0] & 0x3Fu;
+            uint32_t b1 = dec->color_buf[1] & 0x3Fu;
+            uint32_t b2 = dec->color_buf[2] & 0x3Fu;
+            uint32_t b3 = dec->color_buf[3] & 0x3Fu;
+            uint32_t val24 = b0 | (b1 << 6) | (b2 << 12) | (b3 << 18);
+
+            /* CDC s0ascers 3.2.3.1.8: bits 1..8: Blue, 9..16: Green, 17..24: Red */
+            uint32_t blue  = val24 & 0xFFu;
+            uint32_t green = (val24 >> 8) & 0xFFu;
+            uint32_t red   = (val24 >> 16) & 0xFFu;
+            uint32_t bgra  = (0xFFu << 24) | (red << 16) | (green << 8) | blue;
+
+            plato_transport_log_msg(term->transport, "[COLOR ESC %c] raw:%02X %02X %02X %02X -> R:%u G:%u B:%u (bgra:0x%08X)\n",
+                                    dec->color_cmd, dec->color_buf[0], dec->color_buf[1], dec->color_buf[2], dec->color_buf[3],
+                                    red, green, blue, bgra);
+
+            if (dec->color_cmd == 'a') {
+                term->fb.fg_color = bgra;
+            } else if (dec->color_cmd == 'b') {
+                term->fb.bg_color = bgra;
+            }
+            dec->state = STATE_NORMAL;
+        }
+        return;
+    }
+
     if (dec->state == STATE_SKIP_PARAM) {
         if (--dec->skip_bytes_remaining <= 0) dec->state = STATE_NORMAL;
         return;
     }
     if (dec->state == STATE_ESCAPE) {
         dec->state = STATE_NORMAL;
+        if (byte != 'a' && byte != 'b') {
+            printf("[PROTOCOL ESC 0x%02X (%c)]\n", byte, (byte >= 32 && byte <= 126) ? byte : '?');
+        }
         switch (byte) {
             case 0x02:
                 dec->plato_mode = true; dec->data_mode = PLATO_MODE_ALPHA; dec->screen_mode = PLATO_SCREEN_REWRITE;
@@ -291,6 +343,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
                 break;
             case 0x03: break;
             case 0x0C:
+                plato_transport_log_msg(term->transport, "[CLEAR SCREEN ESC 0x0C] bg=0x%08X color=%d\n", term->fb.bg_color, term->fb.color_enabled);
                 plato_fb_clear(&term->fb); term->x = 0; term->y = 496; term->margin_x = 0;
                 dec->char_size = 0;
                 dec->screen_mode = PLATO_SCREEN_REWRITE; dec->data_mode = PLATO_MODE_ALPHA;
@@ -320,7 +373,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
                 dec->mode2_active = false; dec->mode7_active = true; dec->word_idx = 0;
                 break;
             case 'Y': dec->state = STATE_ECHO_WORD; dec->word_idx = 0; break;
-            case 'a': case 'b': dec->state = STATE_SKIP_PARAM; dec->skip_bytes_remaining = 4; break;
+            case 'a': case 'b': dec->state = STATE_COLOR_PARAM; dec->color_cmd = byte; dec->color_idx = 0; break;
 			case 'c':
 			    /* Paint: parametro transitorio di 12 bit composto da due byte a 6 bit. */
 			    dec->state = STATE_SKIP_PARAM;
@@ -343,6 +396,10 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
     if (byte < 0x20) {
         int step = dec->char_size == 2 ? 16 : 8;
         switch (byte) {
+            case 0x00:
+                /* TUTOR pause / -delay- NOP */
+                term->delay_requested = true;
+                break;
             case 0x08: term->x = term->x >= step ? term->x - step : 0; break;
             case 0x09: term->x = term->x + step < PLATO_WIDTH ? term->x + step : PLATO_WIDTH - step; break;
             case 0x0A:

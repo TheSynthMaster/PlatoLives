@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "plato/plato_graphics.h"
 #include <stdlib.h>
 

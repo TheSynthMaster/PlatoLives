@@ -39,5 +39,6 @@ int plato_transport_send(plato_transport_t *t, const uint8_t *data, size_t len);
 int plato_transport_recv(plato_transport_t *t, uint8_t *buf, size_t max_len);
 void plato_transport_set_logging(plato_transport_t *t, bool enabled);
 bool plato_transport_is_logging(const plato_transport_t *t);
+void plato_transport_log_msg(plato_transport_t *t, const char *fmt, ...);
 
 #endif /* PLATO_TRANSPORT_H */

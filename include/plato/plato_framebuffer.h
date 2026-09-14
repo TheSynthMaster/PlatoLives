@@ -5,6 +5,10 @@
 
 typedef struct {
     uint8_t pixels[PLATO_HEIGHT][PLATO_WIDTH / 8];
+    uint32_t colors[PLATO_HEIGHT][PLATO_WIDTH];
+    uint32_t fg_color;
+    uint32_t bg_color;
+    bool color_enabled;
     bool dirty;
 } plato_framebuffer_t;
 

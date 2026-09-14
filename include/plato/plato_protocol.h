@@ -10,7 +10,8 @@ typedef struct plato_terminal plato_terminal_t;
 
 typedef enum {
     STATE_NORMAL, STATE_ESCAPE, STATE_LOAD_COORD,
-    STATE_ECHO_WORD, STATE_WORD_PARAM, STATE_SKIP_PARAM, STATE_PMD
+    STATE_ECHO_WORD, STATE_WORD_PARAM, STATE_SKIP_PARAM, STATE_PMD,
+    STATE_COLOR_PARAM
 } plato_parser_state_t;
 
 typedef struct {
@@ -36,6 +37,9 @@ typedef struct {
     uint32_t load_address;
     char pmd_buf[1024];
     int pmd_len;
+    uint8_t color_cmd;
+    uint8_t color_buf[4];
+    int color_idx;
 } plato_protocol_decoder_t;
 
 void plato_protocol_init(plato_protocol_decoder_t *dec);

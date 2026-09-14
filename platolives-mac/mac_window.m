@@ -75,6 +75,7 @@ static void plato_mac_beep(void *context) {
     NSInteger mode = [p[@"displayMode"] integerValue];
     if (mode == 0) [self.view setDisplayCrisp];
     else if (mode == 2) [self.view setDisplaySplit];
+    else if (mode == 3) [self.view setDisplayCrispColor];
     else [self.view setDisplayRealPlasma];
 
     NSInteger ms = [p[@"persistenceMs"] integerValue];
@@ -621,10 +622,14 @@ static void plato_mac_beep(void *context) {
     NSMenuItem *crispItem = [[NSMenuItem alloc] initWithTitle:@"Crisp" action:@selector(setDisplayCrisp:) keyEquivalent:@""];
     NSMenuItem *plasmaItem = [[NSMenuItem alloc] initWithTitle:@"Real Plasma" action:@selector(setDisplayRealPlasma:) keyEquivalent:@""];
     NSMenuItem *splitItem = [[NSMenuItem alloc] initWithTitle:@"Split: Real Plasma | Crisp" action:@selector(setDisplaySplit:) keyEquivalent:@""];
+    NSMenuItem *colorItem = [[NSMenuItem alloc] initWithTitle:@"Crisp Color" action:@selector(setDisplayCrispColor:) keyEquivalent:@""];
     [crispItem setTarget:self]; [crispItem setTag:1001];
     [plasmaItem setTarget:self]; [plasmaItem setTag:1002]; [plasmaItem setState:NSControlStateValueOn];
     [splitItem setTarget:self]; [splitItem setTag:1003];
-    [viewMenu addItem:crispItem]; [viewMenu addItem:plasmaItem]; [viewMenu addItem:splitItem];
+    [colorItem setTarget:self]; [colorItem setTag:1004];
+    [viewMenu addItem:plasmaItem]; [viewMenu addItem:crispItem]; [viewMenu addItem:splitItem];
+    [viewMenu addItem:[NSMenuItem separatorItem]];
+    [viewMenu addItem:colorItem];
     [viewMenu addItem:[NSMenuItem separatorItem]];
 
     NSMenuItem *decayItem = [[NSMenuItem alloc] initWithTitle:@"Plasma Persistence" action:nil keyEquivalent:@""];
@@ -919,9 +924,14 @@ static void plato_mac_beep(void *context) {
 }
 
 - (void)updateDisplayModeMenu:(NSInteger)mode {
-    NSInteger targetTag = (mode == 0 ? 1001 : (mode == 2 ? 1003 : 1002));
+    NSInteger targetTag = 1002;
+    if (mode == 0) targetTag = 1001;
+    else if (mode == 1) targetTag = 1002;
+    else if (mode == 2) targetTag = 1003;
+    else if (mode == 3) targetTag = 1004;
+
     NSMenu *mainMenu = [NSApp mainMenu];
-    for (NSInteger tag = 1001; tag <= 1003; tag++) {
+    for (NSInteger tag = 1001; tag <= 1004; tag++) {
         [[mainMenu itemWithTag:tag] setState:(tag == targetTag ? NSControlStateValueOn : NSControlStateValueOff)];
     }
 }
@@ -949,19 +959,74 @@ static void plato_mac_beep(void *context) {
     }
 }
 
+- (void)requestDisplayMode:(NSInteger)newMode sender:(id)sender {
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (!active || !active.view) return;
+
+    NSInteger currentMode = [active.view currentDisplayMode];
+    if (currentMode == newMode) return;
+
+    BOOL currentIsColor = (currentMode == 3);
+    BOOL newIsColor = (newMode == 3);
+    BOOL isConnected = (active.view->transport && active.view->transport->connected);
+
+    if (isConnected && (currentIsColor != newIsColor)) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:@"Reconnect Required for Display Mode Change"];
+        [alert setInformativeText:@"Switching between Monochrome and Color requires reconnecting to negotiate terminal capabilities with the PLATO mainframe. Do you want to reconnect now?"];
+        [alert addButtonWithTitle:@"Reconnect"];
+        [alert addButtonWithTitle:@"Cancel"];
+        [alert setAlertStyle:NSAlertStyleInformational];
+
+        NSModalResponse resp = [alert runModal];
+        if (resp != NSAlertFirstButtonReturn) {
+            [self updateDisplayModeMenu:currentMode];
+            return;
+        }
+
+        // Applica modalita sulla vista attiva
+        if (newMode == 0) [active.view setDisplayCrisp];
+        else if (newMode == 1) [active.view setDisplayRealPlasma];
+        else if (newMode == 2) [active.view setDisplaySplit];
+        else if (newMode == 3) [active.view setDisplayCrispColor];
+
+        [self updateDisplayModeMenu:newMode];
+
+        // Riconnette immediatamente la sessione corrente con la nuova modalita
+        if (active.currentProfile) {
+            NSMutableDictionary *p = [active.currentProfile mutableCopy];
+            p[@"displayMode"] = @(newMode);
+            [active applyProfile:p];
+        } else {
+            NSDictionary *def = [PLATOProfileManager defaultProfile];
+            [active applyProfile:def];
+        }
+        return;
+    }
+
+    // Cambio istantaneo tra modalita dello stesso tipo (es. Real Plasma <-> Crisp)
+    if (newMode == 0) [active.view setDisplayCrisp];
+    else if (newMode == 1) [active.view setDisplayRealPlasma];
+    else if (newMode == 2) [active.view setDisplaySplit];
+    else if (newMode == 3) [active.view setDisplayCrispColor];
+
+    [self updateDisplayModeMenu:newMode];
+}
+
 - (void)setDisplayCrisp:(id)sender {
-    [self.view setDisplayCrisp];
-    [self selectDisplayMenuItem:(NSMenuItem *)sender];
+    [self requestDisplayMode:0 sender:sender];
 }
 
 - (void)setDisplayRealPlasma:(id)sender {
-    [self.view setDisplayRealPlasma];
-    [self selectDisplayMenuItem:(NSMenuItem *)sender];
+    [self requestDisplayMode:1 sender:sender];
 }
 
 - (void)setDisplaySplit:(id)sender {
-    [self.view setDisplaySplit];
-    [self selectDisplayMenuItem:(NSMenuItem *)sender];
+    [self requestDisplayMode:2 sender:sender];
+}
+
+- (void)setDisplayCrispColor:(id)sender {
+    [self requestDisplayMode:3 sender:sender];
 }
 
 - (void)selectPlasmaDecay:(id)sender {

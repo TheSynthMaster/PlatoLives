@@ -1,15 +1,29 @@
+#include <stdio.h>
 #include "plato/plato_framebuffer.h"
 #include <string.h>
 
 #define PACK_RGBA(r, g, b) ((uint32_t)(b) | ((uint32_t)(g) << 8) | ((uint32_t)(r) << 16) | ((uint32_t)(0xFF) << 24))
 
 void plato_fb_init(plato_framebuffer_t *fb) {
+    if (!fb) return;
+    fb->fg_color = PACK_RGBA(0xFF, 0x6E, 0x00); /* Default plasma amber */
+    fb->bg_color = PACK_RGBA(0x0A, 0x03, 0x00); /* Default dark background */
+    fb->color_enabled = false;
     plato_fb_clear(fb);
 }
 
 void plato_fb_clear(plato_framebuffer_t *fb) {
     if (!fb) return;
     memset(fb->pixels, 0, sizeof(fb->pixels));
+    if (fb->color_enabled) {
+        for (int y = 0; y < PLATO_HEIGHT; y++) {
+            for (int x = 0; x < PLATO_WIDTH; x++) {
+                fb->colors[y][x] = fb->bg_color;
+            }
+        }
+    } else {
+        memset(fb->colors, 0, sizeof(fb->colors));
+    }
     fb->dirty = true;
 }
 
@@ -23,8 +37,14 @@ void plato_fb_set_pixel(plato_framebuffer_t *fb, int x, int y, bool value) {
 
     if (value) {
         fb->pixels[raster_y][byte_idx] |= bit_mask;
+        if (fb->color_enabled) {
+            fb->colors[raster_y][x] = fb->fg_color;
+        }
     } else {
         fb->pixels[raster_y][byte_idx] &= ~bit_mask;
+        if (fb->color_enabled) {
+            fb->colors[raster_y][x] = fb->bg_color;
+        }
     }
     fb->dirty = true;
 }
@@ -54,6 +74,10 @@ void plato_fb_scroll_up(plato_framebuffer_t *fb, int lines) {
 
 void plato_fb_to_rgba32(const plato_framebuffer_t *fb, uint32_t *out_rgba, plato_palette_t pal) {
     if (!fb || !out_rgba) return;
+    if (fb->color_enabled) {
+        memcpy(out_rgba, fb->colors, sizeof(fb->colors));
+        return;
+    }
 
     uint32_t bg_color, fg_color;
     switch (pal) {
