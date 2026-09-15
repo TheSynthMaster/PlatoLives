@@ -5,6 +5,9 @@
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-red.svg)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-CDC%20IST--III%20%2F%20CERL%20X--20-brightgreen.svg)](#)
 
+<img width="3658" height="1964" alt="image" src="https://github.com/user-attachments/assets/8b8e7e8c-1219-4be6-82f9-b20b1591509c" />
+
+
 **PlatoLives** is a high-performance, native client for the legendary **PLATO** computer-based education and social system, designed specifically for Apple Silicon (M1/M2/M3/M4) and modern Intel Macs running macOS 13+.
 
 Built from the ground up as a pure C11 core with a hardware-accelerated Cocoa/Core Animation/Metal presentation layer, PlatoLives connects over standard TCP to active CYBIS and Cyber1 mainframes (`cyberserv.org:8005`), IRATA.ONLINE, and private PLATO nodes. It delivers an authentic, sub-pixel gas-discharge plasma display experience while maintaining 60 FPS smooth rendering and near-zero idle CPU usage.
