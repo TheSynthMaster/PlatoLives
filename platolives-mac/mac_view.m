@@ -1256,7 +1256,6 @@ static void* network_worker(void *arg) {
 
             /* Se c'è stato del disegno, forziamo il rendering del fotogramma a video */
             if (terminal->fb.dirty) {
-                terminal->fb.dirty = false;
                 if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
                     NSTimeInterval dur = (plasma->displayMode == PLATODisplayModeRealColorCRT) ? plasma->crtDecayDuration : plasma->decayDuration;
                     plasma->animateUntil = now + dur;
@@ -1276,7 +1275,6 @@ static void* network_worker(void *arg) {
     }
 
     if (terminal->fb.dirty) {
-        terminal->fb.dirty = false;
         if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
             NSTimeInterval dur = (plasma->displayMode == PLATODisplayModeRealColorCRT) ? plasma->crtDecayDuration : plasma->decayDuration;
             plasma->animateUntil = now + dur;
@@ -1355,7 +1353,9 @@ static void* network_worker(void *arg) {
         profile.totalMs = plasmaElapsedMs(totalStart, phaseEnd);
     } else if (plasma->displayMode == PLATODisplayModeRealColorCRT) {
         crtRender(self, rgbaBuffer, &profile);
+        terminal->fb.dirty = false;
     } else {
+        terminal->fb.dirty = false;
         plasmaRender(self, rgbaBuffer, &profile);
         if (plasma->displayMode == PLATODisplayModeSplit) {
             CFTimeInterval phaseStart = CACurrentMediaTime();

@@ -155,7 +155,7 @@ static void append_word18(uint8_t *stream, size_t *len, uint32_t word) {
     stream[(*len)++] = (uint8_t)(0x40 | ((word >> 12) & 0x3F));
 }
 
-static uint16_t test_ram_word(const plato_terminal_t *term, uint16_t address) {
+static uint16_t __attribute__((unused)) test_ram_word(const plato_terminal_t *term, uint16_t address) {
     return (uint16_t)term->ram[address] | ((uint16_t)term->ram[(uint16_t)(address + 1u)] << 8);
 }
 
@@ -214,6 +214,7 @@ void test_mode2_ram_and_dynamic_fonts(void) {
     for (int i = 1; i < 8; i++) append_word18(stream, &len, 0);
     plato_terminal_feed(&term, stream, len);
     const uint8_t *m2 = plato_font_get_glyph(&term.font, PLATO_CHARSET_M2, 0x20);
+    (void)m2;
     for (int row = 0; row < 16; row++) assert(m2[row] == 0x80);
     assert(test_ram_word(&term, 0x3800) == 0xFFFF);
     assert(term.decoder.load_address == 0x3810);
@@ -226,6 +227,7 @@ void test_mode2_ram_and_dynamic_fonts(void) {
     append_word18(stream, &len, 0xFFFF);
     plato_terminal_feed(&term, stream, len);
     const uint8_t *m3 = plato_font_get_glyph(&term.font, PLATO_CHARSET_M3, 0x20);
+    (void)m3;
     for (int row = 0; row < 16; row++) assert(m3[row] == 0x01);
     assert(test_ram_word(&term, 0x3C0E) == 0xFFFF);
     assert(term.decoder.load_address == 0x3C10);
