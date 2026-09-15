@@ -11,7 +11,7 @@ typedef struct plato_terminal plato_terminal_t;
 typedef enum {
     STATE_NORMAL, STATE_ESCAPE, STATE_LOAD_COORD,
     STATE_ECHO_WORD, STATE_WORD_PARAM, STATE_SKIP_PARAM, STATE_PMD,
-    STATE_COLOR_PARAM
+    STATE_COLOR_PARAM, STATE_PAINT_PARAM
 } plato_parser_state_t;
 
 typedef struct {

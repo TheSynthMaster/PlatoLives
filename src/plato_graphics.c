@@ -45,11 +45,12 @@ void plato_draw_char(plato_framebuffer_t *fb, const plato_font_t *font,
                      plato_charset_t charset, uint8_t ch,
                      int x, int y, plato_screen_mode_t mode, int size) {
     const uint8_t *glyph = plato_font_get_glyph(font, charset, ch);
-    int scale = (size == 2) ? 2 : 1;
+    int scale = (size <= 1) ? 1 : size;
+    int y_base = y + ((scale > 1) ? (scale - 1) * 5 : 0);
 
     for (int row = 0; row < PLATO_CHAR_HEIGHT; row++) {
         uint8_t bits = glyph[row];
-        int py = y + ((PLATO_CHAR_HEIGHT - 1 - row) * scale);
+        int py = y_base + ((PLATO_CHAR_HEIGHT - 1 - row) * scale);
 
         for (int col = 0; col < PLATO_CHAR_WIDTH; col++) {
             bool bit_on = (bits & (0x80 >> col)) != 0;
@@ -94,4 +95,63 @@ void plato_draw_block(plato_framebuffer_t *fb, int x0, int y0, int x1, int y1, p
             plato_draw_point(fb, x, y, mode);
         }
     }
+}
+
+void plato_draw_paint(plato_framebuffer_t *fb, int start_x, int start_y, plato_screen_mode_t mode) {
+    if (!fb || start_x < 0 || start_x >= PLATO_WIDTH || start_y < 0 || start_y >= PLATO_HEIGHT) return;
+
+    /* PLATO Paint riempie lo spazio vuoto delimitato da vettori tracciati.
+       Se il punto di partenza (seme) è già un pixel acceso, non c'è nulla da riempire. */
+    if (plato_fb_get_pixel(fb, start_x, start_y)) return;
+
+    typedef struct { int16_t x, y; } point_t;
+    point_t *q = malloc(sizeof(point_t) * PLATO_WIDTH * PLATO_HEIGHT);
+    if (!q) return;
+
+    /* Matrice di tracciamento pixel visitati (per evitare cicli infiniti), richiede solo 32 KB */
+    uint8_t (*visited)[PLATO_WIDTH / 8] = calloc(PLATO_HEIGHT, PLATO_WIDTH / 8);
+    if (!visited) { free(q); return; }
+
+    size_t head = 0, tail = 0;
+
+    /* Incolonna il primo seme */
+    q[tail++] = (point_t){(int16_t)start_x, (int16_t)start_y};
+    visited[start_y][start_x / 8] |= (0x80 >> (start_x % 8));
+
+    while (head < tail) {
+        point_t p = q[head++];
+
+        /* Colora il punto usando la modalità corrente (es. colore FG per Asteroids) */
+        plato_draw_point(fb, p.x, p.y, mode);
+
+        int16_t nx, ny;
+
+        /* UP */
+        nx = p.x; ny = p.y + 1;
+        if (ny < PLATO_HEIGHT && !(visited[ny][nx / 8] & (0x80 >> (nx % 8))) && !plato_fb_get_pixel(fb, nx, ny)) {
+            visited[ny][nx / 8] |= (0x80 >> (nx % 8));
+            q[tail++] = (point_t){nx, ny};
+        }
+        /* DOWN */
+        nx = p.x; ny = p.y - 1;
+        if (ny >= 0 && !(visited[ny][nx / 8] & (0x80 >> (nx % 8))) && !plato_fb_get_pixel(fb, nx, ny)) {
+            visited[ny][nx / 8] |= (0x80 >> (nx % 8));
+            q[tail++] = (point_t){nx, ny};
+        }
+        /* LEFT */
+        nx = p.x - 1; ny = p.y;
+        if (nx >= 0 && !(visited[ny][nx / 8] & (0x80 >> (nx % 8))) && !plato_fb_get_pixel(fb, nx, ny)) {
+            visited[ny][nx / 8] |= (0x80 >> (nx % 8));
+            q[tail++] = (point_t){nx, ny};
+        }
+        /* RIGHT */
+        nx = p.x + 1; ny = p.y;
+        if (nx < PLATO_WIDTH && !(visited[ny][nx / 8] & (0x80 >> (nx % 8))) && !plato_fb_get_pixel(fb, nx, ny)) {
+            visited[ny][nx / 8] |= (0x80 >> (nx % 8));
+            q[tail++] = (point_t){nx, ny};
+        }
+    }
+    
+    free(visited);
+    free(q);
 }

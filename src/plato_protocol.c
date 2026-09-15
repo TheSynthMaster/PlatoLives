@@ -81,7 +81,7 @@ void plato_protocol_init(plato_protocol_decoder_t *dec) {
     if (!dec) return;
     dec->state = STATE_NORMAL; dec->plato_mode = true; dec->flow_control = false;
     dec->data_mode = PLATO_MODE_ALPHA; dec->screen_mode = PLATO_SCREEN_REWRITE;
-    dec->charset = PLATO_CHARSET_M0; dec->char_size = 0;
+    dec->charset = PLATO_CHARSET_M0; dec->char_size = 1;
     dec->cur_hi_y = dec->cur_lo_y = dec->cur_hi_x = dec->cur_lo_x = 0;
     dec->got_lo_y = false; dec->first_line_coord = true; dec->first_block_coord = true;
     dec->block_x0 = dec->block_y0 = 0; dec->word_idx = 0; dec->skip_bytes_remaining = 0;
@@ -143,7 +143,8 @@ static void coordinate_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
             plato_draw_block(&term->fb, dec->block_x0, dec->block_y0, x, y, dec->screen_mode);
             plato_transport_log_msg(term->transport, "[BLOCK] (%d,%d)->(%d,%d) mode=%d fg=0x%08X bg=0x%08X\n",
                                     dec->block_x0, dec->block_y0, x, y, dec->screen_mode, term->fb.fg_color, term->fb.bg_color);
-            term->x = x; term->y = y; dec->first_block_coord = true;
+            term->x = dec->block_x0;
+            term->y = dec->block_y0 >= 15 ? dec->block_y0 - 15 : 0; dec->first_block_coord = true;
         }
     }
 }
@@ -167,18 +168,26 @@ static void echo_complete(plato_protocol_decoder_t *dec, plato_terminal_t *term)
     code &= 0x7F;
     switch (code) {
         case 0x52: dec->flow_control = true; send_echo_key(term, 0x53); break;
-        case 0x60: send_echo_key(term, 0x01); break;
-        case 0x70: send_echo_key(term, 12); break;
+        case 0x60: 
+            /* Inquire features: base 0x60 + 0x01 (Fine Grained Touch) */
+            plato_transport_log_msg(term->transport, "[ECHO 0x60] Features -> reply 0x61\n");
+            send_echo_key(term, 0x61); 
+            break;
+        case 0x70: 
+            /* Terminal Type: base 0x70 + 12 (ASCII) */
+            plato_transport_log_msg(term->transport, "[ECHO 0x70] Type -> reply 0x7C\n");
+            send_echo_key(term, 0x7C); 
+            break;
         case 0x71: 
-            plato_transport_log_msg(term->transport, "[ECHO 0x71] Subtype Query -> reply %d (color=%d)\n",
-                                    term->color_mode ? 2 : 1, term->color_mode);
-            send_echo_key(term, term->color_mode ? 2 : 1); 
+            /* Terminal Subtype: 16 (Hybrid Color Pterm), 1 (Mono IST-III) */
+            plato_transport_log_msg(term->transport, "[ECHO 0x71] Subtype -> reply %d\n", term->color_mode ? 16 : 1);
+            send_echo_key(term, term->color_mode ? 16 : 1); 
             break;
         case 0x72: send_echo_key(term, 0); break;
         case 0x73: 
-            plato_transport_log_msg(term->transport, "[ECHO 0x73] Config Query -> reply 0x%02X (color=%d)\n",
-                                    term->color_mode ? 0x70 : 0x40, term->color_mode);
-            send_echo_key(term, term->color_mode ? 0x70 : 0x40); 
+            /* Configuration: 0x60 (Touch + 32k RAM), 0x40 (Standard) */
+            plato_transport_log_msg(term->transport, "[ECHO 0x73] Config -> reply 0x%02X\n", term->color_mode ? 0x60 : 0x40);
+            send_echo_key(term, term->color_mode ? 0x60 : 0x40); 
             break;
         case 0x7A: plato_protocol_send_key(term, 0x3FF); break;
         case 0x7B: plato_terminal_beep(term); break;
@@ -287,7 +296,23 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             uint32_t word = decode_word18(dec->word_buf);
             dec->word_idx = 0;
             dec->state = STATE_NORMAL;
-            if (dec->word_param_command == 'W') dec->load_address = word;
+            if (dec->word_param_command == 'W') {
+                dec->load_address = word;
+            } else if (dec->word_param_command == 'Q') {
+                plato_transport_log_msg(term->transport, "[ESC Q WORD] hex:0x%05X octal:%06o (raw: %02X %02X %02X)\n",
+                                        word, word, dec->word_buf[0], dec->word_buf[1], dec->word_buf[2]);
+            } else if (dec->word_param_command == 'R') {
+                if (word >= 0x0A40 && word <= 0x0A7F) {
+                    int size_val = (int)(word - 0x0A40);
+                    if (size_val == 0) {
+                        dec->char_size = 1;
+                    } else {
+                        int calc_scale = (size_val + 7) / 16;
+                        dec->char_size = calc_scale < 1 ? 1 : calc_scale;
+                    }
+                    plato_transport_log_msg(term->transport, "[ESC R FONT SIZE] size_val=%d -> scale=%d\n", size_val, dec->char_size);
+                }
+            }
             dec->word_param_command = 0;
         }
         return;
@@ -326,6 +351,16 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         return;
     }
 
+    if (dec->state == STATE_PAINT_PARAM) {
+        dec->word_buf[dec->word_idx++] = byte;
+        if (dec->word_idx >= 2) {
+            plato_transport_log_msg(term->transport, "[PAINT] seed=(%d,%d) mode=%d fg=0x%08X\n", term->x, term->y, dec->screen_mode, term->fb.fg_color);
+            plato_draw_paint(&term->fb, term->x, term->y, dec->screen_mode);
+            dec->state = STATE_NORMAL;
+        }
+        return;
+    }
+
     if (dec->state == STATE_SKIP_PARAM) {
         if (--dec->skip_bytes_remaining <= 0) dec->state = STATE_NORMAL;
         return;
@@ -333,7 +368,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
     if (dec->state == STATE_ESCAPE) {
         dec->state = STATE_NORMAL;
         if (byte != 'a' && byte != 'b') {
-            printf("[PROTOCOL ESC 0x%02X (%c)]\n", byte, (byte >= 32 && byte <= 126) ? byte : '?');
+            plato_transport_log_msg(term->transport, "[PROTOCOL ESC 0x%02X (%c)]\n", byte, (byte >= 32 && byte <= 126) ? byte : '?');
         }
         switch (byte) {
             case 0x02:
@@ -345,7 +380,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             case 0x0C:
                 plato_transport_log_msg(term->transport, "[CLEAR SCREEN ESC 0x0C] bg=0x%08X color=%d\n", term->fb.bg_color, term->fb.color_enabled);
                 plato_fb_clear(&term->fb); term->x = 0; term->y = 496; term->margin_x = 0;
-                dec->char_size = 0;
+                dec->char_size = 1;
                 dec->screen_mode = PLATO_SCREEN_REWRITE; dec->data_mode = PLATO_MODE_ALPHA;
                 dec->mode7_active = false; dec->mode2_active = false;
                 dec->word_idx = 0; dec->word_param_command = 0;
@@ -375,9 +410,9 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             case 'Y': dec->state = STATE_ECHO_WORD; dec->word_idx = 0; break;
             case 'a': case 'b': dec->state = STATE_COLOR_PARAM; dec->color_cmd = byte; dec->color_idx = 0; break;
 			case 'c':
-			    /* Paint: parametro transitorio di 12 bit composto da due byte a 6 bit. */
-			    dec->state = STATE_SKIP_PARAM;
-			    dec->skip_bytes_remaining = 2;
+			    /* Paint: flood-fill a partire dalla coordinata corrente. */
+			    dec->state = STATE_PAINT_PARAM;
+			    dec->word_idx = 0;
 			    break;
             case '@': term->y = term->y + 5 < PLATO_HEIGHT ? term->y + 5 : term->y; break;
             case 'A': term->y = term->y >= 5 ? term->y - 5 : 0; break;
@@ -385,7 +420,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             case 'C': dec->charset = PLATO_CHARSET_M1; break;
             case 'D': dec->charset = PLATO_CHARSET_M2; break;
             case 'E': dec->charset = PLATO_CHARSET_M3; break;
-            case 'N': dec->char_size = 0; break;
+            case 'N': dec->char_size = 1; break;
             case 'O': dec->char_size = 2; break;
             case 'Z': term->margin_x = term->x; break;
             default: break;
@@ -394,14 +429,29 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
     }
     if (byte == 0x1B) { dec->state = STATE_ESCAPE; return; }
     if (byte < 0x20) {
-        int step = dec->char_size == 2 ? 16 : 8;
+        int scale = (dec->char_size <= 1) ? 1 : dec->char_size;
+        int tracking = (scale > 2) ? (scale * 2 + 2) : (scale == 2 ? 0 : 0);
+        int step = (8 * scale) + tracking;
         switch (byte) {
             case 0x00:
                 /* TUTOR pause / -delay- NOP */
                 term->delay_requested = true;
                 break;
-            case 0x08: term->x = term->x >= step ? term->x - step : 0; break;
-            case 0x09: term->x = term->x + step < PLATO_WIDTH ? term->x + step : PLATO_WIDTH - step; break;
+            case 0x08:
+
+                term->x -= step;
+
+                if (term->x < 0) term->x += PLATO_WIDTH;
+
+                break;
+
+            case 0x09:
+
+                term->x += step;
+
+                if (term->x >= PLATO_WIDTH) term->x -= PLATO_WIDTH;
+
+                break;
             case 0x0A:
                 /* PLATO LF: spostamento verticale modulo 512, senza scroll del framebuffer. */
                 term->y -= 16;
@@ -458,8 +508,10 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         if (coordinate_byte(dec, term, byte)) return;
     }
     if (dec->data_mode == PLATO_MODE_ALPHA) {
-        int advance = dec->char_size == 2 ? 16 : 8;
-        plato_draw_char(&term->fb, &term->font, dec->charset, byte, term->x, term->y, dec->screen_mode, dec->char_size);
+        int scale = (dec->char_size <= 1) ? 1 : dec->char_size;
+        int tracking = (scale > 2) ? (scale * 2 + 2) : (scale == 2 ? 0 : 0);
+        int advance = (8 * scale) + tracking;
+        plato_draw_char(&term->fb, &term->font, dec->charset, byte, term->x, term->y, dec->screen_mode, scale);
         /* In Alpha PLATO l avanzamento orizzontale avvolge modulo 512 senza LF o scroll. */
         term->x += advance;
         if (term->x >= PLATO_WIDTH) term->x -= PLATO_WIDTH;
