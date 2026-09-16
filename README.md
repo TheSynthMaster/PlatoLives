@@ -11,7 +11,7 @@
 
 Built from the ground up as a pure C11 core (`libplato`) with a hardware-accelerated Cocoa/Core Animation presentation layer, PlatoLives connects over standard TCP to active CYBIS and Cyber1 mainframes (`cyberserv.org:8005`), IRATA.ONLINE, and private PLATO nodes. It delivers an authentic sub-pixel gas-discharge neon plasma and color CRT experience at 60 FPS with near-zero idle CPU usage.
 
-📖 **Documentation**: Read the official [User and Technical Manual v3.5 (PDF)](docs/PlatoLives-Manual-v3.5.pdf).
+📖 **Documentation**: Read the official [User and Technical Manual v3.5 (PDF)](docs/PlatoLives_3.5_User_and_Technical_Manual.pdf).
 
 ---
 
