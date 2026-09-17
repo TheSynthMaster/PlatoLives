@@ -42,18 +42,38 @@ Built from the ground up as a pure C11 core (`libplato`) with a hardware-acceler
 - **Crisp Color**: Pure digital 32-bit BGRA color display.
 - **Real Color CRT**: Full analog shadow mask color monitor simulation.
 
-### 4. Canonical Typography & CDC Appendix G Font Scaling
+### 4. Live Text Buffer Companion & Copy/Paste Engine (v3.7)
+- **"PLATO Live Text Buffer" Window (`Cmd+Shift+T`)**: A dedicated companion window mirroring the active $64 \times 32$ terminal text matrix at 10 fps.
+  - **Freeze-on-Selection**: Automatically pauses live streaming when the user selects text or clicks *Select All*, ensuring stable, uninterrupted selection even during fast chat or data streams.
+  - **Retro DarkAqua Theme ($560 \times 550$)**: High-contrast amber typography on a deep charcoal background with integrated toolbar (`[Select All]`, `[Deselect / Live]`, `[✓] Compact`, `[Copy to Clipboard]`, `[● LIVE]` status badge).
+  - **Menu Integration**: `Cmd+C` opens the Live Text Buffer (or copies active selection); `Cmd+Shift+C` captures full $2048 \times 2048$ PNG screenshots.
+- **Core C11 Text Matrix (`libplato`)**: Tracks all characters in memory (`text_grid[32][64]`), automatically excluding M2/M3 downloadable graphics fonts.
+- **Dual Text Extraction**:
+  - **Verbatim**: Preserves exact 2D column positioning and alignment.
+  - **Compact**: Strips blank lines and collapses multiple consecutive whitespace characters into a single space for clean pasting into notes, chat, or documentation.
+
+### 5. Headless Remote Automation & CLI Scripting (`--test-script`) (v3.7)
+- **SSH & Headless Execution**: Runs autonomously in background and remote SSH sessions without WindowServer or active display requirements.
+- **Expanded Command Grammar**:
+  - `copy-all [compact] [file:<path> | clipboard | console]`: Dumps full-screen text to disk, clipboard, or prints directly to **standard output (`console`) in real time**.
+  - `copy-area <x1> <y1> <x2> <y2> [compact] [dest]`: Extracts specific sub-regions using cell ($0..63 \times 0..31$) or PLATO pixel ($0..511$) coordinates.
+  - `display <on | off>`: Orthogonal toggle to disable window compositing while keeping physical decay simulations running.
+  - `renderer <plasma | crt | color | crisp | split>`: Scriptable selection of simulated optical engines.
+  - `persistence <duration>`, `distortion <type>`, `beam <level>`: Scriptable optical and physics parameters.
+- **In-Memory 4x Optical Screenshots**: Full $2048 \times 2048$ PNG screenshot generation with authentic phosphor decay physics in headless mode.
+
+### 6. Canonical Typography & CDC Appendix G Font Scaling
 - **Direct Provenance**: 8×16 font bitmaps for **M0** and **M1** directly sourced and transcribed from Paul Koning's canonical **`pterm`** tables (Jack Stifle's 1972 CERL hardware matrix).
 - **M0**: Complete alphanumeric set including the iconic slashed zero.
 - **M1**: Full canonical set: Greek alphabet, math operators, and vector symbols.
 - **M2 / M3**: Dynamically loaded and compiled character sets from host lessons.
 - **CDC Appendix G EXT `ESC R` Scaling**: Continuous dynamic character scaling (`scale = (size_val + 7) / 16`) with automatic multi-size tracking for giant vector titles (e.g. *Asteroids*).
 
-### 5. Native macOS Integration & Performance
+### 7. Native macOS Integration & Performance
 - **Zero Idle CPU**: Decoupled 60 FPS render pacing with instant quiescence (0.0% CPU when screen content is static).
 - **macOS Status Bar Companion**: Live `NSStatusItem` menu displaying real-time connection status, active session metadata, and quick-connect presets.
 - **Multi-Window Architecture**: Run independent simultaneous sessions across different mainframe hosts.
-- **Dynamic Connection Profiles (`Cmd+,`)**: Configure display modes, beam profiles, persistence durations, curvature types, and startup presets per host.
+- **Dynamic Connection Profiles (`Cmd+,`)**: Configure display modes, beam profiles, persistence durations, curvature types, and startup presets per host with instant "Connect Now" switching.
 - **Mach Performance HUD (`F12`)**: Live FPS, full/partial frame counters, and process thread CPU telemetry.
 - **Fine-Grained Touch (FGT)**: Full emulation of the PLATO infrared touch panel matrix.
 - **Throttled Async Paste (`Cmd+V`)**: Non-blocking text transmission spaced to match mainframe input pacing.
@@ -66,11 +86,13 @@ Built from the ground up as a pure C11 core (`libplato`) with a hardware-acceler
 | :--- | :--- |
 | **Protocol** | CDC IST-III / Jack Stifle CERL X-20 / CDC 721 (ASCII & Color modes) |
 | **Logical Matrix** | 512 × 512 1-bit bitboard (32 KB) & 32-bit Little-Endian BGRA matrix |
+| **Text Grid** | 64 × 32 character matrix buffer with M2/M3 exclusion and Verbatim/Compact extractors |
 | **Render Surface** | 2048 × 2048 32-bit sub-pixel BGRA supersampled surface (4x scale) |
 | **Core Architecture** | Pure C11 (`libplato`), thread-safe ring buffer, non-blocking BSD sockets |
 | **UI Framework** | Native Objective-C (Cocoa / AppKit), Core Animation (`CALayer`) |
 | **Distortion Engine** | Analytical coordinate warp ($k=0.018$) with seamless black bezel framing |
 | **Persistence Engine** | Floating-point exponential decay ($\tau = \text{duration}/10$) down to $<0.01\%$ |
+| **Scripting Engine** | Headless CLI test runner with direct console/file text export and headless screenshots |
 | **Compatibility** | Cyber1 / CYBIS (`cyberserv.org:8005`), IRATA.ONLINE (`irata.online:8005`) |
 
 ---
@@ -96,5 +118,8 @@ make -j$(sysctl -n hw.ncpu)
 # Run unit tests
 ctest --output-on-failure
 
-# Launch PlatoLives
+# Launch PlatoLives GUI
 ./PlatoLives.app/Contents/MacOS/PlatoLives
+
+# Run automated headless script via SSH / CLI
+./PlatoLives.app/Contents/MacOS/PlatoLives --test-script /path/to/script.txt
