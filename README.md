@@ -1,4 +1,4 @@
-# PlatoLives (v3.5)
+# PlatoLives (v3.7)
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%28Apple%20Silicon%20%26%20Intel%29-orange.svg)](#)
 [![Language](https://img.shields.io/badge/language-C11%20%7C%20Objective--C%20%28Cocoa%2FMetal%29-blue.svg)](#)
