@@ -30,6 +30,7 @@ void plato_terminal_init(plato_terminal_t *term) {
     plato_fb_init(&term->fb);
     plato_font_init(&term->font);
     plato_protocol_init(&term->decoder);
+    plato_terminal_clear_text(term);
 }
 
 size_t plato_terminal_feed(plato_terminal_t *term, const uint8_t *data, size_t len) {
@@ -69,4 +70,126 @@ void plato_terminal_set_color_mode(plato_terminal_t *term, bool enabled) {
         term->fb.fg_color = 0xFF006EFFu; /* Amber plasma */
         term->fb.bg_color = 0xFF00030Au;
     }
+}
+
+void plato_terminal_clear_text(plato_terminal_t *term) {
+    if (!term) return;
+    for (int r = 0; r < PLATO_ROWS; r++) {
+        for (int c = 0; c < PLATO_COLS; c++) {
+            term->text_grid[r][c].ch = ' ';
+            term->text_grid[r][c].charset = (uint8_t)PLATO_CHARSET_M0;
+        }
+    }
+}
+
+void plato_terminal_put_char(plato_terminal_t *term, int x, int y, uint8_t ch,
+                             plato_charset_t charset, plato_screen_mode_t mode, int size) {
+    if (!term) return;
+    int y_mod = ((y % PLATO_HEIGHT) + PLATO_HEIGHT) % PLATO_HEIGHT;
+    int x_mod = ((x % PLATO_WIDTH) + PLATO_WIDTH) % PLATO_WIDTH;
+    int row = 31 - (y_mod / PLATO_CHAR_HEIGHT);
+    int col = x_mod / PLATO_CHAR_WIDTH;
+
+    if (row < 0 || row >= PLATO_ROWS || col < 0 || col >= PLATO_COLS) return;
+
+    if (mode == PLATO_SCREEN_ERASE) {
+        term->text_grid[row][col].ch = ' ';
+        term->text_grid[row][col].charset = (uint8_t)PLATO_CHARSET_M0;
+    } else {
+        term->text_grid[row][col].ch = ch;
+        term->text_grid[row][col].charset = (uint8_t)charset;
+    }
+    (void)size;
+}
+
+size_t plato_terminal_get_text_area(const plato_terminal_t *term,
+                                    int col0, int row0, int col1, int row1,
+                                    bool compact,
+                                    char *out_buf, size_t max_len) {
+    if (!term || !out_buf || max_len == 0) return 0;
+
+    int min_c = (col0 < col1) ? col0 : col1;
+    int max_c = (col0 > col1) ? col0 : col1;
+    int min_r = (row0 < row1) ? row0 : row1;
+    int max_r = (row0 > row1) ? row0 : row1;
+
+    if (min_c < 0) min_c = 0;
+    if (max_c >= PLATO_COLS) max_c = PLATO_COLS - 1;
+    if (min_r < 0) min_r = 0;
+    if (max_r >= PLATO_ROWS) max_r = PLATO_ROWS - 1;
+
+    size_t out_idx = 0;
+    char line[PLATO_COLS + 1];
+    char formatted[PLATO_COLS + 1];
+    bool first_line_written = false;
+
+    for (int r = min_r; r <= max_r; r++) {
+        int line_len = 0;
+        for (int c = min_c; c <= max_c; c++) {
+            plato_text_cell_t cell = term->text_grid[r][c];
+            /* Esclude esplicitamente i charset grafici M2 ed M3 */
+            if (cell.charset == PLATO_CHARSET_M2 || cell.charset == PLATO_CHARSET_M3) {
+                line[line_len++] = ' ';
+            } else if (cell.ch >= 32 && cell.ch <= 126) {
+                line[line_len++] = (char)cell.ch;
+            } else {
+                line[line_len++] = ' ';
+            }
+        }
+        line[line_len] = '\0';
+
+        if (!compact) {
+            /* Modalità Verbatim: preserva le posizioni di colonna, rimuove gli spazi a fine riga */
+            while (line_len > 0 && line[line_len - 1] == ' ') {
+                line_len--;
+            }
+            if (r > min_r) {
+                if (out_idx + 1 < max_len) out_buf[out_idx++] = '\n';
+            }
+            for (int i = 0; i < line_len; i++) {
+                if (out_idx + 1 < max_len) out_buf[out_idx++] = line[i];
+            }
+        } else {
+            /* Modalità Compact: trimma inizio/fine, collassa spazi consecutivi, scarta righe vuote */
+            int start = 0;
+            while (start < line_len && (line[start] == ' ' || line[start] == '\t')) {
+                start++;
+            }
+            int end = line_len;
+            while (end > start && (line[end - 1] == ' ' || line[end - 1] == '\t')) {
+                end--;
+            }
+
+            if (start >= end) {
+                /* Riga vuota: in modalità compact viene scartata */
+                continue;
+            }
+
+            int fmt_len = 0;
+            bool in_space = false;
+            for (int i = start; i < end; i++) {
+                char ch = line[i];
+                if (ch == ' ' || ch == '\t') {
+                    if (!in_space) {
+                        formatted[fmt_len++] = ' ';
+                        in_space = true;
+                    }
+                } else {
+                    formatted[fmt_len++] = ch;
+                    in_space = false;
+                }
+            }
+
+            if (first_line_written) {
+                if (out_idx + 1 < max_len) out_buf[out_idx++] = '\n';
+            }
+            for (int i = 0; i < fmt_len; i++) {
+                if (out_idx + 1 < max_len) out_buf[out_idx++] = formatted[i];
+            }
+            first_line_written = true;
+        }
+    }
+
+    out_buf[out_idx] = '\0';
+    return out_idx;
 }

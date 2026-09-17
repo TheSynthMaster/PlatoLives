@@ -18,6 +18,11 @@ struct plato_transport;
 typedef void (*plato_beep_callback_t)(void *context);
 typedef void (*plato_metadata_callback_t)(void *context, const char *name, const char *group, const char *system, const char *station);
 
+typedef struct {
+    uint8_t ch;
+    uint8_t charset; /* plato_charset_t: M0, M1, M2, M3 */
+} plato_text_cell_t;
+
 struct plato_terminal {
     int x;
     int y;
@@ -38,6 +43,7 @@ struct plato_terminal {
     void *metadata_context;
     bool color_mode;
     bool delay_requested;
+    plato_text_cell_t text_grid[PLATO_ROWS][PLATO_COLS];
 };
 
 void plato_terminal_set_color_mode(plato_terminal_t *term, bool enabled);
@@ -47,5 +53,13 @@ size_t plato_terminal_feed(plato_terminal_t *term, const uint8_t *data, size_t l
 void plato_terminal_render_rgba(const plato_terminal_t *term, uint32_t *out_rgba);
 void plato_terminal_set_palette(plato_terminal_t *term, plato_palette_t pal);
 void plato_terminal_beep(plato_terminal_t *term);
+
+void plato_terminal_clear_text(plato_terminal_t *term);
+void plato_terminal_put_char(plato_terminal_t *term, int x, int y, uint8_t ch,
+                             plato_charset_t charset, plato_screen_mode_t mode, int size);
+size_t plato_terminal_get_text_area(const plato_terminal_t *term,
+                                    int col0, int row0, int col1, int row1,
+                                    bool compact,
+                                    char *out_buf, size_t max_len);
 
 #endif /* PLATO_TERMINAL_H */
