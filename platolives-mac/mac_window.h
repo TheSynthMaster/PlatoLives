@@ -3,6 +3,7 @@
 
 @class PLATOTestRunner;
 @class PLATOTerminalWindowController;
+@class PLATOTextBufferWindowController;
 
 @protocol PLATOTerminalWindowDelegate <NSObject>
 - (void)terminalWindowControllerWillClose:(PLATOTerminalWindowController *)controller;
@@ -46,6 +47,9 @@
 - (void)disconnectSession:(id)sender;
 - (void)quickConnectProfile:(id)sender;
 - (void)copyScreen:(id)sender;
+- (void)copyScreenImage:(id)sender;
+- (void)copyTextAction:(id)sender;
+- (void)showTextBufferWindow:(id)sender;
 - (void)pasteText:(id)sender;
 - (void)cancelPaste:(id)sender;
 @end
