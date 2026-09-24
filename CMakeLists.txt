@@ -27,7 +27,7 @@ else()
 endif()
 
 
-project(PlatoLives VERSION 3.8 LANGUAGES C OBJC)
+project(PlatoLives VERSION 4.0 LANGUAGES C OBJC)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -45,6 +45,9 @@ set(LIBPLATO_SOURCES
     src/plato_graphics.c
     src/plato_protocol.c
     src/plato_keyboard.c
+    src/plato_profile.c
+    src/plato_script.c
+    src/plato_optical.c
     src/plato_terminal.c
     src/plato_ringbuf.c
     src/plato_transport.c

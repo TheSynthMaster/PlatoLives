@@ -67,8 +67,8 @@ void plato_terminal_set_color_mode(plato_terminal_t *term, bool enabled) {
         term->fb.fg_color = 0xFFFFFFFFu; /* Crisp white default for color mode */
         term->fb.bg_color = 0xFF000000u; /* Pure black background */
     } else {
-        term->fb.fg_color = 0xFF006EFFu; /* Amber plasma */
-        term->fb.bg_color = 0xFF00030Au;
+        term->fb.fg_color = 0xFFFF6E00u; /* Amber plasma */
+        term->fb.bg_color = 0xFF0A0300u;
     }
 }
 

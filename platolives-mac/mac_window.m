@@ -1047,39 +1047,33 @@ static void plato_mac_beep(void *context) {
     [fileMenuItem setSubmenu:fileMenu];
     [mainMenu addItem:fileMenuItem];
 
-    // Menu Edit standard macOS (First Responder per editor di testo e terminale)
+    // Menu Edit (Allineato 1:1 con Windows)
     NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
     NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
 
-    NSMenuItem *undoItem = [[NSMenuItem alloc] initWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
-    [editMenu addItem:undoItem];
+    NSMenuItem *copyVerbatimItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Verbatim" action:@selector(copyAllTextVerbatim:) keyEquivalent:@"c"];
+    [copyVerbatimItem setTarget:self];
+    [editMenu addItem:copyVerbatimItem];
 
-    NSMenuItem *redoItem = [[NSMenuItem alloc] initWithTitle:@"Redo" action:@selector(redo:) keyEquivalent:@"Z"];
-    [editMenu addItem:redoItem];
+    NSMenuItem *copyCompactItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Compact" action:@selector(copyAllTextCompact:) keyEquivalent:@"C"];
+    [copyCompactItem setTarget:self];
+    [copyCompactItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [editMenu addItem:copyCompactItem];
 
-    [editMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *copySelectedItem = [[NSMenuItem alloc] initWithTitle:@"Copy Selected Text..." action:@selector(copySelectedText:) keyEquivalent:@"T"];
+    [copySelectedItem setTarget:self];
+    [copySelectedItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [editMenu addItem:copySelectedItem];
 
-    NSMenuItem *cutItem = [[NSMenuItem alloc] initWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
-    [editMenu addItem:cutItem];
-
-    NSMenuItem *copyItem = [[NSMenuItem alloc] initWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
-    [editMenu addItem:copyItem];
-
-    NSMenuItem *pasteItem = [[NSMenuItem alloc] initWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
-    [editMenu addItem:pasteItem];
-
-    NSMenuItem *selAllItem = [[NSMenuItem alloc] initWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
-    [editMenu addItem:selAllItem];
-
-    [editMenu addItem:[NSMenuItem separatorItem]];
-
-    NSMenuItem *copyScreenItem = [[NSMenuItem alloc] initWithTitle:@"Copy Screen Image" action:@selector(copyScreenImage:) keyEquivalent:@"C"];
+    NSMenuItem *copyScreenItem = [[NSMenuItem alloc] initWithTitle:@"Copy Screen Image" action:@selector(copyScreenImage:) keyEquivalent:@""];
     [copyScreenItem setTarget:self];
     [editMenu addItem:copyScreenItem];
 
-    NSMenuItem *liveTextItem = [[NSMenuItem alloc] initWithTitle:@"Show Live Text Buffer..." action:@selector(copyTextAction:) keyEquivalent:@"l"];
-    [liveTextItem setTarget:self];
-    [editMenu addItem:liveTextItem];
+    [editMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *pasteItem = [[NSMenuItem alloc] initWithTitle:@"Paste Text" action:@selector(pasteText:) keyEquivalent:@"v"];
+    [pasteItem setTarget:self];
+    [editMenu addItem:pasteItem];
 
     NSMenuItem *cancelPasteItem = [[NSMenuItem alloc] initWithTitle:@"Cancel Paste" action:@selector(cancelPaste:) keyEquivalent:@"."];
     [cancelPasteItem setTarget:self];
@@ -1402,7 +1396,7 @@ static void plato_mac_beep(void *context) {
     if (!self.statusMenu) return;
     [self.statusMenu removeAllItems];
 
-    NSMenuItem *headerItem = [[NSMenuItem alloc] initWithTitle:@"PlatoLives 3.8" action:nil keyEquivalent:@""];
+    NSMenuItem *headerItem = [[NSMenuItem alloc] initWithTitle:@"PlatoLives 4.0" action:nil keyEquivalent:@""];
     [headerItem setEnabled:NO];
     [self.statusMenu addItem:headerItem];
 
@@ -1757,8 +1751,20 @@ static void plato_mac_beep(void *context) {
     [self applyKeyboardReferencePresentation];
 }
 
+- (void)copyAllTextVerbatim:(id)sender {
+    [self.view copyTextToPasteboardCompact:NO];
+}
+
+- (void)copyAllTextCompact:(id)sender {
+    [self.view copyTextToPasteboardCompact:YES];
+}
+
+- (void)copySelectedText:(id)sender {
+    [self showTextBufferWindow:sender];
+}
+
 - (void)copyScreen:(id)sender {
-    [self copyTextAction:sender];
+    [self copyAllTextVerbatim:sender];
 }
 
 - (void)copyScreenImage:(id)sender {
@@ -1847,7 +1853,7 @@ static void plato_mac_beep(void *context) {
 
 - (void)showAbout:(id)sender {
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    if (!version) version = @"3.8";
+    if (!version) version = @"4.0";
     NSDictionary *options = @{
         NSAboutPanelOptionApplicationName: @"PlatoLives",
         NSAboutPanelOptionApplicationVersion: version,

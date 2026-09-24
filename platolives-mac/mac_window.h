@@ -46,6 +46,9 @@
 - (void)connectDefaultProfile:(id)sender;
 - (void)disconnectSession:(id)sender;
 - (void)quickConnectProfile:(id)sender;
+- (void)copyAllTextVerbatim:(id)sender;
+- (void)copyAllTextCompact:(id)sender;
+- (void)copySelectedText:(id)sender;
 - (void)copyScreen:(id)sender;
 - (void)copyScreenImage:(id)sender;
 - (void)copyTextAction:(id)sender;

@@ -9,15 +9,34 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/time.h>
 #include <time.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
+
+#ifdef _WIN32
+  #define WIN32_LEAN_AND_MEAN
+  #include <windows.h>
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  #include <process.h>
+  #define plato_close_socket(s) closesocket((SOCKET)(s))
+  #define SHUT_RDWR SD_BOTH
+  #define getpid() _getpid()
+  static inline struct tm* plato_localtime_r(const time_t *t, struct tm *res) {
+      localtime_s(res, t);
+      return res;
+  }
+  #define localtime_r plato_localtime_r
+  #include <sys/time.h>
+#else
+  #include <unistd.h>
+  #include <fcntl.h>
+  #include <netdb.h>
+  #include <sys/socket.h>
+  #include <sys/types.h>
+  #include <sys/time.h>
+  #include <netinet/in.h>
+  #include <netinet/tcp.h>
+  #define plato_close_socket(s) close(s)
+#endif
 
 static const char* byte_name(uint8_t value) {
     switch (value & 0x7F) {
@@ -47,7 +66,8 @@ static void format_time(char *out, size_t out_size) {
     struct timeval tv;
     struct tm tm_info;
     gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm_info);
+    time_t sec = (time_t)tv.tv_sec;
+    localtime_r(&sec, &tm_info);
     snprintf(out, out_size, "%02d:%02d:%02d.%03d", tm_info.tm_hour, tm_info.tm_min,
              tm_info.tm_sec, (int)(tv.tv_usec / 1000));
 }
@@ -136,6 +156,15 @@ plato_transport_t* plato_transport_create(void) {
     plato_transport_t *t = (plato_transport_t *)calloc(1, sizeof(plato_transport_t));
     if (!t) return NULL;
 
+#ifdef _WIN32
+    static bool wsa_ready = false;
+    if (!wsa_ready) {
+        WSADATA wsa;
+        if (WSAStartup(MAKEWORD(2, 2), &wsa) == 0) {
+            wsa_ready = true;
+        }
+    }
+#endif
     t->socket_fd = -1;
     pthread_mutex_init(&t->log_mutex, NULL);
     t->log_file = NULL;
@@ -222,10 +251,10 @@ bool plato_transport_connect(plato_transport_t *t, const char *host, int port) {
         fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (fd == -1) continue;
         int nodelay = 1;
-        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&nodelay, sizeof(nodelay));
         if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
         snprintf(t->last_error, sizeof(t->last_error), "%s", strerror(errno));
-        close(fd);
+        plato_close_socket(fd);
         fd = -1;
     }
     freeaddrinfo(res);
@@ -245,7 +274,7 @@ void plato_transport_disconnect(plato_transport_t *t) {
     if (!t) return;
     if (t->socket_fd >= 0) {
         shutdown(t->socket_fd, SHUT_RDWR);
-        close(t->socket_fd);
+        plato_close_socket(t->socket_fd);
         t->socket_fd = -1;
     }
     t->connected = false;
@@ -253,14 +282,14 @@ void plato_transport_disconnect(plato_transport_t *t) {
 
 int plato_transport_send(plato_transport_t *t, const uint8_t *data, size_t len) {
     if (!t || !t->connected || t->socket_fd < 0 || !data || len == 0) return -1;
-    int sent = (int)send(t->socket_fd, data, len, 0);
+    int sent = (int)send(t->socket_fd, (const char *)data, len, 0);
     if (sent > 0) log_traffic(t, "TX", data, (size_t)sent);
     return sent;
 }
 
 int plato_transport_recv(plato_transport_t *t, uint8_t *buf, size_t max_len) {
     if (!t || !t->connected || t->socket_fd < 0 || !buf || max_len == 0) return -1;
-    int received = (int)recv(t->socket_fd, buf, max_len, 0);
+    int received = (int)recv(t->socket_fd, (char *)buf, max_len, 0);
     if (received > 0) log_traffic(t, "RX", buf, (size_t)received);
     return received;
 }

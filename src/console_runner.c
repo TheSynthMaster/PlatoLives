@@ -1,20 +1,50 @@
+#ifndef _WIN32
 #define _DARWIN_C_SOURCE
 #define _GNU_SOURCE
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <poll.h>
 #include <signal.h>
 #include <pthread.h>
+#else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <time.h>
+#include <signal.h>
+
+#ifdef _WIN32
+#ifndef STDIN_FILENO
+#define STDIN_FILENO 0
+#endif
+#ifndef STDOUT_FILENO
+#define STDOUT_FILENO 1
+#endif
+static inline void console_sleep_us(unsigned int us) {
+    Sleep((DWORD)(us >= 1000 ? us / 1000 : 1));
+}
+#define usleep(us) console_sleep_us(us)
+
+static inline ssize_t console_platform_write(int fd, const void *buf, size_t count) {
+    HANDLE h = (fd == STDOUT_FILENO) ? GetStdHandle(STD_OUTPUT_HANDLE) : GetStdHandle(STD_ERROR_HANDLE);
+    if (!h || h == INVALID_HANDLE_VALUE) return -1;
+    DWORD written = 0;
+    if (!WriteFile(h, buf, (DWORD)count, &written, NULL)) return -1;
+    return (ssize_t)written;
+}
+#define write(fd, buf, count) console_platform_write(fd, buf, count)
+#endif
 
 #include "plato/plato_terminal.h"
 #include "plato/plato_transport.h"
@@ -23,7 +53,16 @@
 #include "plato/plato_ringbuf.h"
 #include "plato/console_runner.h"
 
+#ifndef _WIN32
 static struct termios g_orig_termios;
+#else
+static DWORD g_orig_in_mode = 0;
+static DWORD g_orig_out_mode = 0;
+static UINT g_orig_cp = 0;
+static UINT g_orig_out_cp = 0;
+static HANDLE g_hIn = NULL;
+static HANDLE g_hOut = NULL;
+#endif
 static bool g_raw_enabled = false;
 static volatile sig_atomic_t g_quit = 0;
 static volatile sig_atomic_t g_resized = 1;
@@ -37,9 +76,21 @@ void plato_console_set_clipboard_callback(plato_console_clipboard_cb cb) {
 }
 
 static double get_time_sec(void) {
+#ifndef _WIN32
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+#else
+    static LARGE_INTEGER freq;
+    static bool init = false;
+    if (!init) {
+        QueryPerformanceFrequency(&freq);
+        init = true;
+    }
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return (double)now.QuadPart / (double)freq.QuadPart;
+#endif
 }
 
 static void show_status_feedback(const char *msg, double duration_sec) {
@@ -51,11 +102,19 @@ static void show_status_feedback(const char *msg, double duration_sec) {
 static void console_restore_terminal(void) {
     if (g_raw_enabled) {
         write(STDOUT_FILENO, "\033[0m\033[?25h\033[?1049l", 19);
+#ifndef _WIN32
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_orig_termios);
+#else
+        if (g_hIn) SetConsoleMode(g_hIn, g_orig_in_mode);
+        if (g_hOut) SetConsoleMode(g_hOut, g_orig_out_mode);
+        if (g_orig_cp) SetConsoleCP(g_orig_cp);
+        if (g_orig_out_cp) SetConsoleOutputCP(g_orig_out_cp);
+#endif
         g_raw_enabled = false;
     }
 }
 
+#ifndef _WIN32
 static void console_signal_handler(int sig) {
     if (sig == SIGINT || sig == SIGTERM || sig == SIGHUP) {
         g_quit = 1;
@@ -63,8 +122,39 @@ static void console_signal_handler(int sig) {
         g_resized = 1;
     }
 }
+#else
+static BOOL WINAPI console_ctrl_handler(DWORD ctrl_type) {
+    if (ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_BREAK_EVENT || ctrl_type == CTRL_CLOSE_EVENT) {
+        g_quit = 1;
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
+
+static bool console_get_window_size(int *width, int *height) {
+#ifndef _WIN32
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0) {
+        *width = ws.ws_col;
+        *height = ws.ws_row;
+        return true;
+    }
+    return false;
+#else
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h && h != INVALID_HANDLE_VALUE && GetConsoleScreenBufferInfo(h, &csbi)) {
+        *width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        *height = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+        return true;
+    }
+    return false;
+#endif
+}
 
 static bool console_enable_raw_mode(void) {
+#ifndef _WIN32
     if (!isatty(STDIN_FILENO)) return false;
     if (tcgetattr(STDIN_FILENO, &g_orig_termios) == -1) return false;
 
@@ -82,6 +172,60 @@ static bool console_enable_raw_mode(void) {
 
     write(STDOUT_FILENO, "\033[?1049h\033[?25l\033[2J\033[H", 20);
     return true;
+#else
+    g_hIn = GetStdHandle(STD_INPUT_HANDLE);
+    g_hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!g_hIn || g_hIn == INVALID_HANDLE_VALUE || !g_hOut || g_hOut == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    if (!GetConsoleMode(g_hIn, &g_orig_in_mode) || !GetConsoleMode(g_hOut, &g_orig_out_mode)) {
+        return false;
+    }
+
+    g_orig_cp = GetConsoleCP();
+    g_orig_out_cp = GetConsoleOutputCP();
+    SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
+
+    DWORD out_mode = g_orig_out_mode | ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(g_hOut, out_mode);
+
+    DWORD in_mode = ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS;
+    SetConsoleMode(g_hIn, in_mode);
+
+    SetConsoleCtrlHandler(console_ctrl_handler, TRUE);
+
+    g_raw_enabled = true;
+    atexit(console_restore_terminal);
+
+    write(STDOUT_FILENO, "\033[?1049h\033[?25l\033[2J\033[H", 20);
+
+    /* Garanzia altezza minima di 35 righe per accogliere PLATO (32 righe) + bezel + status */
+    int cur_w = 80, cur_h = 24;
+    if (console_get_window_size(&cur_w, &cur_h)) {
+        if (cur_h < 35) {
+            int new_h = 35;
+            int new_w = (cur_w < 80) ? 80 : cur_w;
+            CONSOLE_SCREEN_BUFFER_INFO csbi;
+            if (GetConsoleScreenBufferInfo(g_hOut, &csbi)) {
+                COORD bsize = csbi.dwSize;
+                if (bsize.Y < new_h) bsize.Y = (SHORT)new_h;
+                if (bsize.X < new_w) bsize.X = (SHORT)new_w;
+                SetConsoleScreenBufferSize(g_hOut, bsize);
+                SMALL_RECT r;
+                r.Left = 0; r.Top = 0;
+                r.Right = (SHORT)(new_w - 1);
+                r.Bottom = (SHORT)(new_h - 1);
+                SetConsoleWindowInfo(g_hOut, TRUE, &r);
+            }
+            char rsz[32];
+            int rsz_len = snprintf(rsz, sizeof(rsz), "\033[8;%d;%dt", new_h, new_w);
+            if (rsz_len > 0) write(STDOUT_FILENO, rsz, rsz_len);
+        }
+    }
+    return true;
+#endif
 }
 
 static void console_beep_callback(void *context) {
@@ -142,68 +286,29 @@ static void copy_screen_to_clipboard(const plato_terminal_t *term) {
         g_clipboard_cb(buf, out_len);
     }
 
+#ifdef _WIN32
+    if (OpenClipboard(NULL)) {
+        EmptyClipboard();
+        HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, out_len + 1);
+        if (hGlob) {
+            char *dst = (char *)GlobalLock(hGlob);
+            if (dst) {
+                memcpy(dst, buf, out_len);
+                dst[out_len] = '\0';
+                GlobalUnlock(hGlob);
+                SetClipboardData(CF_TEXT, hGlob);
+            }
+        }
+        CloseClipboard();
+    }
+#endif
     send_osc52_copy(buf, out_len);
     show_status_feedback("*** SCHERMO SALVATO IN screen.txt E NEGLI APPUNTI ***", 1.5);
 }
 
-typedef struct {
-    plato_special_key_t key;
-    double start_time;
-    double expiry;
-    bool active;
-} pending_key_t;
-
-static pending_key_t g_pending = { PLATO_KEY_NONE, 0.0, 0.0, false };
-
-static void flush_pending_key(plato_terminal_t *term) {
-    if (g_pending.active) {
-        plato_protocol_send_key(term, plato_keyboard_keycode(g_pending.key, false));
-        g_pending.active = false;
-    }
-}
-
-static void trigger_key_double_tap(plato_terminal_t *term, plato_special_key_t key, bool explicit_shift) {
-    double now = get_time_sec();
-
-    if (explicit_shift) {
-        flush_pending_key(term);
-        plato_protocol_send_key(term, plato_keyboard_keycode(key, true));
-        return;
-    }
-
-    if (g_pending.active && g_pending.key == key && (now - g_pending.start_time) < 0.06) {
-        return;
-    }
-
-    if (g_pending.active && g_pending.key == key && now < g_pending.expiry) {
-        g_pending.active = false;
-        plato_protocol_send_key(term, plato_keyboard_keycode(key, true));
-
-        const char *name = "COMANDO";
-        switch (key) {
-            case PLATO_KEY_NEXT: name = "SHIFT-NEXT"; break;
-            case PLATO_KEY_STOP: name = "SHIFT-STOP"; break;
-            case PLATO_KEY_BACK: name = "SHIFT-BACK"; break;
-            case PLATO_KEY_HELP: name = "SHIFT-HELP"; break;
-            case PLATO_KEY_LAB:  name = "SHIFT-LAB"; break;
-            case PLATO_KEY_DATA: name = "SHIFT-DATA"; break;
-            case PLATO_KEY_EDIT: name = "SHIFT-EDIT"; break;
-            default: break;
-        }
-        char fb[64];
-        snprintf(fb, sizeof(fb), "*** [ %s INVIATO ] ***", name);
-        show_status_feedback(fb, 1.2);
-        return;
-    }
-
-    if (g_pending.active) {
-        flush_pending_key(term);
-    }
-
-    g_pending.key = key;
-    g_pending.start_time = now;
-    g_pending.expiry = now + 0.50;
-    g_pending.active = true;
+static void console_kbd_feedback(const char *msg, double duration_sec, void *user_data) {
+    (void)user_data;
+    show_status_feedback(msg, duration_sec);
 }
 
 typedef struct {
@@ -212,7 +317,11 @@ typedef struct {
     volatile bool running;
 } console_net_worker_ctx_t;
 
+#ifndef _WIN32
 static void* console_net_worker(void *arg) {
+#else
+static DWORD WINAPI console_net_worker(LPVOID arg) {
+#endif
     console_net_worker_ctx_t *ctx = (console_net_worker_ctx_t *)arg;
     uint8_t buf[4096];
     while (ctx->running) {
@@ -228,7 +337,11 @@ static void* console_net_worker(void *arg) {
             usleep(20000);
         }
     }
+#ifndef _WIN32
     return NULL;
+#else
+    return 0;
+#endif
 }
 
 static void draw_bezel(int offset_x, int offset_y, int term_w, int term_h) {
@@ -293,20 +406,38 @@ static void render_status_bar(const plato_terminal_t *term, const char *host, in
         }
     }
 
-    int bar_len = (int)strlen(bar);
-
     char out[1024];
-    int len = snprintf(out, sizeof(out), "\033[%d;1H\033[7m", status_y);
+    int len = snprintf(out, sizeof(out), "\033[%d;1H\033[7m%s\033[K\033[0m", status_y, bar);
     if (len > 0) write(STDOUT_FILENO, out, len);
-
-    write(STDOUT_FILENO, bar, bar_len);
-    for (int i = bar_len; i < term_w; i++) {
-        write(STDOUT_FILENO, " ", 1);
-    }
-    write(STDOUT_FILENO, "\033[0m", 4);
 }
 
+#ifdef _WIN32
+static bool win_console_has_input(HANDLE hIn) {
+    DWORD num_events = 0;
+    if (!GetNumberOfConsoleInputEvents(hIn, &num_events) || num_events == 0) {
+        return false;
+    }
+    INPUT_RECORD records[32];
+    DWORD read_count = 0;
+    if (!PeekConsoleInputW(hIn, records, 32, &read_count) || read_count == 0) {
+        return false;
+    }
+    for (DWORD i = 0; i < read_count; i++) {
+        if (records[i].EventType == KEY_EVENT) {
+            if (records[i].Event.KeyEvent.bKeyDown) {
+                return true;
+            }
+        } else if (records[i].EventType == WINDOW_BUFFER_SIZE_EVENT) {
+            g_resized = 1;
+        }
+    }
+    ReadConsoleInputW(hIn, records, read_count, &read_count);
+    return false;
+}
+#endif
+
 static size_t console_read_sequence(int fd, uint8_t *buf, size_t max_len) {
+#ifndef _WIN32
     ssize_t n = read(fd, buf, 1);
     if (n <= 0) return 0;
     size_t total = 1;
@@ -327,12 +458,38 @@ static size_t console_read_sequence(int fd, uint8_t *buf, size_t max_len) {
         }
     }
     return total;
+#else
+    (void)fd;
+    if (!win_console_has_input(g_hIn)) return 0;
+    DWORD dwRead = 0;
+    if (!ReadFile(g_hIn, buf, 1, &dwRead, NULL) || dwRead == 0) return 0;
+    size_t total = 1;
+
+    if (buf[0] == 0x1B) {
+        while (total < max_len) {
+            DWORD wait_res = WaitForSingleObject(g_hIn, 60);
+            if (wait_res != WAIT_OBJECT_0 || !win_console_has_input(g_hIn)) break;
+            DWORD m = 0;
+            if (!ReadFile(g_hIn, &buf[total], 1, &m, NULL) || m == 0) break;
+            total++;
+            uint8_t last = buf[total - 1];
+            if (total == 2 && last != '[' && last != 'O') {
+                break;
+            }
+            if (total >= 3 && ((last >= '@' && last <= '~') || last == '$')) {
+                break;
+            }
+        }
+    }
+    return total;
+#endif
 }
 
 int plato_console_run(const char *host, int port) {
     const char *target_host = (host && host[0]) ? host : CYBER1_DEFAULT_HOST;
     int target_port = (port > 0) ? port : CYBER1_DEFAULT_PORT;
 
+#ifndef _WIN32
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = console_signal_handler;
@@ -340,6 +497,7 @@ int plato_console_run(const char *host, int port) {
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGHUP, &sa, NULL);
     sigaction(SIGWINCH, &sa, NULL);
+#endif
 
     if (!console_enable_raw_mode()) {
         fprintf(stderr, "[PlatoLives] Errore: impossibile inizializzare la modalita RAW del terminale.\n");
@@ -362,8 +520,16 @@ int plato_console_run(const char *host, int port) {
         .ringbuf = &ringbuf,
         .running = true
     };
+    plato_keyboard_state_t kbd_state;
+    plato_keyboard_state_init(&kbd_state);
+    plato_keyboard_set_feedback_cb(&kbd_state, console_kbd_feedback, NULL);
+
+#ifndef _WIN32
     pthread_t net_thread;
     pthread_create(&net_thread, NULL, console_net_worker, &net_ctx);
+#else
+    HANDLE net_thread = CreateThread(NULL, 0, console_net_worker, &net_ctx, 0, NULL);
+#endif
 
     bool ok = plato_transport_connect(transport, target_host, target_port);
     if (!ok) {
@@ -375,7 +541,14 @@ int plato_console_run(const char *host, int port) {
             usleep(50000);
         }
         net_ctx.running = false;
+#ifndef _WIN32
         pthread_join(net_thread, NULL);
+#else
+        if (net_thread) {
+            WaitForSingleObject(net_thread, INFINITE);
+            CloseHandle(net_thread);
+        }
+#endif
         plato_transport_destroy(transport);
         plato_ringbuf_destroy(&ringbuf);
         console_restore_terminal();
@@ -399,16 +572,27 @@ int plato_console_run(const char *host, int port) {
     while (!g_quit) {
         double now = get_time_sec();
 
-        if (g_pending.active && now >= g_pending.expiry) {
-            flush_pending_key(&term);
-        }
+        plato_keyboard_poll(&kbd_state, &term, now);
 
+#ifdef _WIN32
+        {
+            static int s_prev_cw = 0, s_prev_ch = 0;
+            int cw = 0, ch = 0;
+            if (console_get_window_size(&cw, &ch)) {
+                if (cw != s_prev_cw || ch != s_prev_ch) {
+                    s_prev_cw = cw;
+                    s_prev_ch = ch;
+                    g_resized = 1;
+                }
+            }
+        }
+#endif
         if (g_resized) {
             g_resized = 0;
-            struct winsize ws;
-            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0) {
-                term_w = ws.ws_col;
-                term_h = ws.ws_row;
+            int cur_w = 80, cur_h = 34;
+            if (console_get_window_size(&cur_w, &cur_h)) {
+                term_w = cur_w;
+                term_h = cur_h;
             }
             offset_x = (term_w > PLATO_COLS) ? ((term_w - PLATO_COLS) / 2 + 1) : 1;
             int avail_h = (term_h > 1) ? (term_h - 1) : term_h;
@@ -479,134 +663,136 @@ int plato_console_run(const char *host, int port) {
             render_status_bar(&term, target_host, target_port, term_w, status_y);
         }
 
+#ifndef _WIN32
         struct pollfd pfd;
         pfd.fd = STDIN_FILENO;
         pfd.events = POLLIN;
         pfd.revents = 0;
 
         int poll_res = poll(&pfd, 1, 16);
-        if (poll_res > 0 && (pfd.revents & POLLIN)) {
+        bool has_input = (poll_res > 0 && (pfd.revents & POLLIN));
+#else
+        DWORD wait_res = WaitForSingleObject(g_hIn, 16);
+        bool has_input = (wait_res == WAIT_OBJECT_0 && win_console_has_input(g_hIn));
+#endif
+        if (has_input) {
             uint8_t seq[32];
             size_t seq_len = console_read_sequence(STDIN_FILENO, seq, sizeof(seq));
             if (seq_len > 0) {
+                plato_key_event_t ev = {0};
+                double now_key = get_time_sec();
+
                 if (seq[0] == 0x1B) {
                     if (seq_len == 1) {
-                        trigger_key_double_tap(&term, PLATO_KEY_BACK, false);
+                        ev.vkey = PLATO_VKEY_ESCAPE;
+                        plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                     } else if (seq_len == 2) {
                         if (seq[1] == 's') {
-                            trigger_key_double_tap(&term, PLATO_KEY_STOP, false);
+                            ev.ctrl = true; ev.unmod_codepoint = 's';
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq[1] == 'S') {
-                            trigger_key_double_tap(&term, PLATO_KEY_STOP, true);
+                            ev.ctrl = true; ev.shift = true; ev.unmod_codepoint = 's';
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq[1] == 'b') {
-                            trigger_key_double_tap(&term, PLATO_KEY_BACK, false);
+                            ev.ctrl = true; ev.unmod_codepoint = 'b';
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq[1] == 'B') {
-                            trigger_key_double_tap(&term, PLATO_KEY_BACK, true);
+                            ev.ctrl = true; ev.shift = true; ev.unmod_codepoint = 'b';
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq[1] == 'n' || seq[1] == 'N' || seq[1] == 10 || seq[1] == 13) {
-                            trigger_key_double_tap(&term, PLATO_KEY_NEXT, true);
+                            ev.vkey = PLATO_VKEY_RETURN; ev.shift = true;
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq[1] == 'c' || seq[1] == 'C') {
-                            flush_pending_key(&term);
+                            plato_keyboard_flush(&kbd_state, &term);
                             copy_screen_to_clipboard(&term);
                         }
                     } else if (seq[1] == 'O') {
                         switch (seq[2]) {
-                            case 'P': trigger_key_double_tap(&term, PLATO_KEY_HELP, false); break;
-                            case 'Q': trigger_key_double_tap(&term, PLATO_KEY_LAB, false); break;
-                            case 'R': trigger_key_double_tap(&term, PLATO_KEY_DATA, false); break;
-                            case 'S': trigger_key_double_tap(&term, PLATO_KEY_STOP, false); break;
+                            case 'P': ev.vkey = PLATO_VKEY_F1; break;
+                            case 'Q': ev.vkey = PLATO_VKEY_F2; break;
+                            case 'R': ev.vkey = PLATO_VKEY_F3; break;
+                            case 'S': ev.vkey = PLATO_VKEY_F4; break;
                         }
+                        if (ev.vkey) plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                     } else if (seq[1] == '[') {
                         if (seq_len >= 3 && seq[2] == 'A') {
-                            flush_pending_key(&term);
-                            plato_protocol_send_key(&term, plato_keyboard_keycode(PLATO_KEY_SUPER, false));
+                            ev.vkey = PLATO_VKEY_UP;
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq_len >= 3 && seq[2] == 'B') {
-                            flush_pending_key(&term);
-                            plato_protocol_send_key(&term, plato_keyboard_keycode(PLATO_KEY_SUB, false));
+                            ev.vkey = PLATO_VKEY_DOWN;
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq_len >= 3 && seq[2] == 'C') {
-                            flush_pending_key(&term);
-                            uint8_t tab = 0x09; plato_transport_send(transport, &tab, 1);
+                            ev.vkey = PLATO_VKEY_RIGHT;
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                         } else if (seq_len >= 3 && seq[2] == 'D') {
-                            flush_pending_key(&term);
-                            plato_protocol_send_key(&term, plato_keyboard_keycode(PLATO_KEY_ERASE, false));
-                        }
-                        else if (seq_len >= 6 && seq[2] == '1' && seq[3] == ';' && seq[4] == '2') {
+                            ev.vkey = PLATO_VKEY_LEFT;
+                            plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
+                        } else if (seq_len >= 6 && seq[2] == '1' && seq[3] == ';' && seq[4] == '2') {
+                            ev.shift = true;
                             switch (seq[5]) {
-                                case 'P': trigger_key_double_tap(&term, PLATO_KEY_HELP, true); break;
-                                case 'Q': trigger_key_double_tap(&term, PLATO_KEY_LAB, true); break;
-                                case 'R': trigger_key_double_tap(&term, PLATO_KEY_DATA, true); break;
-                                case 'S': trigger_key_double_tap(&term, PLATO_KEY_STOP, true); break;
+                                case 'P': ev.vkey = PLATO_VKEY_F1; break;
+                                case 'Q': ev.vkey = PLATO_VKEY_F2; break;
+                                case 'R': ev.vkey = PLATO_VKEY_F3; break;
+                                case 'S': ev.vkey = PLATO_VKEY_F4; break;
                             }
-                        }
-                        else {
-                            int fnum = 0;
-                            int fmod = 1;
+                            if (ev.vkey) plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
+                        } else {
+                            int fnum = 0, fmod = 1;
                             size_t p = 2;
                             while (p < seq_len && seq[p] >= '0' && seq[p] <= '9') {
                                 fnum = fnum * 10 + (seq[p] - '0');
                                 p++;
                             }
                             if (p < seq_len && seq[p] == ';') {
-                                p++;
-                                fmod = 0;
+                                p++; fmod = 0;
                                 while (p < seq_len && seq[p] >= '0' && seq[p] <= '9') {
                                     fmod = fmod * 10 + (seq[p] - '0');
                                     p++;
                                 }
                             }
                             if (p < seq_len && seq[p] == '~') {
-                                bool is_shifted = (fmod == 2);
+                                ev.shift = (fmod == 2);
                                 switch (fnum) {
-                                    case 15: trigger_key_double_tap(&term, PLATO_KEY_EDIT, is_shifted); break;
-                                    case 17: trigger_key_double_tap(&term, PLATO_KEY_HELP, true); break;
-                                    case 18: trigger_key_double_tap(&term, PLATO_KEY_LAB, true); break;
-                                    case 19: trigger_key_double_tap(&term, PLATO_KEY_BACK, is_shifted); break;
-                                    case 20: trigger_key_double_tap(&term, PLATO_KEY_DATA, true); break;
-                                    case 21: trigger_key_double_tap(&term, PLATO_KEY_STOP, is_shifted); break;
+                                    case 15: ev.vkey = PLATO_VKEY_F5; break;
+                                    case 17: ev.vkey = PLATO_VKEY_F6; break;
+                                    case 18: ev.vkey = PLATO_VKEY_F7; break;
+                                    case 19: ev.vkey = PLATO_VKEY_F8; break;
+                                    case 20: ev.vkey = PLATO_VKEY_F9; break;
+                                    case 21: ev.vkey = PLATO_VKEY_F10; break;
                                 }
+                                if (ev.vkey) plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                             }
                         }
                     }
-                }
-                else {
+                } else {
                     uint8_t ch = seq[0];
                     if (ch == 0x03) {
                         g_quit = 1;
                         break;
                     } else if (ch == 0x19) {
-                        flush_pending_key(&term);
+                        plato_keyboard_flush(&kbd_state, &term);
                         copy_screen_to_clipboard(&term);
-                    } else if (ch == 0x0F) {
-                        trigger_key_double_tap(&term, PLATO_KEY_STOP, true);
-                    } else if (ch == 0x13) {
-                        trigger_key_double_tap(&term, PLATO_KEY_STOP, false);
-                    } else if (ch == 0x0E) {
-                        trigger_key_double_tap(&term, PLATO_KEY_NEXT, false);
-                    } else if (ch == 0x02) {
-                        trigger_key_double_tap(&term, PLATO_KEY_BACK, false);
-                    } else if (ch == 0x08) {
-                        trigger_key_double_tap(&term, PLATO_KEY_HELP, false);
-                    } else if (ch == 0x0C) {
-                        trigger_key_double_tap(&term, PLATO_KEY_LAB, false);
-                    } else if (ch == 0x04) {
-                        trigger_key_double_tap(&term, PLATO_KEY_DATA, false);
-                    } else if (ch == 0x05) {
-                        trigger_key_double_tap(&term, PLATO_KEY_EDIT, false);
-                    } else if (ch == 0x01) {
-                        flush_pending_key(&term);
-                        plato_protocol_send_key(&term, plato_keyboard_keycode(PLATO_KEY_ANS, false));
                     } else if (ch == 0x12) {
                         g_resized = 1;
+                    } else if (ch == 0x0F) {
+                        ev.ctrl = true; ev.shift = true; ev.unmod_codepoint = 's';
+                        plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                     } else if (ch == 10 || ch == 13) {
-                        trigger_key_double_tap(&term, PLATO_KEY_NEXT, false);
+                        ev.vkey = PLATO_VKEY_RETURN;
+                        plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                     } else if (ch == 127 || ch == 8) {
-                        flush_pending_key(&term);
-                        plato_protocol_send_key(&term, plato_keyboard_keycode(PLATO_KEY_ERASE, false));
+                        ev.vkey = PLATO_VKEY_BACKSPACE;
+                        plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                     } else if (ch == 9) {
-                        flush_pending_key(&term);
-                        uint8_t tab = 0x09;
-                        plato_transport_send(transport, &tab, 1);
+                        ev.vkey = PLATO_VKEY_TAB;
+                        plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
+                    } else if (ch >= 1 && ch <= 26) {
+                        ev.ctrl = true;
+                        ev.unmod_codepoint = 'a' + (ch - 1);
+                        plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                     } else if (ch >= 32 && ch <= 126) {
-                        flush_pending_key(&term);
-                        plato_transport_send(transport, &ch, 1);
+                        ev.codepoint = ch;
+                        plato_keyboard_dispatch(&kbd_state, &term, &ev, now_key);
                     }
                 }
             }
@@ -617,7 +803,14 @@ int plato_console_run(const char *host, int port) {
 
     net_ctx.running = false;
     plato_transport_disconnect(transport);
+#ifndef _WIN32
     pthread_join(net_thread, NULL);
+#else
+    if (net_thread) {
+        WaitForSingleObject(net_thread, INFINITE);
+        CloseHandle(net_thread);
+    }
+#endif
     plato_transport_destroy(transport);
     plato_ringbuf_destroy(&ringbuf);
 

@@ -6,10 +6,11 @@
 #include "plato/plato_transport.h"
 #include "plato/plato_ringbuf.h"
 #include "plato/plato_graphics.h"
+#include "plato/plato_keyboard.h"
+#include "plato/plato_optical.h"
+#include "plato/plato_profile.h"
 
 FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
-
-typedef struct PLATOPlasmaState PLATOPlasmaState;
 
 @interface PLATOView : NSView {
 @public
@@ -36,10 +37,13 @@ typedef struct PLATOPlasmaState PLATOPlasmaState;
     dispatch_queue_t pasteQueue;
     volatile BOOL pasteCancelled;
     double cpuUsagePercent;
-    PLATOPlasmaState *plasma;
+    plato_optical_t *optical;
+    plato_profile_t opticalProfile;
+    BOOL isAnimating;
     uint8_t feedBuffer[4096];
     size_t feedBufferLen;
     size_t feedBufferPos;
+    plato_keyboard_state_t keyboardState;
     CFTimeInterval paceUntil;
 }
 

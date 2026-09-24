@@ -75,876 +75,12 @@ typedef NS_ENUM(NSInteger, PLATODisplayMode) {
 #define PLASMA_PARTIAL_LIMIT 180
 #define PLASMA_BG_PIXEL 0xFF0E0401u
 
-struct PLATOPlasmaState {
-    PLATODisplayMode displayMode;
-    float *gain;
-    float *energy;
-    float *source;
-    float *tmp;
-    float *local;
-    float *wide;
-    uint32_t *crisp;
-    uint32_t *logical;
-    CFTimeInterval lastTime;
-    CFTimeInterval animateUntil;
-    double decayDuration;
-    float decayTau;
-    double crtDecayDuration;
-    float crtDecayTau;
-    uint8_t dirtySource[PLASMA_TILE_COUNT];
-    uint8_t dirtyOutput[PLASMA_TILE_COUNT];
-    BOOL tilesInitialized;
-    int crtBeamLevel;
-    int crtDistortion; // 0: None (Flat), 1: Barrel (Spherical), 2: Cylindrical (Default)
-    int plasmaDistortion; // 0: None (Flat), 1: Barrel (Spherical), 2: Cylindrical (Default)
-};
+// --- MOTORE OTTICO CONDIVISO (libplato) ---
+// Tutto il calcolo dei fosfori, bloom e fisica CRT/Plasma e' centralizzato in src/plato_optical.c
 
-typedef struct {
-    double logicalMs, expandMs, buildMs, blur4Ms, blur12Ms, composeMs, totalMs;
-    double blur4HorizontalMs, blur4VerticalMs, blur12HorizontalMs, blur12VerticalMs;
-    unsigned sourceTiles, outputTiles;
-    BOOL fullFrame, noOp;
-} PlasmaFrameProfile;
-
-#define PLASMA_PROFILE_HISTORY 64
-
-typedef struct {
-    PlasmaFrameProfile frame;
-    CFTimeInterval timestamp;
-    PLATODisplayMode mode;
-} PlasmaProfileSample;
-
-static PlasmaProfileSample plasmaProfileHistory[PLASMA_PROFILE_HISTORY] = {0};
-static size_t plasmaProfileNext = 0, plasmaProfileCount = 0;
 static NSString *plasmaProfilePath = nil;
-
-static inline double plasmaElapsedMs(CFTimeInterval start, CFTimeInterval end) { return (end - start) * 1000.0; }
-
-static void plasmaProfileFrame(const PlasmaFrameProfile *frame, PLATODisplayMode mode) {
-    plasmaProfileHistory[plasmaProfileNext].frame = *frame;
-    plasmaProfileHistory[plasmaProfileNext].timestamp = CACurrentMediaTime();
-    plasmaProfileHistory[plasmaProfileNext].mode = mode;
-    plasmaProfileNext = (plasmaProfileNext + 1) % PLASMA_PROFILE_HISTORY;
-    if (plasmaProfileCount < PLASMA_PROFILE_HISTORY) plasmaProfileCount++;
-}
-
-static NSString *plasmaProfileModeName(PLATODisplayMode mode) {
-    return mode == PLATODisplayModeCrisp ? @"crisp" : (mode == PLATODisplayModeCrispColor ? @"crisp-color" : (mode == PLATODisplayModeSplit ? @"split" : @"real"));
-}
-
-typedef struct {
-    double buildMs, blur4Ms, blur12Ms, composeMs, totalMs, sourceTiles, outputTiles;
-    double blur4HorizontalMs, blur4VerticalMs, blur12HorizontalMs, blur12VerticalMs;
-    uint64_t frames, activeFrames, partialFrames, fullFrames, noOpFrames;
-    CFTimeInterval started;
-} PlasmaLiveProfile;
-
 static BOOL plasmaLiveProfileEnabled = NO;
-static PlasmaLiveProfile plasmaLiveProfile = {0};
-
-static void plasmaLiveProfileReset(CFTimeInterval now) {
-    memset(&plasmaLiveProfile, 0, sizeof(plasmaLiveProfile));
-    plasmaLiveProfile.started = now;
-}
-
-static void plasmaLiveProfileFrame(const PlasmaFrameProfile *frame, PLATODisplayMode mode) {
-    if (!plasmaLiveProfileEnabled) return;
-    CFTimeInterval now = CACurrentMediaTime();
-    if (plasmaLiveProfile.started == 0.0) plasmaLiveProfile.started = now;
-    plasmaLiveProfile.frames++;
-    if (frame->noOp) {
-        plasmaLiveProfile.noOpFrames++;
-    } else {
-        plasmaLiveProfile.activeFrames++;
-        plasmaLiveProfile.buildMs += frame->buildMs; plasmaLiveProfile.blur4Ms += frame->blur4Ms;
-        plasmaLiveProfile.blur12Ms += frame->blur12Ms; plasmaLiveProfile.composeMs += frame->composeMs;
-        plasmaLiveProfile.totalMs += frame->totalMs; plasmaLiveProfile.sourceTiles += frame->sourceTiles;
-        plasmaLiveProfile.outputTiles += frame->outputTiles;
-        plasmaLiveProfile.blur4HorizontalMs += frame->blur4HorizontalMs; plasmaLiveProfile.blur4VerticalMs += frame->blur4VerticalMs;
-        plasmaLiveProfile.blur12HorizontalMs += frame->blur12HorizontalMs; plasmaLiveProfile.blur12VerticalMs += frame->blur12VerticalMs;
-        if (mode != PLATODisplayModeCrisp) { if (frame->fullFrame) plasmaLiveProfile.fullFrames++; else plasmaLiveProfile.partialFrames++; }
-    }
-    if (now - plasmaLiveProfile.started < 0.5) return;
-    if (plasmaLiveProfile.activeFrames > 0) {
-        double count = (double)plasmaLiveProfile.activeFrames;
-        NSLog(@"[PLASMA LIVE] interval=%.3fs mode=%@ frames=%llu active=%llu partial=%llu full=%llu noop=%llu active-source-tiles=%.1f active-output-tiles=%.1f active-coverage=%.1f%% active-ms build=%.3f blur4=%.3f(h=%.3f v=%.3f) blur12=%.3f(h=%.3f v=%.3f) compose=%.3f total=%.3f",
-              now - plasmaLiveProfile.started, plasmaProfileModeName(mode),
-              (unsigned long long)plasmaLiveProfile.frames, (unsigned long long)plasmaLiveProfile.activeFrames,
-              (unsigned long long)plasmaLiveProfile.partialFrames, (unsigned long long)plasmaLiveProfile.fullFrames,
-              (unsigned long long)plasmaLiveProfile.noOpFrames,
-              plasmaLiveProfile.sourceTiles / count, plasmaLiveProfile.outputTiles / count,
-              100.0 * plasmaLiveProfile.outputTiles / (count * PLASMA_TILE_COUNT),
-              plasmaLiveProfile.buildMs / count, plasmaLiveProfile.blur4Ms / count,
-              plasmaLiveProfile.blur4HorizontalMs / count, plasmaLiveProfile.blur4VerticalMs / count,
-              plasmaLiveProfile.blur12Ms / count, plasmaLiveProfile.blur12HorizontalMs / count,
-              plasmaLiveProfile.blur12VerticalMs / count, plasmaLiveProfile.composeMs / count, plasmaLiveProfile.totalMs / count);
-    }
-    plasmaLiveProfileReset(now);
-}
-
-static NSString *plasmaProfileLine(NSString *tag, PLATODisplayMode currentMode) {
-    CFTimeInterval cutoff = CACurrentMediaTime() - 1.0;
-    PlasmaFrameProfile total = {0};
-    uint64_t frames = 0;
-    PLATODisplayMode mode = currentMode;
-    for (size_t offset = 0; offset < plasmaProfileCount; offset++) {
-        size_t index = (plasmaProfileNext + PLASMA_PROFILE_HISTORY - 1 - offset) % PLASMA_PROFILE_HISTORY;
-        PlasmaProfileSample *sample = &plasmaProfileHistory[index];
-        if (sample->timestamp < cutoff) break;
-        total.logicalMs += sample->frame.logicalMs; total.expandMs += sample->frame.expandMs;
-        total.buildMs += sample->frame.buildMs; total.blur4Ms += sample->frame.blur4Ms;
-        total.blur12Ms += sample->frame.blur12Ms; total.composeMs += sample->frame.composeMs;
-        total.totalMs += sample->frame.totalMs; mode = sample->mode; frames++;
-    }
-    NSString *line;
-    if (frames == 0) {
-        line = [NSString stringWithFormat:@"[PLASMA PROFILE] tag=\"%@\" window=1.000s mode=%@ frames=0 no-rendered-frames", tag, plasmaProfileModeName(mode)];
-    } else {
-        double count = (double)frames;
-        line = [NSString stringWithFormat:@"[PLASMA PROFILE] tag=\"%@\" window=1.000s mode=%@ frames=%llu avg-ms logical=%.3f expand=%.3f build=%.3f blur4=%.3f blur12=%.3f compose=%.3f total=%.3f",
-                tag, plasmaProfileModeName(mode), (unsigned long long)frames,
-                total.logicalMs / count, total.expandMs / count, total.buildMs / count,
-                total.blur4Ms / count, total.blur12Ms / count, total.composeMs / count, total.totalMs / count];
-    }
-    memset(plasmaProfileHistory, 0, sizeof(plasmaProfileHistory));
-    plasmaProfileNext = 0;
-    plasmaProfileCount = 0;
-    return line;
-}
-
-static inline float plasmaClamp(float value, float low, float high) {
-    return fminf(fmaxf(value, low), high);
-}
-
-static inline uint32_t plasmaRGBA(float red, float green, float blue) {
-    uint32_t r = (uint32_t)(plasmaClamp(red, 0.0f, 1.0f) * 255.0f + 0.5f);
-    uint32_t g = (uint32_t)(plasmaClamp(green, 0.0f, 1.0f) * 255.0f + 0.5f);
-    uint32_t b = (uint32_t)(plasmaClamp(blue, 0.0f, 1.0f) * 255.0f + 0.5f);
-    return b | (g << 8) | (r << 16) | (0xFFu << 24);
-}
-
-static void plasmaFreeState(PLATOPlasmaState *ps) {
-    if (!ps) return;
-    free(ps->gain); free(ps->energy); free(ps->source); free(ps->tmp);
-    free(ps->local); free(ps->wide); free(ps->crisp); free(ps->logical);
-    ps->gain = ps->energy = ps->source = ps->tmp = ps->local = ps->wide = NULL;
-    ps->crisp = ps->logical = NULL;
-    ps->lastTime = 0.0;
-    ps->animateUntil = 0.0;
-    ps->tilesInitialized = NO;
-}
-
-static BOOL plasmaAllocState(PLATOPlasmaState *ps) {
-    if (!ps) return NO;
-    if (ps->gain) return YES;
-    size_t logicalPixels = (size_t)PLATO_WIDTH * PLATO_HEIGHT;
-    ps->gain = (float *)calloc(logicalPixels, sizeof(float));
-    ps->energy = (float *)calloc(logicalPixels, sizeof(float));
-    ps->source = (float *)calloc(PLASMA_PIXELS, sizeof(float));
-    ps->tmp = (float *)calloc(PLASMA_PIXELS, sizeof(float));
-    ps->local = (float *)calloc(PLASMA_PIXELS, sizeof(float));
-    ps->wide = (float *)calloc(PLASMA_PIXELS, sizeof(float));
-    ps->crisp = (uint32_t *)calloc(PLASMA_PIXELS, sizeof(uint32_t));
-    ps->logical = (uint32_t *)calloc(logicalPixels, sizeof(uint32_t));
-    if (!ps->gain || !ps->energy || !ps->source || !ps->tmp ||
-        !ps->local || !ps->wide || !ps->crisp || !ps->logical) {
-        plasmaFreeState(ps);
-        return NO;
-    }
-    for (size_t i = 0; i < logicalPixels; i++) {
-        float randomValue = (float)arc4random_uniform(1000001) / 1000000.0f;
-        ps->gain[i] = 0.980f + 0.040f * randomValue;
-    }
-    return YES;
-}
-
-static void plasmaExpandCrisp(const uint32_t *logical, uint32_t *expanded) {
-    for (int y = 0; y < PLATO_HEIGHT; y++) {
-        for (int sy = 0; sy < PLASMA_SCALE; sy++) {
-            uint32_t *row = expanded + (size_t)(y * PLASMA_SCALE + sy) * PLASMA_WIDTH;
-            for (int x = 0; x < PLATO_WIDTH; x++) {
-                uint32_t pixel = logical[(size_t)y * PLATO_WIDTH + x];
-                int base = x * PLASMA_SCALE;
-                for (int sx = 0; sx < PLASMA_SCALE; sx++) row[base + sx] = pixel;
-            }
-        }
-    }
-}
-
-static void plasmaBlurRows(const float *source, float *destination, int width, int height, int radius) {
-    const int span = radius * 2 + 1;
-    const float invSpan = 1.0f / (float)span;
-    for (int y = 0; y < height; y++) {
-        const float *sourceRow = source + (size_t)y * width;
-        float *destinationRow = destination + (size_t)y * width;
-        float sum = sourceRow[0] * (float)(radius + 1);
-        for (int x = 1; x <= radius; x++) sum += sourceRow[x];
-
-        int x = 0;
-        int leftLimit = radius < width ? radius : width;
-        for (; x < leftLimit; x++) {
-            destinationRow[x] = sum * invSpan;
-            sum += sourceRow[x + radius + 1] - sourceRow[0];
-        }
-
-        int midLimit = (width - 1 - radius > x) ? (width - 1 - radius) : x;
-        for (; x < midLimit; x++) {
-            destinationRow[x] = sum * invSpan;
-            sum += sourceRow[x + radius + 1] - sourceRow[x - radius];
-        }
-
-        for (; x < width; x++) {
-            destinationRow[x] = sum * invSpan;
-            int removeX = x - radius;
-            sum += sourceRow[width - 1] - sourceRow[removeX];
-        }
-    }
-}
-
-static void plasmaBlurCols(const float *source, float *destination, int width, int height, int radius) {
-    const int span = radius * 2 + 1;
-    const float invSpan = 1.0f / (float)span;
-    float colSum[PLASMA_WIDTH];
-
-    for (int x = 0; x < width; x++) {
-        colSum[x] = source[x] * (float)(radius + 1);
-    }
-    for (int sy = 1; sy <= radius; sy++) {
-        const float *row = source + (size_t)sy * width;
-        for (int x = 0; x < width; x++) {
-            colSum[x] += row[x];
-        }
-    }
-
-    float *destRow0 = destination;
-    for (int x = 0; x < width; x++) {
-        destRow0[x] = colSum[x] * invSpan;
-    }
-
-    for (int y = 1; y < height; y++) {
-        int addY = y + radius;
-        if (addY >= height) addY = height - 1;
-        int removeY = y - 1 - radius;
-        if (removeY < 0) removeY = 0;
-
-        const float *addRow = source + (size_t)addY * width;
-        const float *remRow = source + (size_t)removeY * width;
-        float *destRow = destination + (size_t)y * width;
-
-        for (int x = 0; x < width; x++) {
-            colSum[x] += addRow[x] - remRow[x];
-            destRow[x] = colSum[x] * invSpan;
-        }
-    }
-}
-
-static void plasmaBoxBlur(const float *source, float *temporary, float *destination, int radius, double *horizontalMs, double *verticalMs) {
-    CFTimeInterval horizontalStart = CACurrentMediaTime();
-    plasmaBlurRows(source, temporary, PLASMA_WIDTH, PLASMA_HEIGHT, radius);
-    CFTimeInterval horizontalEnd = CACurrentMediaTime();
-    plasmaBlurCols(temporary, destination, PLASMA_WIDTH, PLASMA_HEIGHT, radius);
-    CFTimeInterval verticalEnd = CACurrentMediaTime();
-    if (horizontalMs) *horizontalMs += plasmaElapsedMs(horizontalStart, horizontalEnd);
-    if (verticalMs) *verticalMs += plasmaElapsedMs(horizontalEnd, verticalEnd);
-}
-
-static void plasmaBoxBlurTile(const float *source, float *temporary, float *destination, int radius, int tileX, int tileY, double *horizontalMs, double *verticalMs) {
-    const int width = PLASMA_WIDTH, height = PLASMA_HEIGHT, span = radius * 2 + 1;
-    const float invSpan = 1.0f / (float)span;
-    CFTimeInterval horizontalStart = CACurrentMediaTime();
-    int x0 = tileX * PLASMA_TILE_SIZE, x1 = x0 + PLASMA_TILE_SIZE;
-    int y0 = tileY * PLASMA_TILE_SIZE, y1 = y0 + PLASMA_TILE_SIZE;
-    int haloY0 = y0 - radius; if (haloY0 < 0) haloY0 = 0;
-    int haloY1 = y1 + radius; if (haloY1 > height) haloY1 = height;
-
-    bool hasHorizontalBorder = (x0 - 1 - radius < 0) || (x1 + radius >= width);
-
-    for (int y = haloY0; y < haloY1; y++) {
-        const float *sourceRow = source + (size_t)y * width;
-        float *temporaryRow = temporary + (size_t)y * width;
-
-        float sum = 0.0f;
-        for (int k = -radius; k <= radius; k++) {
-            int sx = x0 + k;
-            if (sx < 0) sx = 0;
-            else if (sx >= width) sx = width - 1;
-            sum += sourceRow[sx];
-        }
-        temporaryRow[x0] = sum * invSpan;
-
-        if (!hasHorizontalBorder) {
-            for (int x = x0 + 1; x < x1; x++) {
-                sum += sourceRow[x + radius] - sourceRow[x - 1 - radius];
-                temporaryRow[x] = sum * invSpan;
-            }
-        } else {
-            for (int x = x0 + 1; x < x1; x++) {
-                int addX = x + radius;
-                if (addX >= width) addX = width - 1;
-                int removeX = x - 1 - radius;
-                if (removeX < 0) removeX = 0;
-                sum += sourceRow[addX] - sourceRow[removeX];
-                temporaryRow[x] = sum * invSpan;
-            }
-        }
-    }
-    CFTimeInterval horizontalEnd = CACurrentMediaTime();
-
-    float colSum[PLASMA_TILE_SIZE];
-    for (int i = 0; i < PLASMA_TILE_SIZE; i++) colSum[i] = 0.0f;
-    for (int k = -radius; k <= radius; k++) {
-        int sy = y0 + k;
-        if (sy < 0) sy = 0;
-        else if (sy >= height) sy = height - 1;
-        const float *row = temporary + (size_t)sy * width;
-        for (int i = 0; i < PLASMA_TILE_SIZE; i++) colSum[i] += row[x0 + i];
-    }
-
-    float *destRow0 = destination + (size_t)y0 * width;
-    for (int i = 0; i < PLASMA_TILE_SIZE; i++) destRow0[x0 + i] = colSum[i] * invSpan;
-
-    for (int y = y0 + 1; y < y1; y++) {
-        int addY = y + radius;
-        if (addY >= height) addY = height - 1;
-        int removeY = y - 1 - radius;
-        if (removeY < 0) removeY = 0;
-        const float *addRow = temporary + (size_t)addY * width;
-        const float *remRow = temporary + (size_t)removeY * width;
-        float *destRow = destination + (size_t)y * width;
-        for (int i = 0; i < PLASMA_TILE_SIZE; i++) {
-            colSum[i] += addRow[x0 + i] - remRow[x0 + i];
-            destRow[x0 + i] = colSum[i] * invSpan;
-        }
-    }
-    CFTimeInterval verticalEnd = CACurrentMediaTime();
-
-    if (horizontalMs) *horizontalMs += plasmaElapsedMs(horizontalStart, horizontalEnd);
-    if (verticalMs) *verticalMs += plasmaElapsedMs(horizontalEnd, verticalEnd);
-}
-
-static void plasmaComposeTile(PLATOView *self, uint32_t *output, int tileX, int tileY) {
-    PLATOPlasmaState *p = self->plasma;
-    int x0 = tileX * PLASMA_TILE_SIZE, x1 = x0 + PLASMA_TILE_SIZE;
-    int y0 = tileY * PLASMA_TILE_SIZE, y1 = y0 + PLASMA_TILE_SIZE;
-
-    const float half_dim = 1024.0f;
-    const float inv_half_dim = 1.0f / 1024.0f;
-    const float k_cyl_x = 0.018f;
-    const float k_bar_x = 0.018f;
-    const float k_bar_y = 0.012f;
-    int distMode = (p->displayMode == PLATODisplayModeRealPlasma) ? p->plasmaDistortion : 0;
-
-    for (int y = y0; y < y1; y++) {
-        float v_norm = ((float)y - half_dim) * inv_half_dim;
-        float v2 = v_norm * v_norm;
-        size_t rowBase = (size_t)y * PLASMA_WIDTH;
-
-        for (int x = x0; x < x1; x++) {
-            size_t i = rowBase + (size_t)x;
-            int src_x = x, src_y = y;
-
-            if (distMode == 2) {
-                // Cylindrical: curvatura moderata su X, asse Y piatto
-                float u_norm = ((float)x - half_dim) * inv_half_dim;
-                float xs = half_dim + (u_norm * (1.0f + v2 * k_cyl_x)) * half_dim;
-                if (xs < 0.0f || xs >= 2047.0f) {
-                    output[i] = 0xFF000000u;
-                    continue;
-                }
-                src_x = (int)xs;
-                src_y = y;
-            } else if (distMode == 1) {
-                // Barrel: curvatura sferica proporzionata su X e Y
-                float u_norm = ((float)x - half_dim) * inv_half_dim;
-                float u2 = u_norm * u_norm;
-                float xs = half_dim + (u_norm * (1.0f + v2 * k_bar_x)) * half_dim;
-                float ys = half_dim + (v_norm * (1.0f + u2 * k_bar_y)) * half_dim;
-                if (xs < 0.0f || xs >= 2047.0f || ys < 0.0f || ys >= 2047.0f) {
-                    output[i] = 0xFF000000u;
-                    continue;
-                }
-                src_x = (int)xs;
-                src_y = (int)ys;
-            }
-
-            size_t src_i = (size_t)src_y * PLASMA_WIDTH + (size_t)src_x;
-            float core = p->source[src_i], localGlow = p->local[src_i], wideGlow = p->wide[src_i];
-
-            if ((core + localGlow + wideGlow) < 0.001f) {
-                output[i] = PLASMA_BG_PIXEL;
-                continue;
-            }
-
-            float neighborhood = plasmaClamp((localGlow - 0.25f) * 2.50f, 0.0f, 1.0f);
-            neighborhood = neighborhood * neighborhood * (3.0f - 2.0f * neighborhood);
-            float fusedCore = core;
-            if (core > 0.05f) fusedCore += 0.82f * neighborhood * (1.0f - core);
-            float density = plasmaClamp(fusedCore + 0.62f * localGlow + 0.22f * wideGlow, 0.0f, 1.5f);
-            float hot = plasmaClamp((density - 0.92f) * 2.0f, 0.0f, 1.0f);
-            float red = 0.055f + 0.95f * fusedCore + 0.58f * localGlow + 0.30f * wideGlow;
-            float green = 0.016f + 0.31f * fusedCore + 0.060f * localGlow + 0.020f * wideGlow + 0.08f * hot;
-            float blue = 0.004f + 0.018f * fusedCore + 0.003f * localGlow + 0.010f * hot;
-            output[i] = plasmaRGBA(red, green, blue);
-        }
-    }
-}
-
-static unsigned plasmaBuildCellSurface(PLATOView *self, float deltaTime) {
-    plato_terminal_t *term = self->terminal;
-    PLATOPlasmaState *p = self->plasma;
-    static const float cellProfile[PLASMA_SCALE][PLASMA_SCALE] = {
-        { 0.65f, 0.82f, 0.82f, 0.65f },
-        { 0.82f, 1.00f, 1.00f, 0.82f },
-        { 0.82f, 1.00f, 1.00f, 0.82f },
-        { 0.65f, 0.82f, 0.82f, 0.65f }
-    };
-    const float decay = expf(-deltaTime / p->decayTau);
-    memset(p->dirtySource, 0, sizeof(p->dirtySource));
-    memset(p->dirtyOutput, 0, sizeof(p->dirtyOutput));
-    for (int logicalY = 0; logicalY < PLATO_HEIGHT; logicalY++) {
-        const uint8_t *fbRow = term->fb.pixels[logicalY];
-        size_t rowLogicalBase = (size_t)logicalY * PLATO_WIDTH;
-        for (int byteIdx = 0; byteIdx < PLATO_WIDTH / 8; byteIdx++) {
-            uint8_t byteVal = fbRow[byteIdx];
-            int baseX = byteIdx * 8;
-            size_t logicalIndex = rowLogicalBase + (size_t)baseX;
-
-            if (p->tilesInitialized && byteVal == 0) {
-                bool hasEnergy = false;
-                for (int b = 0; b < 8; b++) {
-                    if (p->energy[logicalIndex + b] > 0.0f) {
-                        hasEnergy = true;
-                        break;
-                    }
-                }
-                if (!hasEnergy) continue;
-            }
-
-            for (int bit = 0; bit < 8; bit++) {
-                int logicalX = baseX + bit;
-                size_t idx = logicalIndex + (size_t)bit;
-                float oldEnergy = p->energy[idx];
-                bool pixelOn = (byteVal & (0x80 >> bit)) != 0;
-                float newEnergy = pixelOn ? p->gain[idx] : oldEnergy * decay;
-                if (newEnergy < 0.0001f) newEnergy = 0.0f;
-                if (!p->tilesInitialized || newEnergy != oldEnergy) {
-                    p->energy[idx] = newEnergy;
-                    int px = logicalX * PLASMA_SCALE;
-                    int py = logicalY * PLASMA_SCALE;
-                    for (int sy = 0; sy < PLASMA_SCALE; sy++) {
-                        float *row = p->source + (size_t)(py + sy) * PLASMA_WIDTH + px;
-                        for (int sx = 0; sx < PLASMA_SCALE; sx++) row[sx] = newEnergy * cellProfile[sy][sx];
-                    }
-                    int tileX = logicalX / PLASMA_TILE_LOGICAL;
-                    int tileY = logicalY / PLASMA_TILE_LOGICAL;
-                    p->dirtySource[tileY * PLASMA_TILE_COLS + tileX] = 1;
-                    p->dirtyOutput[tileY * PLASMA_TILE_COLS + tileX] = 1;
-
-                    int intraX = logicalX % PLASMA_TILE_LOGICAL;
-                    int intraY = logicalY % PLASMA_TILE_LOGICAL;
-                    int dxMin = (intraX < 3) ? -1 : 0;
-                    int dxMax = (intraX >= PLASMA_TILE_LOGICAL - 3) ? 1 : 0;
-                    int dyMin = (intraY < 3) ? -1 : 0;
-                    int dyMax = (intraY >= PLASMA_TILE_LOGICAL - 3) ? 1 : 0;
-
-                    for (int dy = dyMin; dy <= dyMax; dy++) {
-                        for (int dx = dxMin; dx <= dxMax; dx++) {
-                            int nx = tileX + dx, ny = tileY + dy;
-                            if (nx >= 0 && nx < PLASMA_TILE_COLS && ny >= 0 && ny < PLASMA_TILE_ROWS) {
-                                p->dirtyOutput[ny * PLASMA_TILE_COLS + nx] = 1;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (!p->tilesInitialized) {
-        memset(p->dirtySource, 1, sizeof(p->dirtySource));
-        memset(p->dirtyOutput, 1, sizeof(p->dirtyOutput));
-        p->tilesInitialized = YES;
-    }
-    unsigned count = 0;
-    for (int i = 0; i < PLASMA_TILE_COUNT; i++) if (p->dirtyOutput[i]) count++;
-    return count;
-}
-
-
-// --- REAL COLOR CRT ENGINE (Stadi A, B, C, D) ---
-
-#define CRT_BG_PIXEL 0xFF000000u // Nero puro allineato allo sfondo unlit e pillarbox
-
-static unsigned crtBuildCellSurface(PLATOView *self, float deltaTime) {
-    plato_terminal_t *term = self->terminal;
-    PLATOPlasmaState *p = self->plasma;
-    float tau = (p->crtDecayTau > 0.001f) ? p->crtDecayTau : (float)(0.020 / 10.0);
-    const float decay = expf(-deltaTime / tau);
-
-    memset(p->dirtySource, 0, sizeof(p->dirtySource));
-    memset(p->dirtyOutput, 0, sizeof(p->dirtyOutput));
-
-    for (int logicalY = 0; logicalY < PLATO_HEIGHT; logicalY++) {
-        const uint32_t *colorRow = term->fb.colors[logicalY];
-        uint32_t *phosphorRow = p->logical + (size_t)logicalY * PLATO_WIDTH;
-        size_t rowLogicalBase = (size_t)logicalY * PLATO_WIDTH;
-
-        for (int logicalX = 0; logicalX < PLATO_WIDTH; logicalX++) {
-            uint32_t bgra = colorRow[logicalX];
-            size_t idx = rowLogicalBase + (size_t)logicalX;
-
-            float oldEnergy = p->energy[idx];
-            float newEnergy = 0.0f;
-
-            if ((bgra & 0x00FFFFFFu) != 0) {
-                phosphorRow[logicalX] = bgra;
-                newEnergy = 1.0f;
-            } else if (oldEnergy > 0.0001f) {
-                newEnergy = oldEnergy * decay;
-                if (newEnergy < 0.0001f) {
-                    newEnergy = 0.0f;
-                    phosphorRow[logicalX] = 0xFF000000u;
-                }
-            } else {
-                newEnergy = 0.0f;
-                phosphorRow[logicalX] = 0xFF000000u;
-            }
-
-            if (!p->tilesInitialized || newEnergy != oldEnergy) {
-                p->energy[idx] = newEnergy;
-                int px = logicalX * PLASMA_SCALE;
-                int py = logicalY * PLASMA_SCALE;
-
-                for (int sy = 0; sy < PLASMA_SCALE; sy++) {
-                    float *row = p->source + (size_t)(py + sy) * PLASMA_WIDTH + px;
-                    for (int sx = 0; sx < PLASMA_SCALE; sx++) {
-                        row[sx] = newEnergy;
-                    }
-                }
-
-                int tileX = logicalX / PLASMA_TILE_LOGICAL;
-                int tileY = logicalY / PLASMA_TILE_LOGICAL;
-                p->dirtySource[tileY * PLASMA_TILE_COLS + tileX] = 1;
-                p->dirtyOutput[tileY * PLASMA_TILE_COLS + tileX] = 1;
-
-                int intraX = logicalX % PLASMA_TILE_LOGICAL;
-                int intraY = logicalY % PLASMA_TILE_LOGICAL;
-                int dxMin = (intraX < 2) ? -1 : 0;
-                int dxMax = (intraX >= PLASMA_TILE_LOGICAL - 2) ? 1 : 0;
-                int dyMin = (intraY < 2) ? -1 : 0;
-                int dyMax = (intraY >= PLASMA_TILE_LOGICAL - 2) ? 1 : 0;
-
-                for (int dy = dyMin; dy <= dyMax; dy++) {
-                    for (int dx = dxMin; dx <= dxMax; dx++) {
-                        int nx = tileX + dx, ny = tileY + dy;
-                        if (nx >= 0 && nx < PLASMA_TILE_COLS && ny >= 0 && ny < PLASMA_TILE_ROWS) {
-                            p->dirtyOutput[ny * PLASMA_TILE_COLS + nx] = 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (!p->tilesInitialized) {
-        memset(p->dirtySource, 1, sizeof(p->dirtySource));
-        memset(p->dirtyOutput, 1, sizeof(p->dirtyOutput));
-        p->tilesInitialized = YES;
-    }
-
-    unsigned count = 0;
-    for (int i = 0; i < PLASMA_TILE_COUNT; i++) if (p->dirtyOutput[i]) count++;
-    return count;
-}
-
-// --- REAL COLOR CRT ENGINE (Profili Selezionabili: Medium / High / Ultra) ---
-
-typedef struct {
-    float w_3tap[4][3];
-    float scanline[4];
-    float bloom_amt;
-    float gain;
-} CRTBeamProfileParams;
-
-static const CRTBeamProfileParams kCRTProfiles[3] = {
-    // 0: Medium (Standard - Default, Autentico 13" CRT, Preferred Look)
-    {
-        .w_3tap = {
-            { 0.3474f, 0.6440f, 0.0086f },
-            { 0.1305f, 0.8315f, 0.0380f },
-            { 0.0380f, 0.8315f, 0.1305f },
-            { 0.0086f, 0.6440f, 0.3474f }
-        },
-        .scanline = { 1.00f, 1.05f, 1.00f, 0.78f },
-        .bloom_amt = 0.32f,
-        .gain = 1.22f
-    },
-    // 1: High (Soft Glow)
-    {
-        .w_3tap = {
-            { 0.4000f, 0.5800f, 0.0200f },
-            { 0.1800f, 0.7600f, 0.0600f },
-            { 0.0600f, 0.7600f, 0.1800f },
-            { 0.0200f, 0.5800f, 0.4000f }
-        },
-        .scanline = { 1.00f, 1.05f, 1.00f, 0.80f },
-        .bloom_amt = 0.38f,
-        .gain = 1.24f
-    },
-    // 2: Ultra (Vintage Arcade)
-    {
-        .w_3tap = {
-            { 0.4400f, 0.5200f, 0.0400f },
-            { 0.2200f, 0.7000f, 0.0800f },
-            { 0.0800f, 0.7000f, 0.2200f },
-            { 0.0400f, 0.5200f, 0.4400f }
-        },
-        .scanline = { 1.00f, 1.05f, 1.00f, 0.82f },
-        .bloom_amt = 0.45f,
-        .gain = 1.26f
-    }
-};
-
-static void crtComposeTile(PLATOView *self, uint32_t *output, int tileX, int tileY) {
-    PLATOPlasmaState *p = self->plasma;
-
-    int x0 = tileX * PLASMA_TILE_SIZE, x1 = x0 + PLASMA_TILE_SIZE;
-    int y0 = tileY * PLASMA_TILE_SIZE, y1 = y0 + PLASMA_TILE_SIZE;
-
-    int profileIdx = p->crtBeamLevel;
-    if (profileIdx < 0 || profileIdx > 2) profileIdx = 0;
-    const CRTBeamProfileParams *prof = &kCRTProfiles[profileIdx];
-
-    static const float mask_tbl[4][3] = {
-        { 1.08f, 0.94f, 0.94f }, // R boost (sx=0)
-        { 0.94f, 1.08f, 0.94f }, // G boost (sx=1)
-        { 0.94f, 0.94f, 1.08f }, // B boost (sx=2)
-        { 0.88f, 0.88f, 0.88f }  // Wire/Matrix (sx=3)
-    };
-
-    const float half_dim = 1024.0f;
-    const float inv_half_dim = 1.0f / 1024.0f;
-    const float k_cyl_x = 0.018f;
-    const float k_bar_x = 0.018f;
-    const float k_bar_y = 0.012f;
-    int distMode = p->crtDistortion;
-
-    for (int y = y0; y < y1; y++) {
-        float v_norm = ((float)y - half_dim) * inv_half_dim;
-        float v2 = v_norm * v_norm;
-
-        size_t rowBase = (size_t)y * PLASMA_WIDTH;
-
-        for (int x = x0; x < x1; x++) {
-            size_t i = rowBase + (size_t)x;
-            int src_x = x, src_y = y;
-
-            if (distMode == 2) {
-                float u_norm = ((float)x - half_dim) * inv_half_dim;
-                float xs = half_dim + (u_norm * (1.0f + v2 * k_cyl_x)) * half_dim;
-                if (xs < 0.0f || xs >= 2047.0f) {
-                    output[i] = 0xFF000000u;
-                    continue;
-                }
-                src_x = (int)xs;
-                src_y = y;
-            } else if (distMode == 1) {
-                float u_norm = ((float)x - half_dim) * inv_half_dim;
-                float u2 = u_norm * u_norm;
-                float xs = half_dim + (u_norm * (1.0f + v2 * k_bar_x)) * half_dim;
-                float ys = half_dim + (v_norm * (1.0f + u2 * k_bar_y)) * half_dim;
-                if (xs < 0.0f || xs >= 2047.0f || ys < 0.0f || ys >= 2047.0f) {
-                    output[i] = 0xFF000000u;
-                    continue;
-                }
-                src_x = (int)xs;
-                src_y = (int)ys;
-            }
-
-            int logicalY = src_y / PLASMA_SCALE;
-            int sy = src_y % PLASMA_SCALE;
-
-            float v_beam = prof->scanline[sy];
-            float wy_p = prof->w_3tap[sy][0];
-            float wy_c = prof->w_3tap[sy][1];
-            float wy_n = prof->w_3tap[sy][2];
-
-            int prevY = logicalY > 0 ? logicalY - 1 : 0;
-            int nextY = logicalY < PLATO_HEIGHT - 1 ? logicalY + 1 : PLATO_HEIGHT - 1;
-
-            const uint32_t *colorRow_prev = p->logical + (size_t)prevY * PLATO_WIDTH;
-            const uint32_t *colorRow_curr = p->logical + (size_t)logicalY * PLATO_WIDTH;
-            const uint32_t *colorRow_next = p->logical + (size_t)nextY * PLATO_WIDTH;
-
-            const float *energyRow_prev = p->energy + (size_t)prevY * PLATO_WIDTH;
-            const float *energyRow_curr = p->energy + (size_t)logicalY * PLATO_WIDTH;
-            const float *energyRow_next = p->energy + (size_t)nextY * PLATO_WIDTH;
-
-            int logicalX = src_x / PLASMA_SCALE;
-            int sx = src_x % PLASMA_SCALE;
-
-            float wx_p = prof->w_3tap[sx][0];
-            float wx_c = prof->w_3tap[sx][1];
-            float wx_n = prof->w_3tap[sx][2];
-
-            int prevX = logicalX > 0 ? logicalX - 1 : 0;
-            int nextX = logicalX < PLATO_WIDTH - 1 ? logicalX + 1 : PLATO_WIDTH - 1;
-
-            size_t src_i = (size_t)src_y * PLASMA_WIDTH + (size_t)src_x;
-            float glow = 0.40f * p->local[src_i] + 0.60f * p->wide[src_i];
-
-            uint32_t c_pp = colorRow_prev[prevX], c_pc = colorRow_prev[logicalX], c_pn = colorRow_prev[nextX];
-            uint32_t c_cp = colorRow_curr[prevX], c_cc = colorRow_curr[logicalX], c_cn = colorRow_curr[nextX];
-            uint32_t c_np = colorRow_next[prevX], c_nc = colorRow_next[logicalX], c_nn = colorRow_next[nextX];
-
-            float e_pp = energyRow_prev[prevX], e_pc = energyRow_prev[logicalX], e_pn = energyRow_prev[nextX];
-            float e_cp = energyRow_curr[prevX], e_cc = energyRow_curr[logicalX], e_cn = energyRow_curr[nextX];
-            float e_np = energyRow_next[prevX], e_nc = energyRow_next[logicalX], e_nn = energyRow_next[nextX];
-
-            if ((e_pp + e_pc + e_pn + e_cp + e_cc + e_cn + e_np + e_nc + e_nn) < 0.0001f && glow < 0.001f) {
-                output[i] = 0xFF000000u;
-                continue;
-            }
-
-            float r_p = (((float)((c_pp >> 16) & 0xFFu) * e_pp) * wx_p + ((float)((c_pc >> 16) & 0xFFu) * e_pc) * wx_c + ((float)((c_pn >> 16) & 0xFFu) * e_pn) * wx_n) * (1.0f / 255.0f);
-            float g_p = (((float)((c_pp >> 8)  & 0xFFu) * e_pp) * wx_p + ((float)((c_pc >> 8)  & 0xFFu) * e_pc) * wx_c + ((float)((c_pn >> 8)  & 0xFFu) * e_pn) * wx_n) * (1.0f / 255.0f);
-            float b_p = (((float)(c_pp         & 0xFFu) * e_pp) * wx_p + ((float)(c_pc         & 0xFFu) * e_pc) * wx_c + ((float)(c_pn         & 0xFFu) * e_pn) * wx_n) * (1.0f / 255.0f);
-
-            float r_c = (((float)((c_cp >> 16) & 0xFFu) * e_cp) * wx_p + ((float)((c_cc >> 16) & 0xFFu) * e_cc) * wx_c + ((float)((c_cn >> 16) & 0xFFu) * e_cn) * wx_n) * (1.0f / 255.0f);
-            float g_c = (((float)((c_cp >> 8)  & 0xFFu) * e_cp) * wx_p + ((float)((c_cc >> 8)  & 0xFFu) * e_cc) * wx_c + ((float)((c_cn >> 8)  & 0xFFu) * e_cn) * wx_n) * (1.0f / 255.0f);
-            float b_c = (((float)(c_cp         & 0xFFu) * e_cp) * wx_p + ((float)(c_cc         & 0xFFu) * e_cc) * wx_c + ((float)(c_cn         & 0xFFu) * e_cn) * wx_n) * (1.0f / 255.0f);
-
-            float r_n = (((float)((c_np >> 16) & 0xFFu) * e_np) * wx_p + ((float)((c_nc >> 16) & 0xFFu) * e_nc) * wx_c + ((float)((c_nn >> 16) & 0xFFu) * e_nn) * wx_n) * (1.0f / 255.0f);
-            float g_n = (((float)((c_np >> 8)  & 0xFFu) * e_np) * wx_p + ((float)((c_nc >> 8)  & 0xFFu) * e_nc) * wx_c + ((float)((c_nn >> 8)  & 0xFFu) * e_nn) * wx_n) * (1.0f / 255.0f);
-            float b_n = (((float)(c_np         & 0xFFu) * e_np) * wx_p + ((float)(c_nc         & 0xFFu) * e_nc) * wx_c + ((float)(c_nn         & 0xFFu) * e_nn) * wx_n) * (1.0f / 255.0f);
-
-            float r_beam = r_p * wy_p + r_c * wy_c + r_n * wy_n;
-            float g_beam = g_p * wy_p + g_c * wy_c + g_n * wy_n;
-            float b_beam = b_p * wy_p + b_c * wy_c + b_n * wy_n;
-
-            float r_avg = (r_p + r_c + r_n) * 0.3333f;
-            float g_avg = (g_p + g_c + g_n) * 0.3333f;
-            float b_avg = (b_p + b_c + b_n) * 0.3333f;
-            float sum_avg = r_avg + g_avg + b_avg;
-
-            float chroma_r = (sum_avg > 0.001f) ? (r_avg / sum_avg) : 0.0f;
-            float chroma_g = (sum_avg > 0.001f) ? (g_avg / sum_avg) : 0.0f;
-            float chroma_b = (sum_avg > 0.001f) ? (b_avg / sum_avg) : 0.0f;
-
-            float m_r = mask_tbl[sx][0];
-            float m_g = mask_tbl[sx][1];
-            float m_b = mask_tbl[sx][2];
-
-            float bloom_val = glow * prof->bloom_amt * 1.5f;
-            float r_final = (r_beam * m_r * v_beam) + (chroma_r * bloom_val);
-            float g_final = (g_beam * m_g * v_beam) + (chroma_g * bloom_val);
-            float b_final = (b_beam * m_b * v_beam) + (chroma_b * bloom_val);
-
-            r_final *= prof->gain;
-            g_final *= prof->gain;
-            b_final *= prof->gain;
-
-            float max_c = fmaxf(r_final, fmaxf(g_final, b_final));
-            if (max_c > 1.0f) {
-                float boost = (max_c - 1.0f) * 0.20f;
-                r_final += boost;
-                g_final += boost;
-                b_final += boost;
-            }
-
-            output[i] = plasmaRGBA(plasmaClamp(r_final, 0.0f, 1.0f),
-                                   plasmaClamp(g_final, 0.0f, 1.0f),
-                                   plasmaClamp(b_final, 0.0f, 1.0f));
-        }
-    }
-}
-
-static void crtRender(PLATOView *self, uint32_t *output, PlasmaFrameProfile *profile) {
-    PLATOPlasmaState *p = self->plasma;
-    CFTimeInterval totalStart = CACurrentMediaTime(), now = totalStart;
-    float deltaTime = p->lastTime > 0.0 ? (float)(now - p->lastTime) : 1.0f / 60.0f;
-    p->lastTime = now;
-    deltaTime = plasmaClamp(deltaTime, 0.0f, 0.1f);
-
-    CFTimeInterval phaseStart = CACurrentMediaTime();
-    unsigned dirtyTiles = crtBuildCellSurface(self, deltaTime);
-    CFTimeInterval phaseEnd = CACurrentMediaTime();
-    profile->buildMs = plasmaElapsedMs(phaseStart, phaseEnd);
-    profile->outputTiles = dirtyTiles;
-
-    if (dirtyTiles == 0) {
-        profile->noOp = YES;
-        profile->totalMs = plasmaElapsedMs(totalStart, phaseEnd);
-        return;
-    }
-
-    BOOL fullFrame = (p->crtDistortion != 0) || (dirtyTiles > PLASMA_PARTIAL_LIMIT);
-    profile->fullFrame = fullFrame;
-    phaseStart = phaseEnd;
-
-    // Bloom/Halation doppio raggio (local r=4 + wide r=12)
-    if (fullFrame) {
-        plasmaBoxBlur(p->source, p->tmp, p->local, 4, &profile->blur4HorizontalMs, &profile->blur4VerticalMs);
-        plasmaBoxBlur(p->source, p->tmp, p->wide, 12, &profile->blur12HorizontalMs, &profile->blur12VerticalMs);
-    } else {
-        for (int y = 0; y < PLASMA_TILE_ROWS; y++) {
-            for (int x = 0; x < PLASMA_TILE_COLS; x++) {
-                if (p->dirtyOutput[y * PLASMA_TILE_COLS + x]) {
-                    plasmaBoxBlurTile(p->source, p->tmp, p->local, 4, x, y, &profile->blur4HorizontalMs, &profile->blur4VerticalMs);
-                    plasmaBoxBlurTile(p->source, p->tmp, p->wide, 12, x, y, &profile->blur12HorizontalMs, &profile->blur12VerticalMs);
-                }
-            }
-        }
-    }
-    phaseEnd = CACurrentMediaTime();
-    profile->blur4Ms = plasmaElapsedMs(phaseStart, phaseEnd);
-    phaseStart = phaseEnd;
-
-    // Compositing finale
-    if (fullFrame) {
-        for (int y = 0; y < PLASMA_TILE_ROWS; y++) {
-            for (int x = 0; x < PLASMA_TILE_COLS; x++) {
-                crtComposeTile(self, output, x, y);
-            }
-        }
-    } else {
-        for (int y = 0; y < PLASMA_TILE_ROWS; y++) {
-            for (int x = 0; x < PLASMA_TILE_COLS; x++) {
-                if (p->dirtyOutput[y * PLASMA_TILE_COLS + x]) {
-                    crtComposeTile(self, output, x, y);
-                }
-            }
-        }
-    }
-    phaseEnd = CACurrentMediaTime();
-    profile->composeMs = plasmaElapsedMs(phaseStart, phaseEnd);
-    profile->totalMs = plasmaElapsedMs(totalStart, phaseEnd);
-}
-
-static void plasmaRender(PLATOView *self, uint32_t *output, PlasmaFrameProfile *profile) {
-    PLATOPlasmaState *p = self->plasma;
-    CFTimeInterval totalStart = CACurrentMediaTime(), now = totalStart;
-    float deltaTime = p->lastTime > 0.0 ? (float)(now - p->lastTime) : 1.0f / 60.0f;
-    p->lastTime = now; deltaTime = plasmaClamp(deltaTime, 0.0f, 0.1f);
-    CFTimeInterval phaseStart = CACurrentMediaTime();
-    unsigned dirtyTiles = plasmaBuildCellSurface(self, deltaTime);
-    CFTimeInterval phaseEnd = CACurrentMediaTime();
-    profile->buildMs = plasmaElapsedMs(phaseStart, phaseEnd);
-    for (int i = 0; i < PLASMA_TILE_COUNT; i++) if (p->dirtySource[i]) profile->sourceTiles++;
-    profile->outputTiles = dirtyTiles;
-    if (dirtyTiles == 0) { profile->noOp = YES; profile->totalMs = plasmaElapsedMs(totalStart, phaseEnd); return; }
-    BOOL fullFrame = (p->displayMode == PLATODisplayModeRealPlasma && p->plasmaDistortion != 0) || (dirtyTiles > PLASMA_PARTIAL_LIMIT);
-    profile->fullFrame = fullFrame;
-    phaseStart = phaseEnd;
-    if (fullFrame) plasmaBoxBlur(p->source, p->tmp, p->local, 4, &profile->blur4HorizontalMs, &profile->blur4VerticalMs);
-    else for (int y = 0; y < PLASMA_TILE_ROWS; y++) for (int x = 0; x < PLASMA_TILE_COLS; x++) if (p->dirtyOutput[y * PLASMA_TILE_COLS + x]) plasmaBoxBlurTile(p->source, p->tmp, p->local, 4, x, y, &profile->blur4HorizontalMs, &profile->blur4VerticalMs);
-    phaseEnd = CACurrentMediaTime(); profile->blur4Ms = plasmaElapsedMs(phaseStart, phaseEnd); phaseStart = phaseEnd;
-    if (fullFrame) plasmaBoxBlur(p->source, p->tmp, p->wide, 12, &profile->blur12HorizontalMs, &profile->blur12VerticalMs);
-    else for (int y = 0; y < PLASMA_TILE_ROWS; y++) for (int x = 0; x < PLASMA_TILE_COLS; x++) if (p->dirtyOutput[y * PLASMA_TILE_COLS + x]) plasmaBoxBlurTile(p->source, p->tmp, p->wide, 12, x, y, &profile->blur12HorizontalMs, &profile->blur12VerticalMs);
-    phaseEnd = CACurrentMediaTime(); profile->blur12Ms = plasmaElapsedMs(phaseStart, phaseEnd); phaseStart = phaseEnd;
-    if (fullFrame) for (int y = 0; y < PLASMA_TILE_ROWS; y++) for (int x = 0; x < PLASMA_TILE_COLS; x++) plasmaComposeTile(self, output, x, y);
-    else for (int y = 0; y < PLASMA_TILE_ROWS; y++) for (int x = 0; x < PLASMA_TILE_COLS; x++) if (p->dirtyOutput[y * PLASMA_TILE_COLS + x]) plasmaComposeTile(self, output, x, y);
-    phaseEnd = CACurrentMediaTime(); profile->composeMs = plasmaElapsedMs(phaseStart, phaseEnd); profile->totalMs = plasmaElapsedMs(totalStart, phaseEnd);
-}
+static inline void plasmaLiveProfileReset(CFTimeInterval now) { (void)now; }
 
 static double getMachProcessCPUUsage(void) {
     kern_return_t kr;
@@ -1001,19 +137,19 @@ static void* network_worker(void *arg) {
     self = [super initWithFrame:frameRect];
     if (self) {
         rgbaBuffer = (uint32_t *)calloc(PLASMA_PIXELS, sizeof(uint32_t));
-        plasma = (PLATOPlasmaState *)calloc(1, sizeof(PLATOPlasmaState));
-        plasma->decayDuration = 0.10;
-        plasma->decayTau = 0.010f;
-        plasma->crtDecayDuration = 0.020;
-        plasma->crtDecayTau = (float)(0.020 / 6.9077);
-        plasma->displayMode = PLATODisplayModeRealPlasma;
-        plasma->crtBeamLevel = 1; // Default High (Soft Glow)
-        plasma->crtDistortion = 2; // Default Cylindrical
-        plasma->plasmaDistortion = 2; // Default Cylindrical
-        plasmaAllocState(plasma);
+        optical = plato_optical_create();
+        memset(&opticalProfile, 0, sizeof(opticalProfile));
+        opticalProfile.display_mode = 0; /* 0: Real Plasma in libplato */
+        opticalProfile.persistence_ms = 100;
+        opticalProfile.plasma_distortion = 2;
+        opticalProfile.crt_beam_level = 1;
+        opticalProfile.crt_persistence_ms = 20;
+        opticalProfile.crt_distortion = 2;
+        isAnimating = NO;
 
         terminal = (plato_terminal_t *)calloc(1, sizeof(plato_terminal_t));
         plato_terminal_init(terminal);
+        plato_keyboard_state_init(&keyboardState);
 
         colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
         plato_ringbuf_init(&ringbuf);
@@ -1081,7 +217,7 @@ static void* network_worker(void *arg) {
     }
     plato_ringbuf_destroy(&ringbuf);
     if (rgbaBuffer) { free(rgbaBuffer); rgbaBuffer = NULL; }
-    if (plasma) { plasmaFreeState(plasma); free(plasma); plasma = NULL; }
+    if (optical) { plato_optical_destroy(optical); optical = NULL; }
     if (terminal) { free(terminal); terminal = NULL; }
     if (colorSpace) { CGColorSpaceRelease(colorSpace); colorSpace = NULL; }
 }
@@ -1099,8 +235,8 @@ static void* network_worker(void *arg) {
 }
 
 - (void)updateLayerFilters {
-    if (!plasmaLayer || !plasma) return;
-    NSString *filter = (plasma->displayMode == PLATODisplayModeCrisp || plasma->displayMode == PLATODisplayModeCrispColor) ? kCAFilterNearest : kCAFilterLinear;
+    if (!plasmaLayer) return;
+    NSString *filter = (opticalProfile.display_mode == 1 || opticalProfile.display_mode == 3) ? kCAFilterNearest : kCAFilterLinear;
     plasmaLayer.minificationFilter = filter;
     plasmaLayer.magnificationFilter = filter;
 }
@@ -1124,13 +260,8 @@ static void* network_worker(void *arg) {
             rgbaBuffer[i] = PLASMA_BG_PIXEL;
         }
     }
-    if (plasma) {
-        if (plasma->energy) memset(plasma->energy, 0, (size_t)PLATO_WIDTH * PLATO_HEIGHT * sizeof(float));
-        if (plasma->source) memset(plasma->source, 0, PLASMA_PIXELS * sizeof(float));
-        if (plasma->local) memset(plasma->local, 0, PLASMA_PIXELS * sizeof(float));
-        if (plasma->wide) memset(plasma->wide, 0, PLASMA_PIXELS * sizeof(float));
-        plasma->animateUntil = 0.0;
-        plasma->tilesInitialized = NO;
+    if (optical) {
+        plato_optical_invalidate(optical);
     }
 
     if (plasmaLayer) {
@@ -1161,6 +292,7 @@ static void* network_worker(void *arg) {
         plato_metadata_callback_t metaCb = terminal->metadata_callback;
         void *metaCtx = terminal->metadata_context;
         plato_terminal_init(terminal);
+        plato_keyboard_state_init(&keyboardState);
         terminal->transport = self->transport;
         terminal->beep_callback = beepCb;
         terminal->beep_context = beepCtx;
@@ -1205,9 +337,8 @@ static void* network_worker(void *arg) {
                             PLATO_SCREEN_WRITE, 0);
         }
 
-        if (plasma) {
-            plasma->tilesInitialized = NO;
-            plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
+        if (optical) {
+            plato_optical_invalidate(optical);
         }
         [self refreshDisplay];
     }
@@ -1239,7 +370,7 @@ static void* network_worker(void *arg) {
 }
 
 - (void)processIncomingData {
-    if (!terminal || !plasma || !running) return;
+    if (!terminal || !optical || !running) return;
 
     CFTimeInterval now = CACurrentMediaTime();
     if (now < self->paceUntil) return;
@@ -1263,10 +394,6 @@ static void* network_worker(void *arg) {
 
             /* Se c'è stato del disegno, forziamo il rendering del fotogramma a video */
             if (terminal->fb.dirty) {
-                if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
-                    NSTimeInterval dur = (plasma->displayMode == PLATODisplayModeRealColorCRT) ? plasma->crtDecayDuration : plasma->decayDuration;
-                    plasma->animateUntil = now + dur;
-                }
                 [self refreshDisplay];
             }
 
@@ -1282,28 +409,25 @@ static void* network_worker(void *arg) {
     }
 
     if (terminal->fb.dirty) {
-        if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
-            NSTimeInterval dur = (plasma->displayMode == PLATODisplayModeRealColorCRT) ? plasma->crtDecayDuration : plasma->decayDuration;
-            plasma->animateUntil = now + dur;
-        }
         [self refreshDisplay];
     }
 }
 
 - (void)onFrameTick:(NSTimer *)timer {
-    if (!terminal || !plasma) return;
+    if (!terminal || !optical) return;
+    plato_keyboard_poll(&keyboardState, terminal, CACurrentMediaTime());
     flowTickCount++;
     size_t ringBefore = plato_ringbuf_available(&ringbuf);
     if (ringBefore > flowRingMaximum) flowRingMaximum = ringBefore;
 
-    /* 1. Ingestione logica asincrona disaccoppiata (si ferma solo lei se incontra NUL) */
+    /* 1. Ingestione dati di rete */
     [self processIncomingData];
 
     flowRingEnd = plato_ringbuf_available(&ringbuf);
     if (flowRingEnd > flowRingMaximum) flowRingMaximum = flowRingEnd;
 
-    /* 2. Il motore Real Plasma a 60 FPS NON SI FERMA MAI: calcola il decadimento gas continuamente */
-    if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor && CACurrentMediaTime() < plasma->animateUntil) {
+    /* 2. Se e' attiva un'animazione di decadimento fosfori, ridisegna il frame */
+    if (isAnimating) {
         [self refreshDisplay];
     }
 }
@@ -1345,64 +469,28 @@ static void* network_worker(void *arg) {
 }
 
 - (void)refreshDisplay {
-    if (!terminal || !plasma || !plasmaAllocState(plasma)) return;
-    PlasmaFrameProfile profile = {0};
-    CFTimeInterval totalStart = CACurrentMediaTime();
-    if (plasma->displayMode == PLATODisplayModeCrisp || plasma->displayMode == PLATODisplayModeCrispColor) {
-        CFTimeInterval phaseStart = CACurrentMediaTime();
-        plato_terminal_render_rgba(terminal, plasma->logical);
-        CFTimeInterval phaseEnd = CACurrentMediaTime();
-        profile.logicalMs = plasmaElapsedMs(phaseStart, phaseEnd);
-        phaseStart = phaseEnd;
-        plasmaExpandCrisp(plasma->logical, rgbaBuffer);
-        phaseEnd = CACurrentMediaTime();
-        profile.expandMs = plasmaElapsedMs(phaseStart, phaseEnd);
-        profile.totalMs = plasmaElapsedMs(totalStart, phaseEnd);
-    } else if (plasma->displayMode == PLATODisplayModeRealColorCRT) {
-        crtRender(self, rgbaBuffer, &profile);
-        terminal->fb.dirty = false;
-    } else {
-        terminal->fb.dirty = false;
-        plasmaRender(self, rgbaBuffer, &profile);
-        if (plasma->displayMode == PLATODisplayModeSplit) {
-            CFTimeInterval phaseStart = CACurrentMediaTime();
-            plato_terminal_render_rgba(terminal, plasma->logical);
-            CFTimeInterval phaseEnd = CACurrentMediaTime();
-            profile.logicalMs = plasmaElapsedMs(phaseStart, phaseEnd);
-            phaseStart = phaseEnd;
-            plasmaExpandCrisp(plasma->logical, plasma->crisp);
-            phaseEnd = CACurrentMediaTime();
-            profile.expandMs = plasmaElapsedMs(phaseStart, phaseEnd);
-            size_t halfBytes = (PLASMA_WIDTH / 2) * sizeof(uint32_t);
-            for (int y = 0; y < PLASMA_HEIGHT; y++) {
-                memcpy(rgbaBuffer + (size_t)y * PLASMA_WIDTH + PLASMA_WIDTH / 2,
-                       plasma->crisp + (size_t)y * PLASMA_WIDTH + PLASMA_WIDTH / 2, halfBytes);
-            }
-            profile.totalMs = plasmaElapsedMs(totalStart, CACurrentMediaTime());
-        }
-    }
-    plasmaProfileFrame(&profile, plasma->displayMode);
-    plasmaLiveProfileFrame(&profile, plasma->displayMode);
-    if (plasma->displayMode == PLATODisplayModeCrisp || plasma->displayMode == PLATODisplayModeCrispColor || !profile.noOp) {
-        fpsTotalFrames++;
-        if (plasma->displayMode != PLATODisplayModeCrisp && plasma->displayMode != PLATODisplayModeCrispColor) {
-            if (profile.fullFrame) fpsFullFrames++; else fpsPartialFrames++;
-        }
+    if (!terminal || !optical || !rgbaBuffer) return;
+    double now = CACurrentMediaTime();
+    isAnimating = plato_optical_render(optical, terminal, &opticalProfile, now, rgbaBuffer);
 
-        CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, rgbaBuffer, PLASMA_BYTES, NULL);
-        CGImageRef img = CGImageCreate(PLASMA_WIDTH, PLASMA_HEIGHT, 8, 32, PLASMA_WIDTH * 4,
-                                       colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
-                                       provider, NULL, false, kCGRenderingIntentDefault);
-        if (!graphicsDisabled) {
-            [CATransaction begin];
-            [CATransaction setDisableActions:YES];
-            plasmaLayer.frame = platoDisplayRect(self.bounds);
-            plasmaLayer.contents = (__bridge id)img;
-            [CATransaction commit];
-        }
-        CGImageRelease(img);
-        CGDataProviderRelease(provider);
+    fpsTotalFrames++;
+    if (opticalProfile.display_mode != 1 && opticalProfile.display_mode != 3) {
+        if (plato_optical_is_full_frame(optical)) fpsFullFrames++; else fpsPartialFrames++;
     }
+
+    CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, rgbaBuffer, PLASMA_BYTES, NULL);
+    CGImageRef img = CGImageCreate(PLASMA_WIDTH, PLASMA_HEIGHT, 8, 32, PLASMA_WIDTH * 4,
+                                   colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
+                                   provider, NULL, false, kCGRenderingIntentDefault);
+    if (!graphicsDisabled) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        plasmaLayer.frame = platoDisplayRect(self.bounds);
+        plasmaLayer.contents = (__bridge id)img;
+        [CATransaction commit];
+    }
+    CGImageRelease(img);
+    CGDataProviderRelease(provider);
 }
 
 - (void)setDisplayNone {
@@ -1421,94 +509,77 @@ static void* network_worker(void *arg) {
 }
 
 - (void)setDisplayCrisp {
-    if (!plasma) return;
-    plasma->displayMode = PLATODisplayModeCrisp;
-    plasma->animateUntil = 0.0;
+    opticalProfile.display_mode = 1; /* Crisp Mono in libplato */
     if (terminal) plato_terminal_set_color_mode(terminal, false);
+    if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
 }
 
 - (void)setDisplayCrispColor {
-    if (!plasma) return;
-    plasma->displayMode = PLATODisplayModeCrispColor;
-    plasma->animateUntil = 0.0;
+    opticalProfile.display_mode = 3; /* Crisp Color in libplato */
     if (terminal) plato_terminal_set_color_mode(terminal, true);
+    if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
 }
+
 - (void)setDisplayRealColorCRT {
-    if (!plasma) return;
-    plasma->displayMode = PLATODisplayModeRealColorCRT;
-    plasma->lastTime = 0.0;
-    plasma->tilesInitialized = NO;
-    plasma->animateUntil = CACurrentMediaTime() + plasma->crtDecayDuration;
+    opticalProfile.display_mode = 4; /* Real Color CRT in libplato */
     if (terminal) plato_terminal_set_color_mode(terminal, true);
+    if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
 }
 
 - (void)setCRTBeamLevel:(NSInteger)level {
-    if (!plasma) return;
     if (level < 0) level = 0;
     if (level > 2) level = 2;
-    plasma->crtBeamLevel = (int)level;
-    plasma->tilesInitialized = NO;
-    plasma->animateUntil = CACurrentMediaTime() + 0.10;
+    opticalProfile.crt_beam_level = (int)level;
+    if (optical) plato_optical_invalidate(optical);
     [self refreshDisplay];
 }
 
 - (NSInteger)crtBeamLevel {
-    return plasma ? plasma->crtBeamLevel : 0;
+    return opticalProfile.crt_beam_level;
 }
 
 - (void)setCRTDistortion:(NSInteger)distortion {
-    if (!plasma) return;
     if (distortion < 0) distortion = 0;
     if (distortion > 2) distortion = 2;
-    plasma->crtDistortion = (int)distortion;
-    plasma->tilesInitialized = NO;
-    plasma->animateUntil = CACurrentMediaTime() + 0.10;
+    opticalProfile.crt_distortion = (int)distortion;
+    if (optical) plato_optical_invalidate(optical);
     [self refreshDisplay];
 }
 
 - (NSInteger)crtDistortion {
-    return plasma ? plasma->crtDistortion : 2;
+    return opticalProfile.crt_distortion;
 }
 
 - (void)setPlasmaDistortion:(NSInteger)distortion {
-    if (!plasma) return;
     if (distortion < 0) distortion = 0;
     if (distortion > 2) distortion = 2;
-    plasma->plasmaDistortion = (int)distortion;
-    plasma->tilesInitialized = NO;
-    plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
+    opticalProfile.plasma_distortion = (int)distortion;
+    if (optical) plato_optical_invalidate(optical);
     [self refreshDisplay];
 }
 
 - (NSInteger)plasmaDistortion {
-    return plasma ? plasma->plasmaDistortion : 2;
+    return opticalProfile.plasma_distortion;
 }
 
-
 - (void)setDisplayRealPlasma {
-    if (!plasma) return;
-    plasma->displayMode = PLATODisplayModeRealPlasma;
-    plasma->lastTime = 0.0;
-    plasma->tilesInitialized = NO;
-    plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
+    opticalProfile.display_mode = 0; /* Real Plasma in libplato */
     if (terminal) plato_terminal_set_color_mode(terminal, false);
+    if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
 }
 
 - (void)setDisplaySplit {
-    if (!plasma) return;
-    plasma->displayMode = PLATODisplayModeSplit;
-    plasma->lastTime = 0.0;
-    plasma->tilesInitialized = NO;
-    plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
+    opticalProfile.display_mode = 2; /* Split Mono in libplato */
     if (terminal) plato_terminal_set_color_mode(terminal, false);
+    if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
 }
@@ -1523,16 +594,7 @@ static void* network_worker(void *arg) {
 }
 
 - (void)writePlasmaProfileWithTag:(NSString *)tag {
-    PLATODisplayMode mode = plasma ? plasma->displayMode : PLATODisplayModeRealPlasma;
-    NSString *line = plasmaProfileLine(tag, mode);
-    NSLog(@"%@", line);
-    if (!plasmaProfilePath) return;
-    NSString *record = [line stringByAppendingString:@"\n"];
-    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:plasmaProfilePath];
-    if (!handle) return;
-    [handle seekToEndOfFile];
-    [handle writeData:[record dataUsingEncoding:NSUTF8StringEncoding]];
-    [handle closeFile];
+    (void)tag;
 }
 
 - (void)setRendererPerformanceLogEnabled:(BOOL)enabled {
@@ -1552,34 +614,31 @@ static void* network_worker(void *arg) {
 }
 
 - (void)setPlasmaDecayDuration:(NSTimeInterval)duration {
-    if (!plasma) return;
     if (duration < 0.02) duration = 0.02;
-    plasma->decayDuration = duration;
-    plasma->decayTau = (float)(duration / 10.0);
-    plasma->animateUntil = CACurrentMediaTime() + plasma->decayDuration;
+    opticalProfile.persistence_ms = (int)(duration * 1000.0 + 0.5);
+    if (optical) plato_optical_invalidate(optical);
     [self refreshDisplay];
 }
 
 - (NSInteger)currentDisplayMode {
-    return plasma ? (NSInteger)plasma->displayMode : 1;
+    if (opticalProfile.display_mode == 0) return 1; /* Real Plasma (tag 1002 Cocoa) */
+    if (opticalProfile.display_mode == 1) return 0; /* Crisp Mono (tag 1001 Cocoa) */
+    return opticalProfile.display_mode;             /* 2, 3, 4 coincidono */
 }
 
 - (NSTimeInterval)plasmaDecayDuration {
-    return plasma ? plasma->decayDuration : 0.10;
+    return (NSTimeInterval)opticalProfile.persistence_ms / 1000.0;
 }
 
 - (void)setCRTDecayDuration:(NSTimeInterval)duration {
-    if (!plasma) return;
     if (duration < 0.02) duration = 0.02;
-    plasma->crtDecayDuration = duration;
-    plasma->crtDecayTau = (float)(duration / 10.0);
-    plasma->tilesInitialized = NO;
-    plasma->animateUntil = CACurrentMediaTime() + plasma->crtDecayDuration;
+    opticalProfile.crt_persistence_ms = (int)(duration * 1000.0 + 0.5);
+    if (optical) plato_optical_invalidate(optical);
     [self refreshDisplay];
 }
 
 - (NSTimeInterval)crtDecayDuration {
-    return plasma ? plasma->crtDecayDuration : 0.020;
+    return (NSTimeInterval)opticalProfile.crt_persistence_ms / 1000.0;
 }
 
 - (void)setKeyboardReferenceVisible:(BOOL)visible {
@@ -1757,7 +816,7 @@ static void* network_worker(void *arg) {
 
     CGRect destRect = platoDisplayRect(self.bounds);
     if (fpsCounterVisible) {
-        PLATODisplayMode curMode = plasma ? plasma->displayMode : PLATODisplayModeRealPlasma;
+        BOOL isCrisp = (opticalProfile.display_mode == 1 || opticalProfile.display_mode == 3);
         NSString *userInfo = @"";
         if (terminal && terminal->user_name[0] && terminal->user_group[0]) {
             userInfo = [NSString stringWithFormat:@"USER    %s/%s (%s)\n", terminal->user_name, terminal->user_group, terminal->user_station];
@@ -1765,7 +824,7 @@ static void* network_worker(void *arg) {
             userInfo = [NSString stringWithFormat:@"SLOT    %s\n", terminal->user_station];
         }
 
-        NSString *fpsText = curMode == PLATODisplayModeCrisp
+        NSString *fpsText = isCrisp
             ? [NSString stringWithFormat:@"%@FPS     %5.1f\nCPU     %5.1f%%", userInfo, fpsTotal, cpuUsagePercent]
             : [NSString stringWithFormat:@"%@FPS     %5.1f\nPARTIAL %5.1f\nFULL    %5.1f\nCPU     %5.1f%%", userInfo, fpsTotal, fpsPartial, fpsFull, cpuUsagePercent];
         NSDictionary *fpsAttributes = @{
@@ -1815,12 +874,10 @@ static void* network_worker(void *arg) {
         int plato_y = (int)((loc.y - drawY) / scale);
 
         int activeDist = 0;
-        if (plasma) {
-            if (plasma->displayMode == PLATODisplayModeRealColorCRT) {
-                activeDist = plasma->crtDistortion;
-            } else if (plasma->displayMode == PLATODisplayModeRealPlasma) {
-                activeDist = plasma->plasmaDistortion;
-            }
+        if (opticalProfile.display_mode == 4) {
+            activeDist = opticalProfile.crt_distortion;
+        } else if (opticalProfile.display_mode == 0) {
+            activeDist = opticalProfile.plasma_distortion;
         }
         if (activeDist != 0) {
             float u = ((float)plato_x - 256.0f) / 256.0f;
@@ -1847,10 +904,11 @@ static void* network_worker(void *arg) {
 
 - (void)keyDown:(NSEvent *)event {
     NSEventModifierFlags flags = [event modifierFlags];
-    bool shift = (flags & NSEventModifierFlagShift) != 0;
-    bool ctrl  = (flags & NSEventModifierFlagControl) != 0;
-    bool alt   = (flags & NSEventModifierFlagOption) != 0;
-    bool cmd   = (flags & NSEventModifierFlagCommand) != 0;
+    plato_key_event_t ev = {0};
+    ev.shift = (flags & NSEventModifierFlagShift) != 0;
+    ev.ctrl  = (flags & NSEventModifierFlagControl) != 0;
+    ev.alt   = (flags & NSEventModifierFlagOption) != 0;
+    ev.gui   = (flags & NSEventModifierFlagCommand) != 0;
 
     NSString *chars = [event characters];
     NSString *unmod = [[event charactersIgnoringModifiers] lowercaseString];
@@ -1858,118 +916,43 @@ static void* network_worker(void *arg) {
     unichar c = [chars characterAtIndex:0];
     unichar uc = ([unmod length] > 0) ? [unmod characterAtIndex:0] : 0;
 
-    uint8_t sendBuf[8];
-    size_t len = 0;
-    uint16_t platoKey = UINT16_MAX;
+    ev.codepoint = c;
+    ev.unmod_codepoint = uc;
 
-    // 1. Tasti funzione F1..F12
     if (c >= NSF1FunctionKey && c <= NSF12FunctionKey) {
-        switch (c) {
-            case NSF1FunctionKey:
-            case NSF6FunctionKey:  platoKey = plato_keyboard_keycode(PLATO_KEY_HELP, shift); break;
-            case NSF2FunctionKey:
-            case NSF7FunctionKey:  platoKey = plato_keyboard_keycode(PLATO_KEY_LAB, shift); break;
-            case NSF3FunctionKey:
-            case NSF9FunctionKey:  platoKey = plato_keyboard_keycode(PLATO_KEY_DATA, shift); break;
-            case NSF4FunctionKey:
-            case NSF10FunctionKey: platoKey = plato_keyboard_keycode(PLATO_KEY_STOP, shift); break;
-            case NSF5FunctionKey:  platoKey = plato_keyboard_keycode(PLATO_KEY_EDIT, shift); break;
-            case NSF8FunctionKey:  platoKey = plato_keyboard_keycode(PLATO_KEY_BACK, shift); break;
-            case NSF11FunctionKey:
-                [NSApp sendAction:@selector(toggleMainFullScreen:) to:[NSApp delegate] from:self];
-                return;
-            case NSF12FunctionKey:
-                [NSApp sendAction:@selector(toggleFPSCounter:) to:[NSApp delegate] from:self];
-                return;
-        }
-    }
-    // 2. Tasti di controllo e opzione (Ctrl / Option)
-    else if ((ctrl || alt) && !cmd) {
-        if (alt && !ctrl && c == NSLeftArrowFunctionKey) {
-            // Option + Freccia Sinistra: Freccia di assegnamento (<=)
-            platoKey = shift ? 0x2D : 0x0D;
-        } else if (ctrl && (uc >= '0' && uc <= '9')) {
-            // Ctrl+[0..9] e Ctrl+Shift+[0..9] (PLATO shifted number row: > [ ] $ % _ ' * ( <)
-            int digit = uc - '0';
-            platoKey = (uint16_t)(digit | 0x20);
-        } else if (ctrl && shift && (uc == '!' || uc == '@' || uc == '#' || uc == '$' ||
-                                     uc == '%' || uc == '^' || uc == '&' || uc == '*' ||
-                                     uc == '(' || uc == ')')) {
-            int digit = 0;
-            switch (uc) {
-                case '!': digit = 1; break;
-                case '@': digit = 2; break;
-                case '#': digit = 3; break;
-                case '$': digit = 4; break;
-                case '%': digit = 5; break;
-                case '^': digit = 6; break;
-                case '&': digit = 7; break;
-                case '*': digit = 8; break;
-                case '(': digit = 9; break;
-                case ')': digit = 0; break;
-            }
-            platoKey = (uint16_t)(digit | 0x20);
-        } else {
-            switch (uc) {
-                case 'a': platoKey = plato_keyboard_keycode(PLATO_KEY_ANS, shift); break;
-                case 'b': platoKey = plato_keyboard_keycode(PLATO_KEY_BACK, shift); break;
-                case 'c': platoKey = plato_keyboard_keycode(PLATO_KEY_COPY, shift); break;
-                case 'd': platoKey = plato_keyboard_keycode(PLATO_KEY_DATA, shift); break;
-                case 'e': platoKey = plato_keyboard_keycode(PLATO_KEY_EDIT, shift); break;
-                case 'f': platoKey = plato_keyboard_keycode(PLATO_KEY_FONT, shift); break;
-                case 'g': platoKey = 0x0B; break; // Simbolo Divisione (÷)
-                case 'h': platoKey = plato_keyboard_keycode(PLATO_KEY_HELP, shift); break;
-                case 'l': platoKey = plato_keyboard_keycode(PLATO_KEY_LAB, shift); break;
-                case 'm': platoKey = plato_keyboard_keycode(PLATO_KEY_MICRO, shift); break;
-                case 'n': platoKey = plato_keyboard_keycode(PLATO_KEY_NEXT, shift); break;
-                case 'p': platoKey = plato_keyboard_keycode(PLATO_KEY_SUPER, shift); break;
-                case 'q': platoKey = plato_keyboard_keycode(PLATO_KEY_SQUARE, shift); break;
-                case 'r': platoKey = plato_keyboard_keycode(PLATO_KEY_ERASE, shift); break;
-                case 's': platoKey = plato_keyboard_keycode(PLATO_KEY_STOP, shift); break;
-                case 't': platoKey = plato_keyboard_keycode(PLATO_KEY_TERM, shift); break;
-                case 'x': platoKey = 0x0A; break; // Simbolo Moltiplicazione (×)
-                case 'y': platoKey = plato_keyboard_keycode(PLATO_KEY_SUB, shift); break;
-                case '/': platoKey = plato_keyboard_keycode(PLATO_KEY_ANS, shift); break;
-            }
-        }
-    }
-    // 3. Frecce e tasti di scorrimento
-    else if (c == NSLeftArrowFunctionKey) {
-        platoKey = plato_keyboard_keycode(PLATO_KEY_ERASE, shift);
-    }
-    else if (c == NSRightArrowFunctionKey || c == '\t' || c == 9) {
-        sendBuf[0] = 0x09; // TAB fisico o Freccia Destra
-        len = 1;
-    }
-    else if (c == NSUpArrowFunctionKey || c == NSPageUpFunctionKey) {
-        platoKey = plato_keyboard_keycode(PLATO_KEY_SUPER, shift);
-    }
-    else if (c == NSDownArrowFunctionKey || c == NSPageDownFunctionKey) {
-        platoKey = plato_keyboard_keycode(PLATO_KEY_SUB, shift);
-    }
-    // 4. Return / Invio
-    else if (c == 13 || c == 3 || c == 10) {
-        platoKey = plato_keyboard_keycode(PLATO_KEY_NEXT, shift);
-    }
-    // 5. Backspace / Delete
-    else if (c == 127 || c == 8 || c == NSDeleteFunctionKey) {
-        platoKey = plato_keyboard_keycode(PLATO_KEY_ERASE, shift);
-    }
-    // 6. Escape -> BACK
-    else if (c == 27) {
-        platoKey = plato_keyboard_keycode(PLATO_KEY_BACK, shift);
-    }
-    // 7. ASCII stampabili
-    else if (c >= 32 && c <= 126) {
-        sendBuf[0] = (uint8_t)c;
-        len = 1;
+        ev.vkey = (plato_virtual_key_t)(PLATO_VKEY_F1 + (c - NSF1FunctionKey));
+    } else if (c == NSLeftArrowFunctionKey) {
+        ev.vkey = PLATO_VKEY_LEFT;
+    } else if (c == NSRightArrowFunctionKey) {
+        ev.vkey = PLATO_VKEY_RIGHT;
+    } else if (c == NSUpArrowFunctionKey) {
+        ev.vkey = PLATO_VKEY_UP;
+    } else if (c == NSDownArrowFunctionKey) {
+        ev.vkey = PLATO_VKEY_DOWN;
+    } else if (c == NSPageUpFunctionKey) {
+        ev.vkey = PLATO_VKEY_PAGEUP;
+    } else if (c == NSPageDownFunctionKey) {
+        ev.vkey = PLATO_VKEY_PAGEDOWN;
+    } else if (c == 13 || c == 3 || c == 10) {
+        ev.vkey = PLATO_VKEY_RETURN;
+    } else if (c == 127 || c == 8 || c == NSDeleteFunctionKey) {
+        ev.vkey = PLATO_VKEY_BACKSPACE;
+    } else if (c == 27) {
+        ev.vkey = PLATO_VKEY_ESCAPE;
+    } else if (c == '\t' || c == 9) {
+        ev.vkey = PLATO_VKEY_TAB;
     }
 
-    if (platoKey != UINT16_MAX && terminal) {
-        plato_protocol_send_key(terminal, platoKey);
-    } else if (len > 0 && transport && transport->connected) {
-        plato_transport_send(transport, sendBuf, len);
+    if (ev.vkey == PLATO_VKEY_F11) {
+        [NSApp sendAction:@selector(toggleMainFullScreen:) to:[NSApp delegate] from:self];
+        return;
     }
+    if (ev.vkey == PLATO_VKEY_F12) {
+        [NSApp sendAction:@selector(toggleFPSCounter:) to:[NSApp delegate] from:self];
+        return;
+    }
+
+    plato_keyboard_dispatch(&keyboardState, terminal, &ev, CACurrentMediaTime());
 }
 
 - (void)keyUp:(NSEvent *)event {
