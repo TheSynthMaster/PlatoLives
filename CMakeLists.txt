@@ -27,7 +27,7 @@ else()
 endif()
 
 
-project(PlatoLives VERSION 4.0 LANGUAGES C OBJC)
+project(PlatoLives VERSION 4.2 LANGUAGES C OBJC)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -77,6 +77,7 @@ if(APPLE)
         platolives-mac/main.m
         platolives-mac/mac_view.m
         platolives-mac/mac_window.m
+        platolives-mac/mac_scripts.m
         platolives-mac/test_runner.m
         src/console_runner.c
     )
@@ -114,3 +115,8 @@ if(APPLE)
         MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2026 Fabio Montarsolo"
     )
 endif()
+
+
+add_executable(test_script tests/test_script.c)
+target_link_libraries(test_script plato)
+add_test(NAME test_script COMMAND test_script)

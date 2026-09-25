@@ -1,4 +1,5 @@
 #import "mac_view.h"
+#import "mac_window.h"
 #import <QuartzCore/QuartzCore.h>
 #include <math.h>
 
@@ -132,6 +133,7 @@ static void* network_worker(void *arg) {
 @end
 
 @implementation PLATOView
+@synthesize scriptRunner = scriptRunner;
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
     self = [super initWithFrame:frameRect];
@@ -426,8 +428,12 @@ static void* network_worker(void *arg) {
     flowRingEnd = plato_ringbuf_available(&ringbuf);
     if (flowRingEnd > flowRingMaximum) flowRingMaximum = flowRingEnd;
 
-    /* 2. Se e' attiva un'animazione di decadimento fosfori, ridisegna il frame */
-    if (isAnimating) {
+    /* 2. Se e' attiva animazione, script in corso O appena terminato, ridisegna */
+    BOOL isScriptRunning = (self.scriptRunner && plato_script_is_running(self.scriptRunner));
+    static BOOL s_prevScriptRunning = NO;
+    BOOL shouldRefresh = isAnimating || isScriptRunning || s_prevScriptRunning;
+    s_prevScriptRunning = isScriptRunning;
+    if (shouldRefresh) {
         [self refreshDisplay];
     }
 }
@@ -472,6 +478,63 @@ static void* network_worker(void *arg) {
     if (!terminal || !optical || !rgbaBuffer) return;
     double now = CACurrentMediaTime();
     isAnimating = plato_optical_render(optical, terminal, &opticalProfile, now, rgbaBuffer);
+
+    /* Indicatore visivo Script in Esecuzione: salvataggio e ripristino fedele dello sfondo */
+    static uint32_t s_saved_bg[33 * 33];
+    static BOOL s_has_saved_bg = NO;
+
+    const int cx = PLASMA_WIDTH - 48;
+    const int cy = 48;
+    const int r = 16;
+    const int box_dim = 2 * r + 1; /* 33 */
+
+    /* Ripristina SEMPRE lo sfondo originale pulito se era stato salvato */
+    if (s_has_saved_bg) {
+        for (int dy = -r; dy <= r; dy++) {
+            for (int dx = -r; dx <= r; dx++) {
+                int px = cx + dx;
+                int py = cy + dy;
+                if (px >= 0 && px < PLASMA_WIDTH && py >= 0 && py < PLASMA_HEIGHT) {
+                    rgbaBuffer[py * PLASMA_WIDTH + px] = s_saved_bg[(dy + r) * box_dim + (dx + r)];
+                }
+            }
+        }
+        s_has_saved_bg = NO;
+    }
+
+    BOOL isScriptRunning = (self.scriptRunner && plato_script_is_running(self.scriptRunner));
+    if (isScriptRunning) {
+        isAnimating = YES;
+        /* Frequenza lampeggio: ciclo di 400ms (200ms ON / 200ms OFF) a 2.5 Hz */
+        bool blink_on = ((uint64_t)(now * 1000.0) % 400) < 200;
+        if (blink_on) {
+            /* Salva i pixel di sfondo correnti prima di applicare il colore */
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    int px = cx + dx;
+                    int py = cy + dy;
+                    if (px >= 0 && px < PLASMA_WIDTH && py >= 0 && py < PLASMA_HEIGHT) {
+                        s_saved_bg[(dy + r) * box_dim + (dx + r)] = rgbaBuffer[py * PLASMA_WIDTH + px];
+                    }
+                }
+            }
+            s_has_saved_bg = YES;
+
+            /* Disegna il pallino arancione */
+            uint32_t col = 0xFFFF6E00u; /* Orange Plasma */
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (dx * dx + dy * dy <= r * r) {
+                        int px = cx + dx;
+                        int py = cy + dy;
+                        if (px >= 0 && px < PLASMA_WIDTH && py >= 0 && py < PLASMA_HEIGHT) {
+                            rgbaBuffer[py * PLASMA_WIDTH + px] = col;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     fpsTotalFrames++;
     if (opticalProfile.display_mode != 1 && opticalProfile.display_mode != 3) {
@@ -915,6 +978,38 @@ static void* network_worker(void *arg) {
     if ([chars length] == 0) return;
     unichar c = [chars characterAtIndex:0];
     unichar uc = ([unmod length] > 0) ? [unmod characterAtIndex:0] : 0;
+
+    /* 1. Durante l'esecuzione dello script, blocca qualsiasi input tranne Ctrl+Shift+X */
+    if (self.scriptRunner && plato_script_is_running(self.scriptRunner)) {
+        if (ev.ctrl && ev.shift && !ev.alt && (uc == 'x')) {
+            plato_script_stop(self.scriptRunner);
+        }
+        return;
+    }
+
+    /* 2. Controllo e dispatching Hotkey Script Personalizzati */
+    PLATOAppDelegate *appDelegate = (PLATOAppDelegate *)[NSApp delegate];
+    if ([appDelegate respondsToSelector:@selector(scriptList)] && appDelegate.scriptList && appDelegate.scriptList->count > 0) {
+        uint32_t current_mods = 0;
+        if (ev.ctrl)  current_mods |= PLATO_HOTKEY_MOD_CTRL;
+        if (ev.alt)   current_mods |= PLATO_HOTKEY_MOD_ALT;
+        if (ev.shift) current_mods |= PLATO_HOTKEY_MOD_SHIFT;
+
+        unichar upc = [[chars uppercaseString] characterAtIndex:0];
+        uint32_t match_key = (c >= NSF1FunctionKey && c <= NSF12FunctionKey) ? (uint32_t)c : (uint32_t)upc;
+
+        for (size_t si = 0; si < appDelegate.scriptList->count; si++) {
+            const plato_script_t *sc = &appDelegate.scriptList->scripts[si];
+            if (!sc->enabled || sc->hotkey_key == 0) continue;
+            if (sc->hotkey_modifiers == current_mods && sc->hotkey_key == match_key) {
+                PLATOTerminalWindowController *tc = (PLATOTerminalWindowController *)[self.window windowController];
+                if (tc && [tc respondsToSelector:@selector(runScriptStruct:)]) {
+                    [tc runScriptStruct:sc];
+                }
+                return; /* Tasto consumato per avviare lo script: nessun leak al terminale */
+            }
+        }
+    }
 
     ev.codepoint = c;
     ev.unmod_codepoint = uc;

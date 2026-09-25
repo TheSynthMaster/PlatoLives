@@ -78,11 +78,11 @@ static LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
             SetBkMode(hdc, TRANSPARENT);
 
-            /* 2. Titolo PlatoLives v4.0 */
+            /* 2. Titolo PlatoLives v4.2 */
             SetTextColor(hdc, PLATO_PLASMA_BRIGHT);
             SelectObject(hdc, ctx->hFontTitle);
             RECT rcTitle = { 0, 92, rcClient.right, 122 };
-            DrawTextW(hdc, L"PlatoLives v4.0", -1, &rcTitle, DT_CENTER | DT_SINGLELINE);
+            DrawTextW(hdc, L"PlatoLives v4.2", -1, &rcTitle, DT_CENTER | DT_SINGLELINE);
 
             /* 3. Sottotitolo */
             SetTextColor(hdc, PLATO_PLASMA_COLOR);

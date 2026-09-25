@@ -1,5 +1,8 @@
 #import <Cocoa/Cocoa.h>
 #import "mac_view.h"
+#import "plato/plato_script.h"
+
+@class PLATOScriptsWindowController;
 
 @class PLATOTestRunner;
 @class PLATOTerminalWindowController;
@@ -17,12 +20,17 @@
 - (instancetype)initWithProfile:(NSDictionary *)profile;
 - (void)applyProfile:(NSDictionary *)profile;
 - (void)updateTitleWithMetadata;
+- (void)runScriptText:(NSString *)scriptText;
+- (void)runScriptStruct:(const plato_script_t *)script;
 @end
 
 @interface PLATOAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate, PLATOTerminalWindowDelegate>
 @property (nonatomic, strong, readonly) NSWindow *window; // Finestra attiva corrente
 @property (nonatomic, strong, readonly) PLATOView *view;   // Vista attiva corrente
 @property (nonatomic, strong) PLATOTestRunner *testRunner;
+@property (nonatomic, assign) plato_script_list_t *scriptList;
+@property (nonatomic, strong) PLATOScriptsWindowController *scriptsController;
+@property (nonatomic, strong) NSMenu *scriptsSubmenu;
 
 - (PLATOTerminalWindowController *)activeTerminalController;
 - (PLATOTerminalWindowController *)openNewWindowWithProfile:(NSDictionary *)profile;

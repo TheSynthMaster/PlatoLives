@@ -9,11 +9,13 @@
 #include "plato/plato_keyboard.h"
 #include "plato/plato_optical.h"
 #include "plato/plato_profile.h"
+#include "plato/plato_script.h"
 
 FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
 
 @interface PLATOView : NSView {
 @public
+    plato_script_runner_t *scriptRunner;
     plato_terminal_t *terminal;
     BOOL graphicsDisabled;
     plato_transport_t *transport;
@@ -47,6 +49,7 @@ FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
     CFTimeInterval paceUntil;
 }
 
+@property (nonatomic, assign) plato_script_runner_t *scriptRunner;
 @property (nonatomic, copy) void (^onConnectedHandler)(void);
 - (void)setTerminal:(plato_terminal_t *)term;
 - (void)connectToHost:(NSString *)host port:(int)port;
