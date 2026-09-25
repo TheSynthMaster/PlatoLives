@@ -1,3 +1,4 @@
+#include "plato/plato_script.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_profiles.h"
 #include <stdio.h>
@@ -128,7 +129,7 @@ static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
     /* Template o Script esistente */
     const char *src_script = p->startup_script;
     if (!src_script || strlen(src_script) == 0) {
-        src_script = "wait 2s\nkey NEXT\nwait 5s\nsend user\nkey NEXT\nwait 3s\nsend group\nkey SHIFT-STOP\nwait 3s\nsend password\nwait 1s\nkey NEXT";
+        src_script = "# Attende la schermata di benvenuto di Cyber1 e preme NEXT\nwait_text \"Press  NEXT  to begin\" timeout 10s\nkey NEXT\n\n# Attende la richiesta di inserimento nome utente\nwait_text \"Type your CYBIS name\" timeout 5s\nsend \"user\"\nkey NEXT\n\n# Attende la richiesta del gruppo\nwait_text \"Type the name of your CYBIS group.\" timeout 5s\nsend \"group\"\nkey SHIFT-STOP\n\n# Attende la richiesta password\nwait_text \"Enter your password\" timeout 5s\nsend \"password\"\nkey NEXT";
     }
 
     char crlf_script[PLATO_SCRIPT_MAX_LEN * 2];
@@ -208,6 +209,14 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
 static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     dlg_ctx_t *ctx = &g_dlg;
     switch (msg) {
+        case WM_ERASEBKGND: {
+            HDC hdc = (HDC)wParam;
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            FillRect(hdc, &rc, ctx->hbrBg);
+            return 1;
+        }
+
         case WM_CTLCOLORDLG:
         case WM_CTLCOLORSTATIC: {
             HDC hdc = (HDC)wParam;
@@ -327,8 +336,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     np.crt_beam_level = 1;
                     np.crt_persistence_ms = 20;
                     np.crt_distortion = 2;
-                    snprintf(np.startup_script, sizeof(np.startup_script),
-                             "wait 2s\nkey NEXT\nwait 5s\nsend user\nkey NEXT\nwait 3s\nsend group\nkey SHIFT-STOP\nwait 3s\nsend password\nwait 1s\nkey NEXT");
+                    snprintf(np.startup_script, sizeof(np.startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
                     plato_profiles_add(ctx->list, &np);
                     ctx->current_index = (int)(ctx->list->count - 1);
                     dlg_refresh_list(ctx);
@@ -367,6 +375,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             if (ctx->hPenBorder) DeleteObject(ctx->hPenBorder);
             if (ctx->hPenHighlight) DeleteObject(ctx->hPenHighlight);
             if (ctx->hFontMono) DeleteObject(ctx->hFontMono);
+            UnregisterClassW(L"PlatoProfilesDlgClassEx", GetModuleHandle(NULL));
             memset(ctx, 0, sizeof(*ctx));
             return 0;
         }
@@ -379,8 +388,34 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
+static WNDPROC g_old_prof_edit_proc = NULL;
+static LRESULT CALLBACK ProfEditBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_KEYDOWN) {
+        bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        if (ctrl) {
+            if (wParam == 'A' || wParam == 'a') {
+                SendMessage(hwnd, EM_SETSEL, 0, -1);
+                return 0;
+            } else if (wParam == 'C' || wParam == 'c') {
+                SendMessage(hwnd, WM_COPY, 0, 0);
+                return 0;
+            } else if (wParam == 'V' || wParam == 'v') {
+                SendMessage(hwnd, WM_PASTE, 0, 0);
+                return 0;
+            }
+        }
+    }
+    return CallWindowProcW(g_old_prof_edit_proc, hwnd, msg, wParam, lParam);
+}
+
 void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_profile_connect_cb cb, void *user_data) {
     if (!list) return;
+
+    if (g_dlg.hwnd && IsWindow(g_dlg.hwnd)) {
+        ShowWindow(g_dlg.hwnd, SW_RESTORE);
+        SetForegroundWindow(g_dlg.hwnd);
+        return;
+    }
 
     memset(&g_dlg, 0, sizeof(g_dlg));
     g_dlg.list = list;
@@ -408,7 +443,7 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
         WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
         wc.lpszClassName, L"Connection Profiles - PlatoLives",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        CW_USEDEFAULT, CW_USEDEFAULT, 720, 640,
+        CW_USEDEFAULT, CW_USEDEFAULT, 1080, 640,
         hParent, NULL, wc.hInstance, NULL
     );
     if (!hwnd) return;
@@ -449,19 +484,19 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     g_dlg.hBtnDelete = CreateWindowW(L"BUTTON", L"Delete", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 82, 542, 60, 26, hwnd, (HMENU)IDC_BTN_DELETE, wc.hInstance, NULL);
     g_dlg.hBtnDefault = CreateWindowW(L"BUTTON", L"Default", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 148, 542, 58, 26, hwnd, (HMENU)IDC_BTN_DEFAULT, wc.hInstance, NULL);
 
-    /* Destra: Dettagli */
+    /* Destra: Dettagli (+50% larghezza: right column width = 820px) */
     int rx = 226;
     CreateWindowW(L"STATIC", L"Profile Name:", WS_CHILD | WS_VISIBLE, rx, 12, 120, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hEditName = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, rx, 32, 460, 22, hwnd, (HMENU)IDC_EDIT_NAME, wc.hInstance, NULL);
+    g_dlg.hEditName = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, rx, 32, 820, 22, hwnd, (HMENU)IDC_EDIT_NAME, wc.hInstance, NULL);
 
     CreateWindowW(L"STATIC", L"Server Host:", WS_CHILD | WS_VISIBLE, rx, 60, 140, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hEditHost = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, rx, 78, 350, 22, hwnd, (HMENU)IDC_EDIT_HOST, wc.hInstance, NULL);
+    g_dlg.hEditHost = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, rx, 78, 690, 22, hwnd, (HMENU)IDC_EDIT_HOST, wc.hInstance, NULL);
 
-    CreateWindowW(L"STATIC", L"Port:", WS_CHILD | WS_VISIBLE, rx + 365, 60, 80, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hEditPort = CreateWindowW(L"EDIT", L"8005", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, rx + 365, 78, 95, 22, hwnd, (HMENU)IDC_EDIT_PORT, wc.hInstance, NULL);
+    CreateWindowW(L"STATIC", L"Port:", WS_CHILD | WS_VISIBLE, rx + 705, 60, 80, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_dlg.hEditPort = CreateWindowW(L"EDIT", L"8005", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, rx + 705, 78, 115, 22, hwnd, (HMENU)IDC_EDIT_PORT, wc.hInstance, NULL);
 
     CreateWindowW(L"STATIC", L"Display Mode:", WS_CHILD | WS_VISIBLE, rx, 108, 120, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hComboMode = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 126, 460, 150, hwnd, (HMENU)IDC_COMBO_MODE, wc.hInstance, NULL);
+    g_dlg.hComboMode = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 126, 820, 150, hwnd, (HMENU)IDC_COMBO_MODE, wc.hInstance, NULL);
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Plasma");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Crisp Monochrome");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Split Monochrome");
@@ -469,8 +504,8 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Color CRT");
 
     /* Controlli Real Plasma */
-    g_dlg.hLblPlasmaDecay = CreateWindowW(L"STATIC", L"Real Plasma Persistence:", WS_CHILD | WS_VISIBLE, rx, 156, 220, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hComboPlasmaDecay = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 174, 220, 140, hwnd, (HMENU)IDC_COMBO_PLASMA_DECAY, wc.hInstance, NULL);
+    g_dlg.hLblPlasmaDecay = CreateWindowW(L"STATIC", L"Real Plasma Persistence:", WS_CHILD | WS_VISIBLE, rx, 156, 400, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_dlg.hComboPlasmaDecay = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 174, 400, 140, hwnd, (HMENU)IDC_COMBO_PLASMA_DECAY, wc.hInstance, NULL);
     SendMessageW(g_dlg.hComboPlasmaDecay, CB_ADDSTRING, 0, (LPARAM)L"100 ms (Authentic Plasma)");
     SendMessageW(g_dlg.hComboPlasmaDecay, CB_ADDSTRING, 0, (LPARAM)L"200 ms (Warm Glow)");
     SendMessageW(g_dlg.hComboPlasmaDecay, CB_ADDSTRING, 0, (LPARAM)L"500 ms (Medium)");
@@ -478,21 +513,21 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboPlasmaDecay, CB_ADDSTRING, 0, (LPARAM)L"2000 ms (Ultra Persistence)");
     SendMessageW(g_dlg.hComboPlasmaDecay, CB_ADDSTRING, 0, (LPARAM)L"5000 ms (5s Extreme)");
 
-    g_dlg.hLblPlasmaDist = CreateWindowW(L"STATIC", L"Real Plasma Distortion:", WS_CHILD | WS_VISIBLE, rx + 235, 156, 220, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hComboPlasmaDist = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 235, 174, 225, 120, hwnd, (HMENU)IDC_COMBO_PLASMA_DIST, wc.hInstance, NULL);
+    g_dlg.hLblPlasmaDist = CreateWindowW(L"STATIC", L"Real Plasma Distortion:", WS_CHILD | WS_VISIBLE, rx + 420, 156, 400, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_dlg.hComboPlasmaDist = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 420, 174, 400, 120, hwnd, (HMENU)IDC_COMBO_PLASMA_DIST, wc.hInstance, NULL);
     SendMessageW(g_dlg.hComboPlasmaDist, CB_ADDSTRING, 0, (LPARAM)L"None (Flat)");
     SendMessageW(g_dlg.hComboPlasmaDist, CB_ADDSTRING, 0, (LPARAM)L"Barrel (Curved Glass)");
     SendMessageW(g_dlg.hComboPlasmaDist, CB_ADDSTRING, 0, (LPARAM)L"Cylindrical (Default)");
 
     /* Controlli Real Color CRT */
-    g_dlg.hLblCrtBeam = CreateWindowW(L"STATIC", L"CRT Beam Profile:", WS_CHILD | WS_VISIBLE, rx, 156, 145, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hComboCrtBeam = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 174, 145, 120, hwnd, (HMENU)IDC_COMBO_CRT_BEAM, wc.hInstance, NULL);
+    g_dlg.hLblCrtBeam = CreateWindowW(L"STATIC", L"CRT Beam Profile:", WS_CHILD | WS_VISIBLE, rx, 156, 260, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_dlg.hComboCrtBeam = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 174, 260, 120, hwnd, (HMENU)IDC_COMBO_CRT_BEAM, wc.hInstance, NULL);
     SendMessageW(g_dlg.hComboCrtBeam, CB_ADDSTRING, 0, (LPARAM)L"Standard (Authentic 13\")");
     SendMessageW(g_dlg.hComboCrtBeam, CB_ADDSTRING, 0, (LPARAM)L"High (Soft Glow)");
     SendMessageW(g_dlg.hComboCrtBeam, CB_ADDSTRING, 0, (LPARAM)L"Ultra (Vintage Arcade)");
 
-    g_dlg.hLblCrtDecay = CreateWindowW(L"STATIC", L"CRT Persistence:", WS_CHILD | WS_VISIBLE, rx + 155, 156, 150, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hComboCrtDecay = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 155, 174, 150, 140, hwnd, (HMENU)IDC_COMBO_CRT_DECAY, wc.hInstance, NULL);
+    g_dlg.hLblCrtDecay = CreateWindowW(L"STATIC", L"CRT Persistence:", WS_CHILD | WS_VISIBLE, rx + 280, 156, 260, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_dlg.hComboCrtDecay = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 280, 174, 260, 140, hwnd, (HMENU)IDC_COMBO_CRT_DECAY, wc.hInstance, NULL);
     SendMessageW(g_dlg.hComboCrtDecay, CB_ADDSTRING, 0, (LPARAM)L"20 ms (Default CRT)");
     SendMessageW(g_dlg.hComboCrtDecay, CB_ADDSTRING, 0, (LPARAM)L"200 ms (Warm Glow)");
     SendMessageW(g_dlg.hComboCrtDecay, CB_ADDSTRING, 0, (LPARAM)L"500 ms (Medium)");
@@ -500,26 +535,27 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboCrtDecay, CB_ADDSTRING, 0, (LPARAM)L"2000 ms (Ultra Persistence)");
     SendMessageW(g_dlg.hComboCrtDecay, CB_ADDSTRING, 0, (LPARAM)L"5000 ms (5s Extreme)");
 
-    g_dlg.hLblCrtDist = CreateWindowW(L"STATIC", L"CRT Distortion:", WS_CHILD | WS_VISIBLE, rx + 315, 156, 145, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hComboCrtDist = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 315, 174, 145, 120, hwnd, (HMENU)IDC_COMBO_CRT_DIST, wc.hInstance, NULL);
+    g_dlg.hLblCrtDist = CreateWindowW(L"STATIC", L"CRT Distortion:", WS_CHILD | WS_VISIBLE, rx + 560, 156, 260, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_dlg.hComboCrtDist = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 560, 174, 260, 120, hwnd, (HMENU)IDC_COMBO_CRT_DIST, wc.hInstance, NULL);
     SendMessageW(g_dlg.hComboCrtDist, CB_ADDSTRING, 0, (LPARAM)L"None (Flat)");
     SendMessageW(g_dlg.hComboCrtDist, CB_ADDSTRING, 0, (LPARAM)L"Barrel (Curved Glass)");
     SendMessageW(g_dlg.hComboCrtDist, CB_ADDSTRING, 0, (LPARAM)L"Cylindrical");
 
     /* Checkbox Opzioni */
-    g_dlg.hChkFullscreen = CreateWindowW(L"BUTTON", L"Launch in Full Screen", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 206, 200, 18, hwnd, (HMENU)IDC_CHK_FULLSCREEN, wc.hInstance, NULL);
-    g_dlg.hChkDefault = CreateWindowW(L"BUTTON", L"Default profile at startup", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx + 220, 206, 220, 18, hwnd, (HMENU)IDC_CHK_DEFAULT, wc.hInstance, NULL);
-    g_dlg.hChkScript = CreateWindowW(L"BUTTON", L"Run Startup Script on connect", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 228, 400, 18, hwnd, (HMENU)IDC_CHK_SCRIPT, wc.hInstance, NULL);
+    g_dlg.hChkFullscreen = CreateWindowW(L"BUTTON", L"Launch in Full Screen", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 206, 240, 18, hwnd, (HMENU)IDC_CHK_FULLSCREEN, wc.hInstance, NULL);
+    g_dlg.hChkDefault = CreateWindowW(L"BUTTON", L"Default profile at startup", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx + 260, 206, 260, 18, hwnd, (HMENU)IDC_CHK_DEFAULT, wc.hInstance, NULL);
+    g_dlg.hChkScript = CreateWindowW(L"BUTTON", L"Run Startup Script on connect", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 228, 520, 18, hwnd, (HMENU)IDC_CHK_SCRIPT, wc.hInstance, NULL);
 
-    /* Script Editor */
+    /* Script Editor (Allargato da 460px a 820px) */
     CreateWindowW(L"STATIC", L"Startup Script:", WS_CHILD | WS_VISIBLE, rx, 252, 200, 18, hwnd, NULL, wc.hInstance, NULL);
     g_dlg.hEditScript = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_WANTRETURN | ES_AUTOVSCROLL | WS_VSCROLL,
-                                      rx, 272, 460, 220, hwnd, (HMENU)IDC_EDIT_SCRIPT, wc.hInstance, NULL);
+                                      rx, 272, 820, 220, hwnd, (HMENU)IDC_EDIT_SCRIPT, wc.hInstance, NULL);
+    g_old_prof_edit_proc = (WNDPROC)SetWindowLongPtrW(g_dlg.hEditScript, GWLP_WNDPROC, (LONG_PTR)ProfEditBoxSubclassProc);
 
-    /* Pulsanti Azione */
-    g_dlg.hBtnConnect = CreateWindowW(L"BUTTON", L"Connect", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, rx + 160, 502, 90, 30, hwnd, (HMENU)IDC_BTN_CONNECT, wc.hInstance, NULL);
-    g_dlg.hBtnSave = CreateWindowW(L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, rx + 260, 502, 90, 30, hwnd, (HMENU)IDC_BTN_SAVE, wc.hInstance, NULL);
-    g_dlg.hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, rx + 360, 502, 100, 30, hwnd, (HMENU)IDC_BTN_CLOSE, wc.hInstance, NULL);
+    /* Pulsanti Azione (Allineati a destra) */
+    g_dlg.hBtnConnect = CreateWindowW(L"BUTTON", L"Connect", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, rx + 500, 502, 95, 30, hwnd, (HMENU)IDC_BTN_CONNECT, wc.hInstance, NULL);
+    g_dlg.hBtnSave = CreateWindowW(L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, rx + 605, 502, 95, 30, hwnd, (HMENU)IDC_BTN_SAVE, wc.hInstance, NULL);
+    g_dlg.hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, rx + 710, 502, 110, 30, hwnd, (HMENU)IDC_BTN_CLOSE, wc.hInstance, NULL);
 
     /* Applica Font */
     HWND hChild = GetWindow(hwnd, GW_CHILD);

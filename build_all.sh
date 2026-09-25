@@ -63,7 +63,7 @@ echo "[4/4] Cross-compilazione Windows GUI x86_64 (Zig cc Win32/D3D11)..."
 zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude \
     platolives-win/win_main.c \
     platolives-win/win_menu.c \
-    platolives-win/win_profiles.c \
+    platolives-win/win_profiles.c platolives-win/win_scripts.c \
     platolives-win/win_text_buffer.c \
     platolives-win/win_keyref.c \
     platolives-win/win_about.c \

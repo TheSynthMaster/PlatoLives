@@ -74,10 +74,18 @@
 #define IDM_TOOLS_DIAG_LOG              1402
 #define IDM_TOOLS_RENDERER_LOG          1403
 
+
+/* Menu Scripts */
+#define IDM_SCRIPTS_MANAGE              1601
+#define IDM_SCRIPTS_CANCEL              1602
+#define IDM_SCRIPTS_BASE                2200
+#define IDM_SCRIPTS_MAX                 2299
+
 /* Menu Help */
 #define IDM_HELP_ABOUT                  1501
 
-HMENU win_menu_create(const plato_profile_list_t *profiles);
+#include "plato/plato_script.h"
+HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_list_t *scripts);
 void win_menu_update_state(HMENU menu, const plato_profile_t *active_p, bool connected, bool diag_log, bool renderer_log, bool fullscreen, const plato_profile_list_t *profiles, int current_profile_idx);
 
 #endif /* WIN_MENU_H */

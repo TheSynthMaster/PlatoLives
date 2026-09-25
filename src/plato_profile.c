@@ -1,4 +1,5 @@
 #include "plato/plato_profile.h"
+#include "plato/plato_script.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,8 +56,7 @@ static void init_default_cyber1(plato_profile_list_t *list) {
     p->full_screen = false;
     p->is_default = true;
     p->startup_script_enabled = false;
-    snprintf(p->startup_script, sizeof(p->startup_script),
-             "wait 2s\nkey NEXT\nwait 5s\nsend user\nkey NEXT\nwait 3s\nsend group\nkey SHIFT-STOP\nwait 3s\nsend password\nwait 1s\nkey NEXT");
+    snprintf(p->startup_script, sizeof(p->startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
 }
 
 bool plato_profiles_load(plato_profile_list_t *list) {

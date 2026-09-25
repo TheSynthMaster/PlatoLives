@@ -1,7 +1,7 @@
 #include "win_menu.h"
 #include <stdio.h>
 
-HMENU win_menu_create(const plato_profile_list_t *profiles) {
+HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_list_t *scripts) {
     HMENU hMenuBar = CreateMenu();
 
     /* ============================================================= */
@@ -136,6 +136,32 @@ HMENU win_menu_create(const plato_profile_list_t *profiles) {
     /* 6. Help                                                        */
     /* ============================================================= */
     HMENU hHelp = CreatePopupMenu();
+    
+    /* Scripts Menu */
+    HMENU hScripts = CreatePopupMenu();
+    AppendMenuW(hScripts, MF_STRING, IDM_SCRIPTS_MANAGE, L"Manage Scripts...");
+    AppendMenuW(hScripts, MF_STRING, IDM_SCRIPTS_CANCEL, L"Cancel Script Execution\tCtrl+Shift+X");
+    AppendMenuW(hScripts, MF_SEPARATOR, 0, NULL);
+    size_t active_scripts = 0;
+    if (scripts && scripts->count > 0) {
+        for (size_t i = 0; i < scripts->count && i < (IDM_SCRIPTS_MAX - IDM_SCRIPTS_BASE); i++) {
+            if (!scripts->scripts[i].enabled) continue;
+            active_scripts++;
+            WCHAR witem[128];
+            if (scripts->scripts[i].hotkey_display[0]) {
+                swprintf(witem, sizeof(witem)/sizeof(WCHAR), L"%hs\t%hs",
+                         scripts->scripts[i].name, scripts->scripts[i].hotkey_display);
+            } else {
+                swprintf(witem, sizeof(witem)/sizeof(WCHAR), L"%hs", scripts->scripts[i].name);
+            }
+            AppendMenuW(hScripts, MF_STRING, IDM_SCRIPTS_BASE + i, witem);
+        }
+    }
+    if (active_scripts == 0) {
+        AppendMenuW(hScripts, MF_GRAYED, 0, L"(No Active Scripts)");
+    }
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hScripts, L"&Scripts");
+
     AppendMenuW(hHelp, MF_STRING, IDM_HELP_ABOUT, L"About PlatoLives...");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hHelp, L"&Help");
 

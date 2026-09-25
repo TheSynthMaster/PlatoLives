@@ -1,3 +1,4 @@
+#include "win_scripts.h"
 #define COBJMACROS
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -80,6 +81,7 @@ typedef struct {
     plato_keyboard_state_t keyboard_state;
     plato_profile_list_t profile_list;
     plato_script_runner_t *script_runner;
+    plato_script_list_t *script_list;
     int current_profile_idx;
     pthread_t net_thread;
     volatile bool running;
@@ -527,6 +529,31 @@ static void win_render_frame(win_app_t *app) {
     double now = win_get_time_sec();
     bool is_animating = plato_optical_render(app->optical, &app->terminal, cur_p, now, app->optical_fb);
 
+    /* Indicatore visivo Script in Esecuzione: Pallino arancione lampeggiante in alto a destra nell'area attiva */
+    bool is_script_running = (app->script_runner && plato_script_is_running(app->script_runner));
+    if (is_script_running) {
+        is_animating = true;
+        /* Frequenza lampeggio: ciclo di 400ms (200ms ON / 200ms OFF) */
+        bool blink_on = ((uint64_t)(now * 1000.0) % 400) < 200;
+        if (blink_on) {
+            int cx = PLATO_OPTICAL_WIDTH - 48;
+            int cy = 48;
+            int r = 16;
+            uint32_t col = 0xFFFF6E00; /* Orange Plasma */
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (dx * dx + dy * dy <= r * r) {
+                        int px = cx + dx;
+                        int py = cy + dy;
+                        if (px >= 0 && px < PLATO_OPTICAL_WIDTH && py >= 0 && py < PLATO_OPTICAL_HEIGHT) {
+                            app->optical_fb[py * PLATO_OPTICAL_WIDTH + px] = col;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     static bool s_first_frame = true;
     if (is_animating || s_first_frame) {
         s_first_frame = false;
@@ -901,12 +928,45 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data) {
     }
 }
 
+static void win_execute_script(win_app_t *app, const plato_script_t *sc) {
+    if (!app || !sc || !sc->enabled) return;
+    if (!app->script_runner) {
+        app->script_runner = plato_script_create(&app->terminal);
+    }
+    plato_script_start_ex(app->script_runner, sc);
+}
+
 static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     plato_key_event_t ev = {0};
     ev.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     ev.ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     ev.alt   = (GetKeyState(VK_MENU) & 0x8000) != 0;
+
+    /* Durante l'esecuzione dello script, blocca tutto tranne Cancel Script (Ctrl+Shift+X) */
+    if (app->script_runner && plato_script_is_running(app->script_runner)) {
+        if (ev.ctrl && ev.shift && !ev.alt && (wParam == 'X' || wParam == 'x')) {
+            plato_script_stop(app->script_runner);
+        }
+        return;
+    }
+
+    /* Controllo Hotkey Script Personalizzati */
+    if (app->script_list && app->script_list->count > 0) {
+        uint32_t current_mods = 0;
+        if (ev.ctrl)  current_mods |= PLATO_HOTKEY_MOD_CTRL;
+        if (ev.alt)   current_mods |= PLATO_HOTKEY_MOD_ALT;
+        if (ev.shift) current_mods |= PLATO_HOTKEY_MOD_SHIFT;
+
+        for (size_t si = 0; si < app->script_list->count; si++) {
+            const plato_script_t *sc = &app->script_list->scripts[si];
+            if (!sc->enabled || sc->hotkey_key == 0) continue;
+            if (sc->hotkey_modifiers == current_mods && sc->hotkey_key == (uint32_t)wParam) {
+                win_execute_script(app, sc);
+                return;
+            }
+        }
+    }
 
     if (ev.alt && wParam == VK_RETURN) { win_toggle_fullscreen(app); return; }
     if (ev.ctrl && !ev.shift && !ev.alt) {
@@ -960,6 +1020,9 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
 }
 
 static void win_handle_char(win_app_t *app, WPARAM wParam) {
+    if (app->script_runner && plato_script_is_running(app->script_runner)) {
+        return;
+    }
     if (wParam >= 32 && wParam <= 126) {
         plato_key_event_t ev = {0};
         ev.codepoint = (uint32_t)wParam;
@@ -1099,7 +1162,8 @@ static void win_setup_ownerdraw_menu(HMENU hMenu, bool is_top_bar) {
                     }
                     mii.dwItemData = (ULONG_PTR)data;
                 }
-                mii.fMask = MIIM_FTYPE | MIIM_DATA;
+                mii.fMask = MIIM_FTYPE | MIIM_DATA | MIIM_ID;
+                mii.wID = data->id;
                 mii.fType = MFT_OWNERDRAW;
                 if (data->is_separator) mii.fType |= MFT_SEPARATOR;
                 SetMenuItemInfoW(hMenu, (UINT)i, TRUE, &mii);
@@ -1316,11 +1380,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             if (hdc) {
                 RECT rc = pudmi->dis.rcItem;
 
-                const wchar_t *defaults[] = { L"File", L"Edit", L"Connection", L"View", L"Tools", L"Help" };
+                const wchar_t *defaults[] = { L"File", L"Edit", L"Connection", L"View", L"Tools", L"Scripts", L"Help" };
                 const wchar_t *item_name = L"";
 
                 DWORD pos = pudmi->umi.iPosition;
-                if (pos < 6) {
+                if (pos < 7) {
                     item_name = defaults[pos];
                 } else {
                     if (rc.left < 35) item_name = defaults[0];
@@ -1328,7 +1392,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     else if (rc.left < 155) item_name = defaults[2];
                     else if (rc.left < 205) item_name = defaults[3];
                     else if (rc.left < 255) item_name = defaults[4];
-                    else item_name = defaults[5];
+                    else if (rc.left < 315) item_name = defaults[5];
+                    else item_name = defaults[6];
                 }
 
                 bool is_hover = (pudmi->umi.dwStateId == 2) || ((pudmi->dis.itemState & ODS_HOTLIGHT) != 0);
@@ -1410,6 +1475,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 size_t idx = (size_t)(cmdId - IDM_FILE_NEW_WIN_PROFILE_BASE);
                 if (idx < g_app.profile_list.count) {
                     win_launch_instance(g_app.profile_list.profiles[idx].name);
+                }
+                return 0;
+            }
+
+            if (cmdId >= IDM_SCRIPTS_BASE && cmdId <= IDM_SCRIPTS_MAX) {
+                size_t s_idx = (size_t)(cmdId - IDM_SCRIPTS_BASE);
+                if (g_app.script_list && s_idx < g_app.script_list->count) {
+                    win_execute_script(&g_app, &g_app.script_list->scripts[s_idx]);
                 }
                 return 0;
             }
@@ -1532,11 +1605,33 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 case IDM_EDIT_CANCEL_PASTE:
                     g_app.paste_cancelled = true;
                     return 0;
+
                 case IDM_CONN_CONNECT_DEFAULT: {
                     plato_profile_t *def = plato_profiles_get_default(&g_app.profile_list);
                     if (def) win_connect_profile(def, &g_app);
                     return 0;
                 }
+                
+                                case IDM_SCRIPTS_CANCEL:
+                    if (g_app.script_runner) {
+                        plato_script_stop(g_app.script_runner);
+                    }
+                    return 0;
+                case IDM_SCRIPTS_MANAGE:
+                    win_scripts_dialog_show(hwnd, g_app.script_list, &g_app.terminal);
+                    DestroyMenu(g_app.menu);
+                    g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
+                    win_setup_ownerdraw_menu(g_app.menu, true);
+                    SetMenu(hwnd, g_app.menu);
+                    if (g_app.current_profile_idx >= 0 && (size_t)g_app.current_profile_idx < g_app.profile_list.count) {
+                        plato_profile_t *p_cur = &g_app.profile_list.profiles[g_app.current_profile_idx];
+                        win_menu_update_state(g_app.menu, p_cur,
+                                             g_app.transport && g_app.transport->connected,
+                                             g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen,
+                                             &g_app.profile_list, g_app.current_profile_idx);
+                    }
+                    return 0;
+
                 case IDM_CONN_MANAGE_PROFILES:
                     win_profiles_dialog_show(hwnd, &g_app.profile_list, win_connect_profile, &g_app);
                     if (g_app.profile_list.default_index >= 0 && (size_t)g_app.profile_list.default_index < g_app.profile_list.count) {
@@ -1548,7 +1643,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     plato_terminal_set_color_mode(&g_app.terminal, (cur_p->display_mode == 3 || cur_p->display_mode == 4));
                     plato_optical_invalidate(g_app.optical);
                     DestroyMenu(g_app.menu);
-                    g_app.menu = win_menu_create(&g_app.profile_list);
+                    g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
                     win_setup_ownerdraw_menu(g_app.menu, true);
                     SetMenu(hwnd, g_app.menu);
                     win_menu_update_state(g_app.menu, cur_p,
@@ -1678,6 +1773,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_app.current_profile_idx = g_app.profile_list.default_index;
     g_app.script_runner = plato_script_create(&g_app.terminal);
 
+    /* Inizializzazione gestore script */
+    g_app.script_list = plato_scripts_create();
+    plato_scripts_load(g_app.script_list, NULL);
+    if (g_app.script_list && g_app.script_list->count == 0) {
+        plato_script_t def_s = {0};
+        snprintf(def_s.name, sizeof(def_s.name), "Cyber1 Auto Login");
+        def_s.enabled = true;
+        def_s.char_delay_ms = 250;
+        def_s.next_delay_ms = 500;
+        def_s.command_delay_ms = 0;
+        snprintf(def_s.body, sizeof(def_s.body), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
+        plato_scripts_add(g_app.script_list, &def_s);
+        plato_scripts_save(g_app.script_list, NULL);
+    }
+
     /* Controllo argomento --profile <nome> */
     if (lpCmdLine && strstr(lpCmdLine, "--profile")) {
         const char *p = strstr(lpCmdLine, "--profile");
@@ -1714,7 +1824,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
 
     win_apply_dark_theme(NULL);
-    g_app.menu = win_menu_create(&g_app.profile_list);
+    g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
     win_setup_ownerdraw_menu(g_app.menu, true);
     g_app.distortion = 2;
 
