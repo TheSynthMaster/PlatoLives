@@ -1,4 +1,3 @@
-````markdown
 # PlatoLives (v4.3)
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Windows%2010%2F11%20%7C%20Linux%20ARM64%20%26%20x86__64-orange.svg)](#)
@@ -659,4 +658,3 @@ The project is deliberately kept lightweight and does not depend on a large cros
 PlatoLives is released under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International** license.
 
 See [LICENSE](LICENSE) for the complete license text.
-````
