@@ -18,6 +18,7 @@
 #include "win_profiles.h"
 #include "win_text_buffer.h"
 #include "win_keyref.h"
+#include "win_scriptref.h"
 #include "win_about.h"
 #include "plato/console_runner.h"
 #include "plato/plato_terminal.h"
@@ -1617,7 +1618,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                         plato_script_stop(g_app.script_runner);
                     }
                     return 0;
-                case IDM_SCRIPTS_MANAGE:
+                
+        case IDM_SCRIPTS_REFERENCE:
+            win_scriptref_show(hwnd);
+            return 0;
+        case IDM_SCRIPTS_MANAGE:
                     win_scripts_dialog_show(hwnd, g_app.script_list, &g_app.terminal);
                     DestroyMenu(g_app.menu);
                     g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
@@ -1718,6 +1723,54 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     (void)hPrevInstance;
+
+    /* Controllo comandi CLI (--script, --help, --version) */
+    if (lpCmdLine && (strstr(lpCmdLine, "--script -h") || strstr(lpCmdLine, "--script --help") || strstr(lpCmdLine, "--script-help"))) {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        printf("%s\n", plato_script_get_manual_text());
+        return 0;
+    }
+
+    if (lpCmdLine && (strstr(lpCmdLine, "--help") || strstr(lpCmdLine, "-h"))) {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        printf("PlatoLives v4.3 - CDC PLATO IV & Cyber1 Terminal Emulator\n\n"
+               "Usage:\n  PlatoLives [options] [host] [port]\n\n"
+               "Options:\n"
+               "  --script <file>        Execute a PLATO script autonomously (headless)\n"
+               "  --script -h            Display PLATO Scripting Engine language reference\n"
+               "  --test-script <file>   Alias for --script (backward compatibility)\n"
+               "  --console, -c          Launch interactive ANSI TrueColor console mode\n"
+               "  --version, -v          Display application version and exit\n"
+               "  --help, -h             Display this help message and exit\n");
+        return 0;
+    }
+    if (lpCmdLine && (strstr(lpCmdLine, "--version") || strstr(lpCmdLine, "-v"))) {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        printf("PlatoLives v4.3\n");
+        return 0;
+    }
+    if (lpCmdLine && (strstr(lpCmdLine, "--script") || strstr(lpCmdLine, "--test-script"))) {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        char sfile[MAX_PATH] = {0};
+        const char *p = strstr(lpCmdLine, "--script");
+        if (!p) p = strstr(lpCmdLine, "--test-script");
+        if (p) {
+            p += (strncmp(p, "--script", 8) == 0) ? 8 : 13;
+            while (*p == ' ') p++;
+            sscanf(p, "%s", sfile);
+            if (sfile[0] != 0) {
+                return plato_script_run_file(sfile, NULL, 0);
+            }
+        }
+    }
 
     /* Controllo modalita' Console (--console, -c, --c) */
     if (lpCmdLine && (strstr(lpCmdLine, "--console") || strstr(lpCmdLine, "-c") || strstr(lpCmdLine, "--c"))) {

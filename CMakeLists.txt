@@ -27,7 +27,7 @@ else()
 endif()
 
 
-project(PlatoLives VERSION 4.2 LANGUAGES C OBJC)
+project(PlatoLives VERSION 4.3 LANGUAGES C OBJC)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)

@@ -304,3 +304,18 @@ void plato_transport_log_msg(plato_transport_t *t, const char *fmt, ...) {
     fflush(t->log_file);
     pthread_mutex_unlock(&t->log_mutex);
 }
+
+int plato_transport_poll_read(plato_transport_t *t, int timeout_ms) {
+    if (!t || !t->connected || t->socket_fd < 0) return -1;
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+#ifdef _WIN32
+    FD_SET((SOCKET)t->socket_fd, &read_fds);
+#else
+    FD_SET(t->socket_fd, &read_fds);
+#endif
+    struct timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    return select((int)t->socket_fd + 1, &read_fds, NULL, NULL, &tv);
+}

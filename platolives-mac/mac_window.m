@@ -27,6 +27,10 @@ static void plato_mac_beep(void *context) {
 @implementation PLATOTerminalWindowController
 
 - (instancetype)initWithProfile:(NSDictionary *)profile {
+    return [self initWithProfile:profile tabbedWithWindow:nil];
+}
+
+- (instancetype)initWithProfile:(NSDictionary *)profile tabbedWithWindow:(NSWindow *)hostWindow {
     static NSPoint cascadePoint = { 40.0, 100.0 };
     NSRect frame = NSMakeRect(cascadePoint.x, cascadePoint.y, 960, 960);
     NSWindow *win = [[NSWindow alloc] initWithContentRect:frame
@@ -51,7 +55,12 @@ static void plato_mac_beep(void *context) {
         if (cascadePoint.x > 300.0) cascadePoint.x = 40.0;
         if (cascadePoint.y > 300.0) cascadePoint.y = 100.0;
 
-        [self applyProfile:profile];
+        if (hostWindow) {
+            [hostWindow addTabbedWindow:win ordered:NSWindowAbove];
+            [self applyProfile:profile syncFullScreen:NO];
+        } else {
+            [self applyProfile:profile syncFullScreen:YES];
+        }
     }
     return self;
 }
@@ -75,6 +84,10 @@ static void plato_mac_beep(void *context) {
 }
 
 - (void)applyProfile:(NSDictionary *)p {
+    [self applyProfile:p syncFullScreen:YES];
+}
+
+- (void)applyProfile:(NSDictionary *)p syncFullScreen:(BOOL)syncFullScreen {
     if (!p) return;
     _currentProfile = [p copy];
 
@@ -114,6 +127,7 @@ static void plato_mac_beep(void *context) {
     [self.window setTitle:[NSString stringWithFormat:@"PlatoLives - %@ (%@:%d)", name, host, port]];
     [self.window makeKeyAndOrderFront:nil];
 
+    if (!syncFullScreen) return;
     BOOL wantFull = [p[@"fullScreen"] boolValue];
     BOOL isFull = ((self.window.styleMask & NSWindowStyleMaskFullScreen) != 0);
     if (wantFull != isFull) {
@@ -183,6 +197,67 @@ static void plato_mac_beep(void *context) {
 
 @interface PLATOKeymapWindowController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, copy) void (^closeHandler)(void);
+@end
+
+
+@interface PLATOScriptRefWindow : NSWindow
+@end
+
+@implementation PLATOScriptRefWindow
+- (BOOL)canBecomeKeyWindow { return YES; }
+- (BOOL)canBecomeMainWindow { return YES; }
+@end
+
+@interface PLATOScriptRefWindowController : NSWindowController <NSWindowDelegate>
+@end
+
+@implementation PLATOScriptRefWindowController
+- (instancetype)init {
+    NSRect frame = NSMakeRect(0, 0, 840, 780);
+    NSWindow *window = [[PLATOScriptRefWindow alloc] initWithContentRect:frame
+                                                  styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                                                             NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable)
+                                                    backing:NSBackingStoreBuffered defer:NO];
+    self = [super initWithWindow:window];
+    if (self) {
+        [window setTitle:@"PLATO Scripting Engine Reference"];
+        [window setAppearance:[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]];
+        [window setBackgroundColor:[NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0]];
+        [window setDelegate:self];
+        [window center];
+
+        NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:[[window contentView] bounds]];
+        [scroll setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+        [scroll setHasVerticalScroller:YES];
+        [scroll setHasHorizontalScroller:NO];
+        [scroll setBorderType:NSNoBorder];
+        [scroll setDrawsBackground:YES];
+        [scroll setBackgroundColor:[NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0]];
+
+        NSTextView *textView = [[NSTextView alloc] initWithFrame:[[scroll contentView] bounds]];
+        [textView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+        [textView setEditable:NO];
+        [textView setSelectable:YES];
+        [textView setDrawsBackground:YES];
+        [textView setBackgroundColor:[NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0]];
+        [textView setTextContainerInset:NSMakeSize(20.0, 20.0)];
+
+        const char *manual_c = plato_script_get_manual_text();
+        NSString *manualText = [NSString stringWithUTF8String:manual_c ? manual_c : ""];
+        NSFont *font = [NSFont fontWithName:@"Menlo" size:12.5];
+        if (!font) {
+            font = [NSFont monospacedSystemFontOfSize:12.5 weight:NSFontWeightRegular];
+        }
+        NSDictionary *attrs = @{
+            NSFontAttributeName: font,
+            NSForegroundColorAttributeName: [NSColor colorWithCalibratedRed:255.0/255.0 green:110.0/255.0 blue:0.0/255.0 alpha:1.0]
+        };
+        [[textView textStorage] setAttributedString:[[NSAttributedString alloc] initWithString:manualText attributes:attrs]];
+        [scroll setDocumentView:textView];
+        [[window contentView] addSubview:scroll];
+    }
+    return self;
+}
 @end
 
 @implementation PLATOKeymapWindowController
@@ -966,6 +1041,8 @@ static void plato_mac_beep(void *context) {
 @interface PLATOAppDelegate () <PLATOScriptsDelegate,PLATOProfilesDelegate>
 @property (nonatomic, strong) NSMutableArray<PLATOTerminalWindowController *> *terminalControllers;
 @property (nonatomic, strong) PLATOKeymapWindowController *keymapController;
+@property (nonatomic, strong) PLATOScriptRefWindowController *scriptRefController;
+
 @property (nonatomic, strong) PLATOTextBufferWindowController *textBufferController;
 @property (nonatomic, strong) PLATOProfilesWindowController *profilesController;
 @property (nonatomic, strong) NSMenu *connectionSubmenu;
@@ -1034,6 +1111,16 @@ static void plato_mac_beep(void *context) {
     return tc;
 }
 
+- (PLATOTerminalWindowController *)openNewTabWithProfile:(NSDictionary *)profile {
+    NSWindow *host = [self activeTerminalController].window;
+    if (!host) return [self openNewWindowWithProfile:profile];
+    PLATOTerminalWindowController *tc = [[PLATOTerminalWindowController alloc] initWithProfile:profile tabbedWithWindow:host];
+    tc.appDelegate = self;
+    [self.terminalControllers addObject:tc];
+    [tc.window makeKeyAndOrderFront:nil];
+    return tc;
+}
+
 - (void)terminalWindowControllerWillClose:(PLATOTerminalWindowController *)controller {
     [self.terminalControllers removeObject:controller];
     if ([self.terminalControllers count] == 0) {
@@ -1088,6 +1175,10 @@ static void plato_mac_beep(void *context) {
     NSMenuItem *newWinItem = [[NSMenuItem alloc] initWithTitle:@"New Window" action:@selector(newWindow:) keyEquivalent:@"n"];
     [newWinItem setTarget:self];
     [fileMenu addItem:newWinItem];
+
+    NSMenuItem *newTabItem = [[NSMenuItem alloc] initWithTitle:@"New Tab" action:@selector(newWindowForTab:) keyEquivalent:@"t"];
+    [newTabItem setTarget:self];
+    [fileMenu addItem:newTabItem];
 
     NSMenuItem *newWinProfItem = [[NSMenuItem alloc] initWithTitle:@"New Window with Profile" action:nil keyEquivalent:@""];
     self.profileNewWindowSubmenu = [[NSMenu alloc] initWithTitle:@"New Window with Profile"];
@@ -1290,6 +1381,9 @@ static void plato_mac_beep(void *context) {
     NSMenuItem *manageScriptsItem = [[NSMenuItem alloc] initWithTitle:@"Manage Scripts..." action:@selector(showScriptsWindow:) keyEquivalent:@""];
     [manageScriptsItem setTarget:self];
     [scriptsMenu addItem:manageScriptsItem];
+    NSMenuItem *scriptRefItem = [[NSMenuItem alloc] initWithTitle:@"Scripting Reference..." action:@selector(showScriptingReference:) keyEquivalent:@""];
+    [scriptRefItem setTarget:self];
+    [scriptsMenu addItem:scriptRefItem];
 
     NSMenuItem *cancelScriptItem = [[NSMenuItem alloc] initWithTitle:@"Cancel Script Execution" action:@selector(cancelScriptExecution:) keyEquivalent:@"X"];
     [cancelScriptItem setTarget:self];
@@ -1303,7 +1397,8 @@ static void plato_mac_beep(void *context) {
 
     NSMenuItem *toolsMenuItem = [[NSMenuItem alloc] init];
     NSMenu *toolsMenu = [[NSMenu alloc] initWithTitle:@"Tools"];
-    NSMenuItem *textBufferItem = [[NSMenuItem alloc] initWithTitle:@"Show Live Text Buffer" action:@selector(showTextBufferWindow:) keyEquivalent:@"t"];
+    NSMenuItem *textBufferItem = [[NSMenuItem alloc] initWithTitle:@"Show Live Text Buffer" action:@selector(showTextBufferWindow:) keyEquivalent:@"B"];
+    [textBufferItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
     [textBufferItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
     [textBufferItem setTarget:self]; [toolsMenu addItem:textBufferItem];
     NSMenuItem *logItem = [[NSMenuItem alloc] initWithTitle:@"Enable Diagnostic Log" action:@selector(toggleTrafficLog:) keyEquivalent:@""];
@@ -1311,6 +1406,33 @@ static void plato_mac_beep(void *context) {
     NSMenuItem *rendererLogItem = [[NSMenuItem alloc] initWithTitle:@"Enable Renderer Performance Log" action:@selector(toggleRendererPerformanceLog:) keyEquivalent:@""];
     [rendererLogItem setTarget:self]; [rendererLogItem setState:NSControlStateValueOff]; [toolsMenu addItem:rendererLogItem];
     [toolsMenuItem setSubmenu:toolsMenu]; [mainMenu addItem:toolsMenuItem];
+
+    // Menu Window (standard macOS)
+    NSMenuItem *windowMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
+    [windowMenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+    [windowMenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+
+    [windowMenu addItemWithTitle:@"Show Previous Tab" action:@selector(selectPreviousTab:) keyEquivalent:@"["];
+    [windowMenu addItemWithTitle:@"Show Next Tab" action:@selector(selectNextTab:) keyEquivalent:@"]"];
+
+    NSMenuItem *selectTabItem = [[NSMenuItem alloc] initWithTitle:@"Select Tab" action:nil keyEquivalent:@""];
+    NSMenu *selectTabMenu = [[NSMenu alloc] initWithTitle:@"Select Tab"];
+    for (NSInteger pos = 1; pos <= 9; pos++) {
+        NSString *title = (pos == 9) ? @"Last Tab" : [NSString stringWithFormat:@"Tab %ld", (long)pos];
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:@selector(selectTabAtPosition:) keyEquivalent:[NSString stringWithFormat:@"%ld", (long)pos]];
+        [item setTarget:self]; [item setTag:pos];
+        [selectTabMenu addItem:item];
+    }
+    [selectTabItem setSubmenu:selectTabMenu];
+    [windowMenu addItem:selectTabItem];
+
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    [windowMenu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
+    [windowMenuItem setSubmenu:windowMenu];
+    [mainMenu addItem:windowMenuItem];
+    [NSApp setWindowsMenu:windowMenu];
 
     [NSApp setMainMenu:mainMenu];
     [self rebuildConnectionMenu];
@@ -1486,7 +1608,7 @@ static void plato_mac_beep(void *context) {
     if (!self.statusMenu) return;
     [self.statusMenu removeAllItems];
 
-    NSMenuItem *headerItem = [[NSMenuItem alloc] initWithTitle:@"PlatoLives 4.2" action:nil keyEquivalent:@""];
+    NSMenuItem *headerItem = [[NSMenuItem alloc] initWithTitle:@"PlatoLives 4.3" action:nil keyEquivalent:@""];
     [headerItem setEnabled:NO];
     [self.statusMenu addItem:headerItem];
 
@@ -1945,7 +2067,7 @@ static void plato_mac_beep(void *context) {
 
 - (void)showAbout:(id)sender {
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    if (!version) version = @"4.2";
+    if (!version) version = @"4.3";
     NSDictionary *options = @{
         NSAboutPanelOptionApplicationName: @"PlatoLives",
         NSAboutPanelOptionApplicationVersion: version,
@@ -1979,12 +2101,37 @@ static void plato_mac_beep(void *context) {
 }
 
 
+
+- (void)newWindowForTab:(id)sender {
+    NSDictionary *defProf = [PLATOProfileManager defaultProfile];
+    [self openNewTabWithProfile:defProf];
+}
+
+- (void)selectTabAtPosition:(id)sender {
+    NSWindow *win = [self activeTerminalController].window;
+    if (!win) return;
+    NSArray<NSWindow *> *tabs = win.tabbedWindows ? win.tabbedWindows : @[win];
+    NSInteger pos = [(NSMenuItem *)sender tag];
+    NSInteger idx = (pos == 9) ? (NSInteger)[tabs count] - 1 : pos - 1;
+    if (idx < 0 || idx >= (NSInteger)[tabs count]) return;
+    [tabs[idx] makeKeyAndOrderFront:nil];
+}
+
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
     if (self.scriptList) {
         plato_scripts_save(self.scriptList, NULL);
         plato_scripts_free(self.scriptList);
         self.scriptList = NULL;
     }
+}
+
+
+- (void)showScriptingReference:(id)sender {
+    if (!self.scriptRefController) {
+        self.scriptRefController = [[PLATOScriptRefWindowController alloc] init];
+    }
+    [self.scriptRefController showWindow:nil];
+    [self.scriptRefController.window makeKeyAndOrderFront:nil];
 }
 
 - (void)showScriptsWindow:(id)sender {

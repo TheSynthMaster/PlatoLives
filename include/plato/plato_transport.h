@@ -37,6 +37,7 @@ bool plato_transport_connect(plato_transport_t *t, const char *host, int port);
 void plato_transport_disconnect(plato_transport_t *t);
 int plato_transport_send(plato_transport_t *t, const uint8_t *data, size_t len);
 int plato_transport_recv(plato_transport_t *t, uint8_t *buf, size_t max_len);
+int plato_transport_poll_read(plato_transport_t *t, int timeout_ms);
 void plato_transport_set_logging(plato_transport_t *t, bool enabled);
 bool plato_transport_is_logging(const plato_transport_t *t);
 void plato_transport_log_msg(plato_transport_t *t, const char *fmt, ...);

@@ -78,6 +78,7 @@
 /* Menu Scripts */
 #define IDM_SCRIPTS_MANAGE              1601
 #define IDM_SCRIPTS_CANCEL              1602
+#define IDM_SCRIPTS_REFERENCE           1603
 #define IDM_SCRIPTS_BASE                2200
 #define IDM_SCRIPTS_MAX                 2299
 

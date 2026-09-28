@@ -114,6 +114,7 @@ int  plato_scripts_add(plato_script_list_t *list, const plato_script_t *script);
 int  plato_scripts_clone(plato_script_list_t *list, size_t index);
 bool plato_scripts_delete(plato_script_list_t *list, size_t index);
 const char *plato_scripts_get_default_path(void);
+int plato_script_run_file(const char *filepath, const char *host, int port);
 
 typedef struct plato_script_runner plato_script_runner_t;
 
@@ -127,4 +128,6 @@ bool plato_script_is_running(const plato_script_runner_t *runner);
 int64_t plato_script_get_var(plato_script_runner_t *runner, const char *name, bool *found);
 bool    plato_script_set_var(plato_script_runner_t *runner, const char *name, int64_t val);
 
+
+const char* plato_script_get_manual_text(void);
 #endif /* PLATO_SCRIPT_H */

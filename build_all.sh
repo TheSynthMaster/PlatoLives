@@ -66,6 +66,7 @@ zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude \
     platolives-win/win_profiles.c platolives-win/win_scripts.c \
     platolives-win/win_text_buffer.c \
     platolives-win/win_keyref.c \
+    platolives-win/win_scriptref.c \
     platolives-win/win_about.c \
     platolives-win/PlatoLives.rc \
     src/plato_protocol.c \

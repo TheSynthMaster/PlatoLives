@@ -18,6 +18,7 @@
 @property (nonatomic, copy) NSDictionary *currentProfile;
 
 - (instancetype)initWithProfile:(NSDictionary *)profile;
+- (instancetype)initWithProfile:(NSDictionary *)profile tabbedWithWindow:(NSWindow *)hostWindow;
 - (void)applyProfile:(NSDictionary *)profile;
 - (void)updateTitleWithMetadata;
 - (void)runScriptText:(NSString *)scriptText;
@@ -35,7 +36,10 @@
 - (PLATOTerminalWindowController *)activeTerminalController;
 - (PLATOTerminalWindowController *)openNewWindowWithProfile:(NSDictionary *)profile;
 
+- (PLATOTerminalWindowController *)openNewTabWithProfile:(NSDictionary *)profile;
 - (void)newWindow:(id)sender;
+- (void)newWindowForTab:(id)sender;
+- (void)selectTabAtPosition:(id)sender;
 - (void)newWindowWithProfileItem:(id)sender;
 - (void)activeWindowDidChange:(PLATOTerminalWindowController *)controller;
 

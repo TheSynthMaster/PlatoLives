@@ -140,6 +140,7 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     /* Scripts Menu */
     HMENU hScripts = CreatePopupMenu();
     AppendMenuW(hScripts, MF_STRING, IDM_SCRIPTS_MANAGE, L"Manage Scripts...");
+    AppendMenuW(hScripts, MF_STRING, IDM_SCRIPTS_REFERENCE, L"Scripting Reference...");
     AppendMenuW(hScripts, MF_STRING, IDM_SCRIPTS_CANCEL, L"Cancel Script Execution\tCtrl+Shift+X");
     AppendMenuW(hScripts, MF_SEPARATOR, 0, NULL);
     size_t active_scripts = 0;
