@@ -157,7 +157,7 @@ static void* network_worker(void *arg) {
         isAnimating = NO;
 
         terminal = (plato_terminal_t *)calloc(1, sizeof(plato_terminal_t));
-        plato_terminal_init(terminal);
+        plato_terminal_reset(terminal);
         plato_keyboard_state_init(&keyboardState);
 
         colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
@@ -300,7 +300,7 @@ static void* network_worker(void *arg) {
         void *beepCtx = terminal->beep_context;
         plato_metadata_callback_t metaCb = terminal->metadata_callback;
         void *metaCtx = terminal->metadata_context;
-        plato_terminal_init(terminal);
+        plato_terminal_reset(terminal);
         plato_keyboard_state_init(&keyboardState);
         terminal->transport = self->transport;
         terminal->beep_callback = beepCb;
@@ -358,6 +358,7 @@ static void* network_worker(void *arg) {
 }
 
 - (void)connectToHost:(NSString *)host port:(int)port {
+    [self resetTerminal];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         bool ok = plato_transport_connect(self->transport, [host UTF8String], port);
         if (ok) {
@@ -432,13 +433,17 @@ static void* network_worker(void *arg) {
     /* 1. Ingestione dati di rete */
     [self processIncomingData];
 
+    /* 1b. Tick clock CPU Z80 / Micro Tutor (60 FPS) */
+    plato_terminal_tick(terminal, 16);
+
     flowRingEnd = plato_ringbuf_available(&ringbuf);
     if (flowRingEnd > flowRingMaximum) flowRingMaximum = flowRingEnd;
 
-    /* 2. Se e' attiva animazione, script in corso O appena terminato, ridisegna */
+    /* 2. Se e' attiva animazione, Z80 in esecuzione, script in corso O appena terminato, ridisegna */
     BOOL isScriptRunning = (self.scriptRunner && plato_script_is_running(self.scriptRunner));
     static BOOL s_prevScriptRunning = NO;
-    BOOL shouldRefresh = isAnimating || isScriptRunning || s_prevScriptRunning;
+    BOOL isZ80Active = terminal->mt.running || terminal->mt.in_r_exec;
+    BOOL shouldRefresh = isAnimating || isScriptRunning || s_prevScriptRunning || isZ80Active;
     s_prevScriptRunning = isScriptRunning;
     if (shouldRefresh) {
         [self refreshDisplay];
@@ -661,6 +666,10 @@ static void* network_worker(void *arg) {
 
 - (void)setDiagnosticLogEnabled:(BOOL)enabled {
     if (transport) plato_transport_set_logging(transport, enabled);
+}
+
+- (void)setMicroTutorLogEnabled:(BOOL)enabled {
+    if (terminal) plato_microtutor_set_logging(&terminal->mt, enabled);
 }
 
 - (void)writePlasmaProfileWithTag:(NSString *)tag {
@@ -930,7 +939,7 @@ static void* network_worker(void *arg) {
 }
 
 - (void)mouseDown:(NSEvent *)event {
-    if (!terminal || !transport || !transport->connected) return;
+    if (!terminal || (!terminal->mt.local_boot && (!transport || !transport->connected))) return;
     NSPoint loc = [self convertPoint:[event locationInWindow] fromView:nil];
     CGRect displayRect = platoDisplayRect(self.bounds);
     CGFloat scale = displayRect.size.width / PLATO_WIDTH;
@@ -943,25 +952,7 @@ static void* network_worker(void *arg) {
         int plato_x = (int)((loc.x - drawX) / scale);
         int plato_y = (int)((loc.y - drawY) / scale);
 
-        int activeDist = 0;
-        if (opticalProfile.display_mode == 4) {
-            activeDist = opticalProfile.crt_distortion;
-        } else if (opticalProfile.display_mode == 0) {
-            activeDist = opticalProfile.plasma_distortion;
-        }
-        if (activeDist != 0) {
-            float u = ((float)plato_x - 256.0f) / 256.0f;
-            float v = ((float)plato_y - 256.0f) / 256.0f;
-            float u_src = u, v_src = v;
-            if (activeDist == 2) {
-                u_src = u * (1.0f + (v * v) * 0.018f);
-            } else if (activeDist == 1) {
-                u_src = u * (1.0f + (v * v) * 0.018f);
-                v_src = v * (1.0f + (u * u) * 0.012f);
-            }
-            plato_x = (int)(256.0f + u_src * 256.0f);
-            plato_y = (int)(256.0f + v_src * 256.0f);
-        }
+        plato_optical_unwarp_touch(&plato_x, &plato_y, opticalProfile.display_mode, opticalProfile.plasma_distortion, opticalProfile.crt_distortion);
 
         if (plato_x < 0) plato_x = 0;
         if (plato_x >= PLATO_WIDTH) plato_x = PLATO_WIDTH - 1;

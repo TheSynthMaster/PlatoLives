@@ -73,6 +73,9 @@
 #define IDM_TOOLS_SAVE_SCREEN_TEXT      1401
 #define IDM_TOOLS_DIAG_LOG              1402
 #define IDM_TOOLS_RENDERER_LOG          1403
+#define IDM_TOOLS_MT_LOG                1404
+#define IDM_TOOLS_DUMP_RAM              1405
+#define IDM_TOOLS_BOOT_MTE              1406
 
 
 /* Menu Scripts */

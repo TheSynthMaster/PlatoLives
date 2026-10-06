@@ -830,3 +830,39 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
     }
     return was_dirty || (now_sec < opt->state->animateUntil);
 }
+
+void plato_optical_unwarp_touch(int *x, int *y, int display_mode, int plasma_distortion, int crt_distortion) {
+    if (!x || !y) return;
+    int activeDist = 0;
+    if (display_mode == 4) {
+        activeDist = crt_distortion;
+    } else if (display_mode == 0 || display_mode == 2) {
+        activeDist = plasma_distortion;
+    }
+    if (activeDist == 0) return;
+
+    /* Coordinate normalizzate nel range [-1.0, 1.0] attorno al centro di 512x512 */
+    float u = ((float)(*x) - 255.5f) / 255.5f;
+    float v = ((float)(*y) - 255.5f) / 255.5f;
+    float u_src = u, v_src = v;
+
+    const float k_cyl_x = 0.018f;
+    const float k_bar_x = 0.018f;
+    const float k_bar_y = 0.012f;
+
+    if (activeDist == 2) {
+        /* Distorsione Cilindrica (curvatura solo orizzontale in funzione di v^2) */
+        u_src = u * (1.0f + (v * v) * k_cyl_x);
+    } else if (activeDist == 1) {
+        /* Distorsione a Barilotto (curvatura sia orizzontale che verticale) */
+        u_src = u * (1.0f + (v * v) * k_bar_x);
+        v_src = v * (1.0f + (u * u) * k_bar_y);
+    }
+
+    int nx = (int)(255.5f + u_src * 255.5f + 0.5f);
+    int ny = (int)(255.5f + v_src * 255.5f + 0.5f);
+    if (nx < 0) nx = 0; if (nx >= PLATO_WIDTH) nx = PLATO_WIDTH - 1;
+    if (ny < 0) ny = 0; if (ny >= PLATO_HEIGHT) ny = PLATO_HEIGHT - 1;
+    *x = nx;
+    *y = ny;
+}

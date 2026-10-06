@@ -1156,7 +1156,9 @@ static void plato_mac_beep(void *context) {
 - (void)setupMenuBar {
     NSMenu *mainMenu = [[NSMenu alloc] init];
 
-    // Menu PlatoLives (App)
+    // =============================================================
+    // 0. App Menu: PlatoLives
+    // =============================================================
     NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
     NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"PlatoLives"];
     NSMenuItem *aboutItem = [[NSMenuItem alloc] initWithTitle:@"About PlatoLives" action:@selector(showAbout:) keyEquivalent:@""];
@@ -1166,75 +1168,41 @@ static void plato_mac_beep(void *context) {
     [appMenu addItemWithTitle:@"Hide PlatoLives" action:@selector(hide:) keyEquivalent:@"h"];
     [appMenu addItemWithTitle:@"Quit PlatoLives" action:@selector(terminate:) keyEquivalent:@"q"];
     [appMenuItem setSubmenu:appMenu];
-    [mainMenu addItem:appMenuItem];
 
-    // Menu File
-    NSMenuItem *fileMenuItem = [[NSMenuItem alloc] init];
-    NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
-
-    NSMenuItem *newWinItem = [[NSMenuItem alloc] initWithTitle:@"New Window" action:@selector(newWindow:) keyEquivalent:@"n"];
-    [newWinItem setTarget:self];
-    [fileMenu addItem:newWinItem];
-
-    NSMenuItem *newTabItem = [[NSMenuItem alloc] initWithTitle:@"New Tab" action:@selector(newWindowForTab:) keyEquivalent:@"t"];
-    [newTabItem setTarget:self];
-    [fileMenu addItem:newTabItem];
-
-    NSMenuItem *newWinProfItem = [[NSMenuItem alloc] initWithTitle:@"New Window with Profile" action:nil keyEquivalent:@""];
-    self.profileNewWindowSubmenu = [[NSMenu alloc] initWithTitle:@"New Window with Profile"];
-    [newWinProfItem setSubmenu:self.profileNewWindowSubmenu];
-    [fileMenu addItem:newWinProfItem];
-
-    [fileMenu addItem:[NSMenuItem separatorItem]];
-    NSMenuItem *closeWinItem = [[NSMenuItem alloc] initWithTitle:@"Close Window" action:@selector(performClose:) keyEquivalent:@"w"];
-    [fileMenu addItem:closeWinItem];
-
-    [fileMenuItem setSubmenu:fileMenu];
-    [mainMenu addItem:fileMenuItem];
-
-    // Menu Edit (Allineato 1:1 con Windows)
-    NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
-    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
-
-    NSMenuItem *copyVerbatimItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Verbatim" action:@selector(copyAllTextVerbatim:) keyEquivalent:@"c"];
-    [copyVerbatimItem setTarget:self];
-    [editMenu addItem:copyVerbatimItem];
-
-    NSMenuItem *copyCompactItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Compact" action:@selector(copyAllTextCompact:) keyEquivalent:@"C"];
-    [copyCompactItem setTarget:self];
-    [copyCompactItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
-    [editMenu addItem:copyCompactItem];
-
-    NSMenuItem *copySelectedItem = [[NSMenuItem alloc] initWithTitle:@"Copy Selected Text..." action:@selector(copySelectedText:) keyEquivalent:@"T"];
-    [copySelectedItem setTarget:self];
-    [copySelectedItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
-    [editMenu addItem:copySelectedItem];
-
-    NSMenuItem *copyScreenItem = [[NSMenuItem alloc] initWithTitle:@"Copy Screen Image" action:@selector(copyScreenImage:) keyEquivalent:@""];
-    [copyScreenItem setTarget:self];
-    [editMenu addItem:copyScreenItem];
-
-    [editMenu addItem:[NSMenuItem separatorItem]];
-
-    NSMenuItem *pasteItem = [[NSMenuItem alloc] initWithTitle:@"Paste Text" action:@selector(pasteText:) keyEquivalent:@"v"];
-    [pasteItem setTarget:self];
-    [editMenu addItem:pasteItem];
-
-    NSMenuItem *cancelPasteItem = [[NSMenuItem alloc] initWithTitle:@"Cancel Paste" action:@selector(cancelPaste:) keyEquivalent:@"."];
-    [cancelPasteItem setTarget:self];
-    [editMenu addItem:cancelPasteItem];
-
-    [editMenuItem setSubmenu:editMenu];
-    [mainMenu addItem:editMenuItem];
-
-    // Menu Connection (Dinamico)
+    // =============================================================
+    // 1. Connection (Dinamico)
+    // =============================================================
     NSMenuItem *connMenuItem = [[NSMenuItem alloc] init];
     self.connectionSubmenu = [[NSMenu alloc] initWithTitle:@"Connection"];
     [self.connectionSubmenu setDelegate:self];
     [connMenuItem setSubmenu:self.connectionSubmenu];
-    [mainMenu addItem:connMenuItem];
 
-    // Menu View
+    // =============================================================
+    // 2. Scripts
+    // =============================================================
+    NSMenuItem *scriptsMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *scriptsMenu = [[NSMenu alloc] initWithTitle:@"Scripts"];
+    self.scriptsSubmenu = scriptsMenu;
+
+    NSMenuItem *manageScriptsItem = [[NSMenuItem alloc] initWithTitle:@"Manage Scripts..." action:@selector(showScriptsWindow:) keyEquivalent:@""];
+    [manageScriptsItem setTarget:self];
+    [scriptsMenu addItem:manageScriptsItem];
+
+    NSMenuItem *scriptRefItem = [[NSMenuItem alloc] initWithTitle:@"Scripting Reference..." action:@selector(showScriptingReference:) keyEquivalent:@""];
+    [scriptRefItem setTarget:self];
+    [scriptsMenu addItem:scriptRefItem];
+
+    NSMenuItem *cancelScriptItem = [[NSMenuItem alloc] initWithTitle:@"Cancel Script Execution" action:@selector(cancelScriptExecution:) keyEquivalent:@"X"];
+    [cancelScriptItem setTarget:self];
+    [cancelScriptItem setKeyEquivalentModifierMask:NSEventModifierFlagControl | NSEventModifierFlagShift];
+    [scriptsMenu addItem:cancelScriptItem];
+
+    [scriptsMenu addItem:[NSMenuItem separatorItem]];
+    [scriptsMenuItem setSubmenu:scriptsMenu];
+
+    // =============================================================
+    // 3. View
+    // =============================================================
     NSMenuItem *viewMenuItem = [[NSMenuItem alloc] init];
     NSMenu *viewMenu = [[NSMenu alloc] initWithTitle:@"View"];
     self.viewMenu = viewMenu;
@@ -1271,7 +1239,6 @@ static void plato_mac_beep(void *context) {
     [decayItem setSubmenu:self.decayMenu];
     [viewMenu addItem:decayItem];
 
-    // Sottomenu Real Plasma Distortion (Default Cylindrical tag 6003)
     NSMenuItem *plasmaDistortionItem = [[NSMenuItem alloc] initWithTitle:@"Real Plasma Distortion" action:nil keyEquivalent:@""];
     self.plasmaDistortionMenu = [[NSMenu alloc] initWithTitle:@"Real Plasma Distortion"];
     NSArray *plasmaDistOptions = @[
@@ -1300,7 +1267,6 @@ static void plato_mac_beep(void *context) {
     [crtItem setTarget:self]; [crtItem setTag:1005];
     [viewMenu addItem:crtItem];
 
-    // Sottomenu CRT Beam Profile (Default High tag 3002)
     NSMenuItem *crtBeamItem = [[NSMenuItem alloc] initWithTitle:@"CRT Beam Profile" action:nil keyEquivalent:@""];
     self.crtBeamMenu = [[NSMenu alloc] initWithTitle:@"CRT Beam Profile"];
     NSMenuItem *medItem = [[NSMenuItem alloc] initWithTitle:@"Standard (Authentic 13\")" action:@selector(setCRTBeamMedium:) keyEquivalent:@""];
@@ -1315,7 +1281,6 @@ static void plato_mac_beep(void *context) {
     [crtBeamItem setSubmenu:self.crtBeamMenu];
     [viewMenu addItem:crtBeamItem];
 
-    // Sottomenu CRT Persistence (Default 20ms tag 4001)
     NSMenuItem *crtDecayItem = [[NSMenuItem alloc] initWithTitle:@"CRT Persistence" action:nil keyEquivalent:@""];
     self.crtDecayMenu = [[NSMenu alloc] initWithTitle:@"CRT Persistence"];
     NSArray *crtDecayOptions = @[
@@ -1336,7 +1301,6 @@ static void plato_mac_beep(void *context) {
     [crtDecayItem setSubmenu:self.crtDecayMenu];
     [viewMenu addItem:crtDecayItem];
 
-    // Sottomenu CRT Distortion (Default None tag 5001)
     NSMenuItem *crtDistortionItem = [[NSMenuItem alloc] initWithTitle:@"CRT Distortion" action:nil keyEquivalent:@""];
     self.crtDistortionMenu = [[NSMenu alloc] initWithTitle:@"CRT Distortion"];
     NSArray *distortionOptions = @[
@@ -1348,7 +1312,7 @@ static void plato_mac_beep(void *context) {
         NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:opt[@"title"] action:@selector(selectCRTDistortion:) keyEquivalent:@""];
         [item setTarget:self];
         [item setTag:[opt[@"tag"] integerValue]];
-        if ([opt[@"tag"] integerValue] == 5003) [item setState:NSControlStateValueOn]; // Default Cylindrical
+        if ([opt[@"tag"] integerValue] == 5003) [item setState:NSControlStateValueOn];
         [self.crtDistortionMenu addItem:item];
     }
     [crtDistortionItem setSubmenu:self.crtDistortionMenu];
@@ -1370,44 +1334,57 @@ static void plato_mac_beep(void *context) {
     self.fpsCounterMenuItem = [[NSMenuItem alloc] initWithTitle:@"Show Performance HUD (FPS/CPU)" action:@selector(toggleFPSCounter:) keyEquivalent:[NSString stringWithCharacters:&fpsCounterKey length:1]];
     [self.fpsCounterMenuItem setKeyEquivalentModifierMask:0]; [self.fpsCounterMenuItem setTarget:self]; [self.fpsCounterMenuItem setState:NSControlStateValueOff];
     [viewMenu addItem:self.fpsCounterMenuItem];
-    [viewMenuItem setSubmenu:viewMenu]; [mainMenu addItem:viewMenuItem];
+    [viewMenuItem setSubmenu:viewMenu];
 
-    // Menu Tools
-    // Menu Scripts
-    NSMenuItem *scriptsMenuItem = [[NSMenuItem alloc] init];
-    NSMenu *scriptsMenu = [[NSMenu alloc] initWithTitle:@"Scripts"];
-    self.scriptsSubmenu = scriptsMenu;
+    // =============================================================
+    // 4. Edit
+    // =============================================================
+    NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
 
-    NSMenuItem *manageScriptsItem = [[NSMenuItem alloc] initWithTitle:@"Manage Scripts..." action:@selector(showScriptsWindow:) keyEquivalent:@""];
-    [manageScriptsItem setTarget:self];
-    [scriptsMenu addItem:manageScriptsItem];
-    NSMenuItem *scriptRefItem = [[NSMenuItem alloc] initWithTitle:@"Scripting Reference..." action:@selector(showScriptingReference:) keyEquivalent:@""];
-    [scriptRefItem setTarget:self];
-    [scriptsMenu addItem:scriptRefItem];
+    NSMenuItem *copyVerbatimItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Verbatim" action:@selector(copyAllTextVerbatim:) keyEquivalent:@"c"];
+    [copyVerbatimItem setTarget:self];
+    [editMenu addItem:copyVerbatimItem];
 
-    NSMenuItem *cancelScriptItem = [[NSMenuItem alloc] initWithTitle:@"Cancel Script Execution" action:@selector(cancelScriptExecution:) keyEquivalent:@"X"];
-    [cancelScriptItem setTarget:self];
-    [cancelScriptItem setKeyEquivalentModifierMask:NSEventModifierFlagControl | NSEventModifierFlagShift];
-    [scriptsMenu addItem:cancelScriptItem];
+    NSMenuItem *copyCompactItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Compact" action:@selector(copyAllTextCompact:) keyEquivalent:@"C"];
+    [copyCompactItem setTarget:self];
+    [copyCompactItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [editMenu addItem:copyCompactItem];
 
-    [scriptsMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *copySelectedItem = [[NSMenuItem alloc] initWithTitle:@"Copy Selected Text..." action:@selector(copySelectedText:) keyEquivalent:@"T"];
+    [copySelectedItem setTarget:self];
+    [copySelectedItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [editMenu addItem:copySelectedItem];
 
-    [scriptsMenuItem setSubmenu:scriptsMenu];
-    [mainMenu addItem:scriptsMenuItem];
+    NSMenuItem *copyScreenItem = [[NSMenuItem alloc] initWithTitle:@"Copy Screen Image" action:@selector(copyScreenImage:) keyEquivalent:@""];
+    [copyScreenItem setTarget:self];
+    [editMenu addItem:copyScreenItem];
 
-    NSMenuItem *toolsMenuItem = [[NSMenuItem alloc] init];
-    NSMenu *toolsMenu = [[NSMenu alloc] initWithTitle:@"Tools"];
-    NSMenuItem *textBufferItem = [[NSMenuItem alloc] initWithTitle:@"Show Live Text Buffer" action:@selector(showTextBufferWindow:) keyEquivalent:@"B"];
-    [textBufferItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
-    [textBufferItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
-    [textBufferItem setTarget:self]; [toolsMenu addItem:textBufferItem];
-    NSMenuItem *logItem = [[NSMenuItem alloc] initWithTitle:@"Enable Diagnostic Log" action:@selector(toggleTrafficLog:) keyEquivalent:@""];
-    [logItem setTarget:self]; [toolsMenu addItem:logItem];
-    NSMenuItem *rendererLogItem = [[NSMenuItem alloc] initWithTitle:@"Enable Renderer Performance Log" action:@selector(toggleRendererPerformanceLog:) keyEquivalent:@""];
-    [rendererLogItem setTarget:self]; [rendererLogItem setState:NSControlStateValueOff]; [toolsMenu addItem:rendererLogItem];
-    [toolsMenuItem setSubmenu:toolsMenu]; [mainMenu addItem:toolsMenuItem];
+    [editMenu addItem:[NSMenuItem separatorItem]];
 
-    // Menu Window (standard macOS)
+    NSMenuItem *pasteItem = [[NSMenuItem alloc] initWithTitle:@"Paste Text" action:@selector(pasteText:) keyEquivalent:@"v"];
+    [pasteItem setTarget:self];
+    [editMenu addItem:pasteItem];
+
+    NSMenuItem *cancelPasteItem = [[NSMenuItem alloc] initWithTitle:@"Cancel Paste" action:@selector(cancelPaste:) keyEquivalent:@"."];
+    [cancelPasteItem setTarget:self];
+    [editMenu addItem:cancelPasteItem];
+    [editMenuItem setSubmenu:editMenu];
+
+    // =============================================================
+    // 5. Micro Tutor
+    // =============================================================
+    NSMenuItem *microTutorMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *microTutorMenu = [[NSMenu alloc] initWithTitle:@"Micro Tutor"];
+    NSMenuItem *bootMteItem = [[NSMenuItem alloc] initWithTitle:@"Load and Boot from MTE..." action:@selector(bootFromMte:) keyEquivalent:@""];
+    [bootMteItem setTarget:self]; [microTutorMenu addItem:bootMteItem];
+    NSMenuItem *mtLogItem = [[NSMenuItem alloc] initWithTitle:@"Enable Z80 Diagnostic Log" action:@selector(toggleZ80Log:) keyEquivalent:@""];
+    [mtLogItem setTarget:self]; [mtLogItem setState:NSControlStateValueOff]; [microTutorMenu addItem:mtLogItem];
+    [microTutorMenuItem setSubmenu:microTutorMenu];
+
+    // =============================================================
+    // 6. Window (Standard macOS - Posizione 6)
+    // =============================================================
     NSMenuItem *windowMenuItem = [[NSMenuItem alloc] init];
     NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
     [windowMenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
@@ -1431,10 +1408,48 @@ static void plato_mac_beep(void *context) {
     [windowMenu addItem:[NSMenuItem separatorItem]];
     [windowMenu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
     [windowMenuItem setSubmenu:windowMenu];
-    [mainMenu addItem:windowMenuItem];
-    [NSApp setWindowsMenu:windowMenu];
 
+    // =============================================================
+    // 7. Tools (Intatto - Posizione 7)
+    // =============================================================
+    NSMenuItem *toolsMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *toolsMenu = [[NSMenu alloc] initWithTitle:@"Tools"];
+    NSMenuItem *textBufferItem = [[NSMenuItem alloc] initWithTitle:@"Show Live Text Buffer" action:@selector(showTextBufferWindow:) keyEquivalent:@"B"];
+    [textBufferItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [textBufferItem setTarget:self]; [toolsMenu addItem:textBufferItem];
+    NSMenuItem *logItem = [[NSMenuItem alloc] initWithTitle:@"Enable Diagnostic Log" action:@selector(toggleTrafficLog:) keyEquivalent:@""];
+    [logItem setTarget:self]; [toolsMenu addItem:logItem];
+    NSMenuItem *rendererLogItem = [[NSMenuItem alloc] initWithTitle:@"Enable Renderer Performance Log" action:@selector(toggleRendererPerformanceLog:) keyEquivalent:@""];
+    [rendererLogItem setTarget:self]; [rendererLogItem setState:NSControlStateValueOff]; [toolsMenu addItem:rendererLogItem];
+    [toolsMenuItem setSubmenu:toolsMenu];
+
+    // =============================================================
+    // 8. Help (Posizione 8)
+    // =============================================================
+    NSMenuItem *helpMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *helpMenu = [[NSMenu alloc] initWithTitle:@"Help"];
+    NSMenuItem *aboutHelpItem = [[NSMenuItem alloc] initWithTitle:@"About PlatoLives..." action:@selector(showAbout:) keyEquivalent:@""];
+    [aboutHelpItem setTarget:self];
+    [helpMenu addItem:aboutHelpItem];
+    [helpMenuItem setSubmenu:helpMenu];
+
+    // =============================================================
+    // COMPOSIZIONE BARRA DEI MENU NEL RIGOROSO ORDINE SPECIFICATO
+    // =============================================================
+    [mainMenu addItem:appMenuItem];        // 0. PlatoLives
+    [mainMenu addItem:connMenuItem];       // 1. Connection
+    [mainMenu addItem:scriptsMenuItem];    // 2. Scripts
+    [mainMenu addItem:viewMenuItem];       // 3. View
+    [mainMenu addItem:editMenuItem];       // 4. Edit
+    [mainMenu addItem:microTutorMenuItem]; // 5. Micro Tutor
+    [mainMenu addItem:windowMenuItem];     // 6. Window
+    [mainMenu addItem:toolsMenuItem];      // 7. Tools
+    [mainMenu addItem:helpMenuItem];       // 8. Help
+
+    [NSApp setWindowsMenu:windowMenu];
+    [NSApp setHelpMenu:helpMenu];
     [NSApp setMainMenu:mainMenu];
+
     [self rebuildConnectionMenu];
     [self rebuildScriptsMenu];
 }
@@ -1451,45 +1466,85 @@ static void plato_mac_beep(void *context) {
 - (void)rebuildConnectionMenu {
     if (!self.connectionSubmenu) return;
     [self.connectionSubmenu removeAllItems];
-    if (self.profileNewWindowSubmenu) [self.profileNewWindowSubmenu removeAllItems];
 
-    NSMenuItem *defConnItem = [[NSMenuItem alloc] initWithTitle:@"Connect to Default Profile" action:@selector(connectDefaultProfile:) keyEquivalent:@"r"];
+    NSArray *profiles = [PLATOProfileManager loadProfiles];
+
+    // a) Same window default profile
+    NSMenuItem *defConnItem = [[NSMenuItem alloc] initWithTitle:@"Same window default profile" action:@selector(connectDefaultProfile:) keyEquivalent:@""];
     [defConnItem setTarget:self];
     [self.connectionSubmenu addItem:defConnItem];
 
-    NSMenuItem *manageProfilesItem = [[NSMenuItem alloc] initWithTitle:@"Connection Profiles..." action:@selector(showProfilesWindow:) keyEquivalent:@","];
-    [manageProfilesItem setTarget:self];
-    [self.connectionSubmenu addItem:manageProfilesItem];
-
-    [self.connectionSubmenu addItem:[NSMenuItem separatorItem]];
-
-    NSArray *profiles = [PLATOProfileManager loadProfiles];
+    // b) Same window with profile (sottomenu profili)
+    NSMenuItem *sameWinProfItem = [[NSMenuItem alloc] initWithTitle:@"Same window with profile" action:nil keyEquivalent:@""];
+    NSMenu *sameWinProfMenu = [[NSMenu alloc] initWithTitle:@"Same window with profile"];
     for (NSDictionary *p in profiles) {
         NSString *name = p[@"name"] ? p[@"name"] : @"Untitled";
-        NSString *title = [NSString stringWithFormat:@"Connect to %@", name];
-        if ([p[@"isDefault"] boolValue]) {
-            title = [title stringByAppendingString:@" ★"];
-        }
-
+        NSString *title = [NSString stringWithFormat:@"%@", name];
+        if ([p[@"isDefault"] boolValue]) title = [title stringByAppendingString:@" ★"];
         NSMenuItem *pItem = [[NSMenuItem alloc] initWithTitle:title action:@selector(quickConnectProfile:) keyEquivalent:@""];
         [pItem setRepresentedObject:p];
         [pItem setTarget:self];
-        [self.connectionSubmenu addItem:pItem];
-
-        if (self.profileNewWindowSubmenu) {
-            NSMenuItem *newPItem = [[NSMenuItem alloc] initWithTitle:name action:@selector(newWindowWithProfileItem:) keyEquivalent:@""];
-            [newPItem setRepresentedObject:p];
-            [newPItem setTarget:self];
-            [self.profileNewWindowSubmenu addItem:newPItem];
-        }
+        [sameWinProfMenu addItem:pItem];
     }
+    if ([profiles count] == 0) {
+        [sameWinProfMenu addItemWithTitle:@"(No Profiles)" action:nil keyEquivalent:@""];
+    }
+    [sameWinProfItem setSubmenu:sameWinProfMenu];
+    [self.connectionSubmenu addItem:sameWinProfItem];
 
+    // c) New window default profile (Cmd+N)
+    NSMenuItem *newDefItem = [[NSMenuItem alloc] initWithTitle:@"New window default profile" action:@selector(newWindow:) keyEquivalent:@"n"];
+    [newDefItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
+    [newDefItem setTarget:self];
+    [self.connectionSubmenu addItem:newDefItem];
+
+    // d) New window with profile (sottomenu profili)
+    NSMenuItem *newWinProfItem = [[NSMenuItem alloc] initWithTitle:@"New window with profile" action:nil keyEquivalent:@""];
+    NSMenu *newWinProfMenu = [[NSMenu alloc] initWithTitle:@"New window with profile"];
+    for (NSDictionary *p in profiles) {
+        NSString *name = p[@"name"] ? p[@"name"] : @"Untitled";
+        NSMenuItem *newPItem = [[NSMenuItem alloc] initWithTitle:name action:@selector(newWindowWithProfileItem:) keyEquivalent:@""];
+        [newPItem setRepresentedObject:p];
+        [newPItem setTarget:self];
+        [newWinProfMenu addItem:newPItem];
+    }
+    if ([profiles count] == 0) {
+        [newWinProfMenu addItemWithTitle:@"(No Profiles)" action:nil keyEquivalent:@""];
+    }
+    [newWinProfItem setSubmenu:newWinProfMenu];
+    [self.connectionSubmenu addItem:newWinProfItem];
+
+    // e) Separatore
     [self.connectionSubmenu addItem:[NSMenuItem separatorItem]];
 
-    NSMenuItem *discItem = [[NSMenuItem alloc] initWithTitle:@"Disconnect" action:@selector(disconnectSession:) keyEquivalent:@"d"];
-    [discItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    // f) Disconnect this window (Cmd+D)
+    NSMenuItem *discItem = [[NSMenuItem alloc] initWithTitle:@"Disconnect this window" action:@selector(disconnectSession:) keyEquivalent:@"d"];
+    [discItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
     [discItem setTarget:self];
     [self.connectionSubmenu addItem:discItem];
+
+    // g) Close this window (Cmd+W)
+    NSMenuItem *closeItem = [[NSMenuItem alloc] initWithTitle:@"Close this window" action:@selector(performClose:) keyEquivalent:@"w"];
+    [closeItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
+    [closeItem setTarget:nil];
+    [self.connectionSubmenu addItem:closeItem];
+
+    // h) Separatore
+    [self.connectionSubmenu addItem:[NSMenuItem separatorItem]];
+
+    // i) Manage Profiles...
+    NSMenuItem *manageProfilesItem = [[NSMenuItem alloc] initWithTitle:@"Manage Profiles..." action:@selector(showProfilesWindow:) keyEquivalent:@","];
+    [manageProfilesItem setTarget:self];
+    [self.connectionSubmenu addItem:manageProfilesItem];
+
+    // l) Separatore
+    [self.connectionSubmenu addItem:[NSMenuItem separatorItem]];
+
+    // m) Exit (Cmd+Q)
+    NSMenuItem *exitItem = [[NSMenuItem alloc] initWithTitle:@"Exit" action:@selector(terminate:) keyEquivalent:@"q"];
+    [exitItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
+    [exitItem setTarget:NSApp];
+    [self.connectionSubmenu addItem:exitItem];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
@@ -2085,6 +2140,48 @@ static void plato_mac_beep(void *context) {
     plato_transport_set_logging(self.view->transport, enabled);
     NSMenuItem *item = (NSMenuItem *)sender;
     [item setTitle:enabled ? @"Disable Diagnostic Log" : @"Enable Diagnostic Log"];
+    [item setState:enabled ? NSControlStateValueOn : NSControlStateValueOff];
+}
+
+- (void)dumpZ80Ram:(id)sender {
+    if (!self.view || !self.view->terminal) return;
+    plato_microtutor_dump_ram(&self.view->terminal->mt, "z80ram.dmp");
+}
+
+- (void)bootFromMte:(id)sender {
+    if (!self.view || !self.view->terminal) return;
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    [panel setCanChooseFiles:YES];
+    [panel setCanChooseDirectories:NO];
+    [panel setAllowsMultipleSelection:NO];
+    [panel setMessage:@"Select MicroTutor Executable (.mte) Floppy Image"];
+    [panel setPrompt:@"Boot"];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    [panel setAllowedFileTypes:@[@"mte"]];
+#pragma clang diagnostic pop
+
+    if ([panel runModal] == NSModalResponseOK) {
+        NSURL *url = [[panel URLs] firstObject];
+        if (url) {
+            const char *path = [[url path] UTF8String];
+            if (path) {
+                if (self.view.scriptRunner && plato_script_is_running(self.view.scriptRunner)) {
+                    plato_script_stop(self.view.scriptRunner);
+                }
+                plato_microtutor_boot_mte(&self.view->terminal->mt, path);
+                [self.view setNeedsDisplay:YES];
+            }
+        }
+    }
+}
+
+- (void)toggleZ80Log:(id)sender {
+    if (!self.view) return;
+    NSMenuItem *item = (NSMenuItem *)sender;
+    BOOL enabled = [item state] != NSControlStateValueOn;
+    [self.view setMicroTutorLogEnabled:enabled];
+    [item setTitle:enabled ? @"Disable Z80 Diagnostic Log" : @"Enable Z80 Diagnostic Log"];
     [item setState:enabled ? NSControlStateValueOn : NSControlStateValueOff];
 }
 

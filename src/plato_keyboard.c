@@ -134,7 +134,12 @@ static void trigger_key_double_tap(plato_keyboard_state_t *state,
 }
 
 static inline void send_raw_byte(plato_terminal_t *term, uint8_t b) {
-    if (term && term->transport && term->transport->connected) {
+    if (!term) return;
+    if (term->mt.local_boot || ((term->ram[0x22FA] & 1) != 0)) {
+        plato_microtutor_send_ascii_key(&term->mt, b);
+        return;
+    }
+    if (term->transport && term->transport->connected) {
         plato_transport_send(term->transport, &b, 1);
     }
 }

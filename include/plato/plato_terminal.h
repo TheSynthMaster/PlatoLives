@@ -6,6 +6,7 @@
 #include "plato_font.h"
 #include "plato_protocol.h"
 #include "plato_keyboard.h"
+#include "plato_microtutor.h"
 
 #define PLATO_TERMINAL_RAM_SIZE 65536u
 #define PLATO_C2ORIGIN_ADDRESS 0x2306u
@@ -43,16 +44,20 @@ struct plato_terminal {
     void *metadata_context;
     bool color_mode;
     bool delay_requested;
+    int mclock_acc_ms;
     plato_text_cell_t text_grid[PLATO_ROWS][PLATO_COLS];
+    plato_microtutor_t mt;
 };
 
 void plato_terminal_set_color_mode(plato_terminal_t *term, bool enabled);
 
 void plato_terminal_init(plato_terminal_t *term);
+void plato_terminal_reset(plato_terminal_t *term);
 size_t plato_terminal_feed(plato_terminal_t *term, const uint8_t *data, size_t len);
 void plato_terminal_render_rgba(const plato_terminal_t *term, uint32_t *out_rgba);
 void plato_terminal_set_palette(plato_terminal_t *term, plato_palette_t pal);
 void plato_terminal_beep(plato_terminal_t *term);
+void plato_terminal_tick(plato_terminal_t *term, int ms);
 
 void plato_terminal_clear_text(plato_terminal_t *term);
 void plato_terminal_put_char(plato_terminal_t *term, int x, int y, uint8_t ch,

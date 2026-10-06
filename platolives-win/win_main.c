@@ -507,6 +507,9 @@ static void win_render_hud_overlay(win_app_t *app, double now_sec, bool is_anima
 static void win_render_frame(win_app_t *app) {
     if (!app->context || !app->rtv) return;
 
+    /* Tick clock CPU Z80 / Micro Tutor a 60 FPS */
+    plato_terminal_tick(&app->terminal, 16);
+
     while (1) {
         if (app->feed_pos >= app->feed_len) {
             app->feed_pos = 0;
@@ -530,22 +533,58 @@ static void win_render_frame(win_app_t *app) {
     double now = win_get_time_sec();
     bool is_animating = plato_optical_render(app->optical, &app->terminal, cur_p, now, app->optical_fb);
 
-    /* Indicatore visivo Script in Esecuzione: Pallino arancione lampeggiante in alto a destra nell'area attiva */
+    /* Indicatore visivo Script in Esecuzione: salvataggio e ripristino fedele dello sfondo */
+    static uint32_t s_saved_bg[33 * 33];
+    static bool s_has_saved_bg = false;
+    static bool s_prev_script_running = false;
+
+    const int dot_cx = PLATO_OPTICAL_WIDTH - 48;
+    const int dot_cy = 48;
+    const int dot_r = 16;
+    const int dot_box_dim = 2 * dot_r + 1; /* 33 */
+
+    /* Ripristina SEMPRE lo sfondo originale pulito se era stato salvato */
+    if (s_has_saved_bg) {
+        for (int dy = -dot_r; dy <= dot_r; dy++) {
+            for (int dx = -dot_r; dx <= dot_r; dx++) {
+                int px = dot_cx + dx;
+                int py = dot_cy + dy;
+                if (px >= 0 && px < PLATO_OPTICAL_WIDTH && py >= 0 && py < PLATO_OPTICAL_HEIGHT) {
+                    app->optical_fb[py * PLATO_OPTICAL_WIDTH + px] = s_saved_bg[(dy + dot_r) * dot_box_dim + (dx + dot_r)];
+                }
+            }
+        }
+        s_has_saved_bg = false;
+    }
+
     bool is_script_running = (app->script_runner && plato_script_is_running(app->script_runner));
-    if (is_script_running) {
+    if (is_script_running || s_prev_script_running) {
         is_animating = true;
+    }
+    s_prev_script_running = is_script_running;
+
+    if (is_script_running) {
         /* Frequenza lampeggio: ciclo di 400ms (200ms ON / 200ms OFF) */
         bool blink_on = ((uint64_t)(now * 1000.0) % 400) < 200;
         if (blink_on) {
-            int cx = PLATO_OPTICAL_WIDTH - 48;
-            int cy = 48;
-            int r = 16;
+            /* Salva i pixel di sfondo correnti prima di applicare il colore */
+            for (int dy = -dot_r; dy <= dot_r; dy++) {
+                for (int dx = -dot_r; dx <= dot_r; dx++) {
+                    int px = dot_cx + dx;
+                    int py = dot_cy + dy;
+                    if (px >= 0 && px < PLATO_OPTICAL_WIDTH && py >= 0 && py < PLATO_OPTICAL_HEIGHT) {
+                        s_saved_bg[(dy + dot_r) * dot_box_dim + (dx + dot_r)] = app->optical_fb[py * PLATO_OPTICAL_WIDTH + px];
+                    }
+                }
+            }
+            s_has_saved_bg = true;
+
             uint32_t col = 0xFFFF6E00; /* Orange Plasma */
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dx = -r; dx <= r; dx++) {
-                    if (dx * dx + dy * dy <= r * r) {
-                        int px = cx + dx;
-                        int py = cy + dy;
+            for (int dy = -dot_r; dy <= dot_r; dy++) {
+                for (int dx = -dot_r; dx <= dot_r; dx++) {
+                    if (dx * dx + dy * dy <= dot_r * dot_r) {
+                        int px = dot_cx + dx;
+                        int py = dot_cy + dy;
                         if (px >= 0 && px < PLATO_OPTICAL_WIDTH && py >= 0 && py < PLATO_OPTICAL_HEIGHT) {
                             app->optical_fb[py * PLATO_OPTICAL_WIDTH + px] = col;
                         }
@@ -890,15 +929,33 @@ static void win_clear_screen(win_app_t *app) {
     pthread_mutex_unlock(&app->ringbuf.mutex);
 }
 
+static void win_reset_terminal(win_app_t *app) {
+    if (!app) return;
+    if (app->script_runner) {
+        plato_script_stop(app->script_runner);
+    }
+    if (app->transport && app->transport->connected) {
+        plato_transport_disconnect(app->transport);
+    }
+    app->feed_len = 0;
+    app->feed_pos = 0;
+
+    plato_terminal_reset(&app->terminal);
+    plato_keyboard_state_init(&app->keyboard_state);
+
+    pthread_mutex_lock(&app->ringbuf.mutex);
+    app->ringbuf.head = 0;
+    app->ringbuf.tail = 0;
+    pthread_mutex_unlock(&app->ringbuf.mutex);
+
+    win_clear_screen(app);
+}
+
 static void win_connect_profile(const plato_profile_t *p, void *user_data) {
     win_app_t *app = (win_app_t *)user_data;
     if (!app || !p) return;
 
-    if (app->transport && app->transport->connected) {
-        plato_script_stop(app->script_runner);
-        plato_transport_disconnect(app->transport);
-    }
-    win_clear_screen(app);
+    win_reset_terminal(app);
 
     for (size_t i = 0; i < app->profile_list.count; i++) {
         if (&app->profile_list.profiles[i] == p || strcmp(app->profile_list.profiles[i].name, p->name) == 0) {
@@ -1032,7 +1089,7 @@ static void win_handle_char(win_app_t *app, WPARAM wParam) {
 }
 
 static void win_handle_lbuttondown(win_app_t *app, LPARAM lParam) {
-    if (!app->transport || !app->transport->connected) return;
+    if (!app || (!app->terminal.mt.local_boot && (!app->transport || !app->transport->connected))) return;
     int mx = GET_X_LPARAM(lParam);
     int my = GET_Y_LPARAM(lParam);
 
@@ -1050,6 +1107,9 @@ static void win_handle_lbuttondown(win_app_t *app, LPARAM lParam) {
         int py = (int)((my - viewY) / scale);
         int plato_x = px;
         int plato_y = 511 - py;
+
+        plato_profile_t *cur_p = &app->profile_list.profiles[app->current_profile_idx];
+        plato_optical_unwarp_touch(&plato_x, &plato_y, app->display_mode, cur_p->plasma_distortion, cur_p->crt_distortion);
 
         if (plato_x < 0) plato_x = 0;
         if (plato_x >= PLATO_WIDTH) plato_x = PLATO_WIDTH - 1;
@@ -1381,20 +1441,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             if (hdc) {
                 RECT rc = pudmi->dis.rcItem;
 
-                const wchar_t *defaults[] = { L"File", L"Edit", L"Connection", L"View", L"Tools", L"Scripts", L"Help" };
+                const wchar_t *defaults[] = { L"Connection", L"Scripts", L"View", L"Edit", L"Micro Tutor", L"Tools", L"Help" };
                 const wchar_t *item_name = L"";
 
                 DWORD pos = pudmi->umi.iPosition;
-                if (pos < 7) {
+                if (pos < (sizeof(defaults) / sizeof(defaults[0]))) {
                     item_name = defaults[pos];
                 } else {
-                    if (rc.left < 35) item_name = defaults[0];
-                    else if (rc.left < 75) item_name = defaults[1];
-                    else if (rc.left < 155) item_name = defaults[2];
-                    else if (rc.left < 205) item_name = defaults[3];
-                    else if (rc.left < 255) item_name = defaults[4];
-                    else if (rc.left < 315) item_name = defaults[5];
-                    else item_name = defaults[6];
+                    if (rc.left < 85) item_name = defaults[0];       /* Connection */
+                    else if (rc.left < 145) item_name = defaults[1];  /* Scripts */
+                    else if (rc.left < 190) item_name = defaults[2];  /* View */
+                    else if (rc.left < 230) item_name = defaults[3];  /* Edit */
+                    else if (rc.left < 325) item_name = defaults[4];  /* Micro Tutor */
+                    else if (rc.left < 375) item_name = defaults[5];  /* Tools */
+                    else item_name = defaults[6];                    /* Help */
                 }
 
                 bool is_hover = (pudmi->umi.dwStateId == 2) || ((pudmi->dis.itemState & ODS_HOTLIGHT) != 0);
@@ -1657,16 +1717,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                                          &g_app.profile_list, g_app.current_profile_idx);
                     return 0;
                 case IDM_CONN_DISCONNECT:
-                    if (g_app.transport) {
-                        plato_script_stop(g_app.script_runner);
-                        if (g_app.transport->connected) {
-                            plato_transport_disconnect(g_app.transport);
-                        }
-                        win_clear_screen(&g_app);
-                        win_menu_update_state(g_app.menu, cur_p,
-                                             false, g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen,
-                                             &g_app.profile_list, g_app.current_profile_idx);
-                    }
+                    win_reset_terminal(&g_app);
+                    win_menu_update_state(g_app.menu, cur_p,
+                                         false, g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen,
+                                         &g_app.profile_list, g_app.current_profile_idx);
                     return 0;
                 case IDM_VIEW_KEYBOARD_REF:
                     win_keyref_show(hwnd);
@@ -1690,6 +1744,37 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                                          g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen,
                                          &g_app.profile_list, g_app.current_profile_idx);
                     return 0;
+                case IDM_TOOLS_MT_LOG:
+                    {
+                        static bool s_z80_log = false;
+                        s_z80_log = !s_z80_log;
+                        plato_microtutor_set_logging(&g_app.terminal.mt, s_z80_log);
+                        CheckMenuItem(g_app.menu, IDM_TOOLS_MT_LOG, s_z80_log ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+                        return 0;
+                    }
+
+                case IDM_TOOLS_BOOT_MTE:
+                    {
+                        OPENFILENAMEW ofn;
+                        wchar_t szFile[MAX_PATH] = { 0 };
+                        ZeroMemory(&ofn, sizeof(ofn));
+                        ofn.lStructSize = sizeof(ofn);
+                        ofn.hwndOwner = hwnd;
+                        ofn.lpstrFile = szFile;
+                        ofn.nMaxFile = sizeof(szFile) / sizeof(szFile[0]);
+                        ofn.lpstrFilter = L"MicroTutor Executable (*.mte)\0*.mte\0All Files (*.*)\0*.*\0";
+                        ofn.nFilterIndex = 1;
+                        ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+                        if (GetOpenFileNameW(&ofn)) {
+                            char path_utf8[MAX_PATH * 3];
+                            WideCharToMultiByte(CP_UTF8, 0, szFile, -1, path_utf8, sizeof(path_utf8), NULL, NULL);
+                            if (g_app.script_runner && plato_script_is_running(g_app.script_runner)) {
+                                plato_script_stop(g_app.script_runner);
+                            }
+                            plato_microtutor_boot_mte(&g_app.terminal.mt, path_utf8);
+                        }
+                        return 0;
+                    }
                 case IDM_TOOLS_RENDERER_LOG:
                     g_app.renderer_log = !g_app.renderer_log;
                     win_menu_update_state(g_app.menu, cur_p,
@@ -1737,7 +1822,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         AttachConsole(ATTACH_PARENT_PROCESS);
         freopen("CONOUT$", "w", stdout);
         freopen("CONOUT$", "w", stderr);
-        printf("PlatoLives v4.3 - CDC PLATO IV & Cyber1 Terminal Emulator\n\n"
+        printf("PlatoLives v4.5 - CDC PLATO IV & Cyber1 Terminal Emulator\n\n"
                "Usage:\n  PlatoLives [options] [host] [port]\n\n"
                "Options:\n"
                "  --script <file>        Execute a PLATO script autonomously (headless)\n"
@@ -1752,7 +1837,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         AttachConsole(ATTACH_PARENT_PROCESS);
         freopen("CONOUT$", "w", stdout);
         freopen("CONOUT$", "w", stderr);
-        printf("PlatoLives v4.3\n");
+        printf("PlatoLives v4.5\n");
         return 0;
     }
     if (lpCmdLine && (strstr(lpCmdLine, "--script") || strstr(lpCmdLine, "--test-script"))) {

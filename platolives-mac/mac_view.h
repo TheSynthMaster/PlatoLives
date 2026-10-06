@@ -75,6 +75,7 @@ FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
 - (NSInteger)plasmaDistortion;
 - (void)setKeyboardReferenceVisible:(BOOL)visible;
 - (void)setDiagnosticLogEnabled:(BOOL)enabled;
+- (void)setMicroTutorLogEnabled:(BOOL)enabled;
 - (void)setPlasmaProfilePath:(NSString *)path;
 - (void)writePlasmaProfileWithTag:(NSString *)tag;
 - (void)setRendererPerformanceLogEnabled:(BOOL)enabled;

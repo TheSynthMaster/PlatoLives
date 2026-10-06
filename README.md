@@ -1,4 +1,5 @@
-# PlatoLives (v4.3)
+markdown
+# PlatoLives (v4.5)
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Windows%2010%2F11%20%7C%20Linux%20ARM64%20%26%20x86__64-orange.svg)](#)
 [![Language](https://img.shields.io/badge/language-C%20%7C%20Direct3D%2011%20%7C%20Cocoa%2FMetal-blue.svg)](#)
@@ -15,7 +16,7 @@ The display can be rendered as either the original-style **orange gas-plasma dis
 
 At the same time, PlatoLives is very much a modern client. It runs natively on **macOS, Windows and Linux**, supports copy and paste, scripting, automation, SSH/headless operation and modern Unicode text, and can be used with both traditional PLATO services and private nodes.
 
-Version 4.3 extends the automation side of PlatoLives with a **standalone headless script runner**, allowing complete PLATO scripts to run without the graphical client. Scripts can also capture the current PLATO screen directly to PNG or BMP files, and the complete scripting language reference is now available directly from the application and command line.
+Version 4.5 adds a new dimension to the client: **local MicroTutor emulation**. PlatoLives can now run standalone MicroTutor floppy images locally, without connecting to a PLATO host, while retaining the same PLATO display and interaction model. MicroTutor sessions can then be stopped and the terminal returned cleanly to a normal online PLATO connection.
 
 📖 **Documentation:** [User and Technical Manual (PDF)](docs/PlatoLives_3.5_User_and_Technical_Manual.pdf)
 
@@ -72,6 +73,42 @@ Normal typing remains immediate; the double-tap mechanism only becomes active wh
 
 ---
 
+# Local MicroTutor
+
+Version 4.5 adds support for running **MicroTutor floppy images locally**.
+
+MicroTutor was one of the important educational environments built for PLATO. Its lessons were distributed as disk images containing the MicroTutor interpreter and lesson data.
+
+PlatoLives can now load supported `.mte` floppy images and execute them locally, without requiring a connection to Cyber1, CYBIS or another PLATO host.
+
+This makes it possible to use PlatoLives as a standalone MicroTutor terminal:
+
+- load a local MicroTutor floppy image
+- start the lesson directly from the application
+- interact with it using the normal PLATO display and keyboard
+- run the lesson completely offline
+- return to a normal online PLATO session when finished
+
+The local MicroTutor environment includes emulation of the original processor and floppy controller environment needed by the interpreter, together with the PLATO terminal services required by MicroTutor.
+
+### MicroTutor color
+
+Color MicroTutor lessons are supported as well.
+
+Some MicroTutor interpreters use their own mechanisms for handling color rather than relying entirely on the standard PLATO protocol. PlatoLives handles these cases so that supported color lessons can be rendered using the normal PLATO color display.
+
+This includes the color levels used by later MicroTutor releases.
+
+### Switching between MicroTutor and online PLATO
+
+A local MicroTutor session is isolated from the normal PLATO connection.
+
+When MicroTutor is stopped, PlatoLives resets the terminal state before returning to an online connection. This prevents characters, downloaded fonts, graphics state or other data from the local session from leaking into the subsequent PLATO session.
+
+This makes switching between a local lesson and Cyber1 or another PLATO host safe and predictable.
+
+---
+
 # Automation and scripting
 
 One of the biggest additions in PlatoLives is its built-in scripting system.
@@ -100,6 +137,8 @@ For example, an automatic login script can determine whether the terminal is cur
 
 Scripts can be executed interactively from the application or remotely in headless mode.
 
+Scripts are automatically stopped if a local MicroTutor session is started, preventing two independent automation environments from operating on the same terminal at the same time.
+
 ---
 
 # Manage Scripts
@@ -119,6 +158,8 @@ Scripts are stored persistently and can be triggered directly from the **Scripts
 
 The built-in editor is deliberately simple: it is intended for editing PlatoLives scripts, not for replacing a full programming editor.
 
+While a script is running, a small indicator in the terminal shows that automated input is active.
+
 ---
 
 # Headless and SSH operation
@@ -137,7 +178,7 @@ or connected directly to a host:
 ./PlatoLives --c cyberserv.org 8005
 ```
 
-Version 4.3 adds a standalone script runner that can execute a complete script without starting the graphical client:
+Version 4.3 added a standalone script runner that can execute a complete script without starting the graphical client:
 
 ```bash
 ./PlatoLives --script login.plato
@@ -200,7 +241,7 @@ This makes it possible to use PlatoLives on devices such as:
 
 A particularly useful combination is a small Linux appliance running a permanent or remotely accessible PLATO connection while the full graphical client remains available on a Mac or Windows PC.
 
-With version 4.3, the same systems can also run complete PLATO automation scripts without starting a graphical session.
+With the headless script runner, these systems can also execute complete PLATO automation scripts without starting a graphical session.
 
 ---
 
@@ -286,11 +327,23 @@ The renderer then scales that logical display to the modern screen.
 
 ---
 
+# Touch and curved displays
+
+PlatoLives supports PLATO touch interaction through the FGT touch protocol.
+
+Version 4.5 improves touch accuracy when the terminal display is rendered with curved-screen effects.
+
+Mouse and touch coordinates are compensated for the optical distortion introduced by the simulated curved display before being translated into PLATO touch input.
+
+The result is more consistent interaction with touch-sensitive PLATO applications when using the CRT or curved-display presentation.
+
+---
+
 # macOS integration
 
-The macOS version uses native application features where they are useful without changing the way PLATO itself behaves.
+The macOS application uses native application features where they are useful without changing the way PLATO itself behaves.
 
-Version 4.3 adds native macOS window tabs:
+The application supports native macOS window tabs:
 
 - **Cmd+T** opens a new tab
 - **Cmd+[** and **Cmd+]** switch between tabs
@@ -300,6 +353,36 @@ Version 4.3 adds native macOS window tabs:
 The standard macOS **Window** menu is also available, including normal window minimization with **Cmd+M**.
 
 The Live Text Buffer shortcut is **Cmd+Shift+B**, avoiding conflicts with the macOS tab system.
+
+---
+
+# Menus and connections
+
+The main menu structure has been simplified and made consistent between macOS and Windows.
+
+Connection-related operations are grouped under the **Connection** menu, including:
+
+- connecting to the default profile
+- connecting using another profile
+- opening a connection in a new window
+- reconnecting
+- disconnecting
+- managing profiles
+- closing the current window
+- quitting the application
+
+The main menu structure is now centered around:
+
+- **Connection**
+- **Scripts**
+- **View**
+- **Edit**
+- **Micro Tutor**
+- **Window** on macOS
+- **Tools**
+- **Help**
+
+The dedicated **Micro Tutor** menu provides access to the local MicroTutor functionality introduced in version 4.5.
 
 ---
 
@@ -315,10 +398,13 @@ PlatoLives currently targets:
 | **Cyber1 / CYBIS** | Supported |
 | **IRATA.ONLINE** | Supported |
 | **Private PLATO nodes** | Supported |
+| **MicroTutor floppy images** | Local execution supported |
 
 The client communicates using the protocols used by the supported PLATO systems, including CDC IST-III, CERL X-20 and CDC 721 variants.
 
-The graphical clients provide the same core scripting functionality across macOS and Windows, while the Linux builds provide the console and headless environments.
+The graphical clients provide the core scripting functionality across macOS and Windows, while the Linux builds provide console and headless environments.
+
+MicroTutor runs locally and does not require a network connection to a PLATO host.
 
 ---
 
@@ -520,7 +606,7 @@ find_text regex "Enter +your +password" into pos_pwd, dummy_y
 if pos_pwd >= 0 goto do_password
 
 let pos_banner = -1
-find_text regex "Press +NEXT +to begin" into pos_banner, dummy_y
+find_text regex "Press +NEXT +to +begin" into pos_banner, dummy_y
 if pos_banner >= 0 goto do_next
 
 goto reset
@@ -563,7 +649,7 @@ for reset_step = 1 to 10
     find_text regex "Type +your +CYBIS +name" into r_user, dummy_y
     if r_user >= 0 goto do_user
 
-    find_text regex "Press +NEXT +to begin" into r_banner, dummy_y
+    find_text regex "Press +NEXT +to +begin" into r_banner, dummy_y
     if r_banner >= 0 goto do_next
 next reset_step
 
@@ -646,6 +732,7 @@ For those interested in the implementation, PlatoLives is built around a portabl
 | **Input** | Native keyboard handling plus PLATO key mapping |
 | **Networking** | TCP |
 | **Automation** | Integrated scripting engine and standalone script runner |
+| **MicroTutor** | Local MicroTutor floppy emulation |
 | **Console** | ANSI TrueColor |
 | **Linux binaries** | Static ARM64 and x86_64 builds |
 

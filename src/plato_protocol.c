@@ -43,7 +43,12 @@ static const uint8_t PTAT1[128] = {
     0x58, 0x59, 0x5A, 0x29, 0x3A, 0x3F, 0x21, 0x22
 };
 
-static void send_echo_key(plato_terminal_t *term, uint16_t key) { plato_protocol_send_key(term, 0x080 | (key & 0x7F)); }
+static void send_echo_key(plato_terminal_t *term, uint16_t key) {
+    if (!term || !term->transport || !term->transport->connected) return;
+    uint16_t k = 0x080 | (key & 0x7F);
+    uint8_t out[3] = { 0x1B, (uint8_t)(0x40 | (k & 0x3F)), (uint8_t)(0x60 | ((k >> 6) & 0x0F)) };
+    plato_transport_send(term->transport, out, 3);
+}
 
 static void parse_pmd_item(const char *str, const char *key, char *out, size_t out_max) {
     char pattern[32];
@@ -83,10 +88,13 @@ void plato_protocol_init(plato_protocol_decoder_t *dec) {
     dec->got_lo_y = false; dec->first_line_coord = true; dec->first_block_coord = true;
     dec->block_x0 = dec->block_y0 = 0; dec->word_idx = 0; dec->skip_bytes_remaining = 0;
     dec->last_raw_byte = 0;
+    dec->mode5_active = false;
+    dec->mode6_active = false;
     dec->mode7_active = false;
     dec->mode2_active = false;
     dec->word_param_command = 0;
     dec->load_address = 0;
+    dec->checksum = 0;
     dec->pmd_len = 0;
     dec->pmd_buf[0] = '\0';
     dec->color_cmd = 0;
@@ -99,7 +107,13 @@ uint16_t plato_protocol_keycode_for_ascii(uint8_t ascii) {
 }
 
 void plato_protocol_send_key(plato_terminal_t *term, uint16_t key) {
-    if (!term || !term->transport || !term->transport->connected) return;
+    if (!term) return;
+    bool key2mtutor = term->mt.local_boot || ((term->ram[0x22FA] & 1) != 0);
+    if (key2mtutor) {
+        plato_microtutor_send_key(&term->mt, key);
+        return;
+    }
+    if (!term->transport || !term->transport->connected) return;
     if (key >> 7) {
         uint8_t out[3] = { 0x1B, 0x40 | (key & 0x3F), 0x60 | ((key >> 6) & 0x0F) };
         plato_transport_send(term->transport, out, 3);
@@ -113,7 +127,13 @@ void plato_protocol_send_key(plato_terminal_t *term, uint16_t key) {
 }
 
 void plato_protocol_send_touch(plato_terminal_t *term, int16_t x, int16_t y) {
-    if (!term || !term->transport || !term->transport->connected) return;
+    if (!term) return;
+    if (x < 0) x = 0; if (x >= 512) x = 511; if (y < 0) y = 0; if (y >= 512) y = 511;
+    if (term->mt.local_boot) {
+        plato_protocol_send_key(term, 0x100 | ((x >> 1) & 0xF0) | ((y >> 5) & 0x0F));
+        return;
+    }
+    if (!term->transport || !term->transport->connected) return;
     if (x < 0) x = 0; if (x >= 512) x = 511; if (y < 0) y = 0; if (y >= 512) y = 511;
     uint8_t fgt[6] = { 0x1B, 0x1F, 0x40 + (uint8_t)(x & 0x1F), 0x40 + (uint8_t)((x >> 5) & 0x0F),
                        0x40 + (uint8_t)(y & 0x1F), 0x40 + (uint8_t)((y >> 5) & 0x0F) };
@@ -224,8 +244,17 @@ static void rebuild_programmable_glyph(plato_terminal_t *term, plato_charset_t c
 static void mode2_word_complete(plato_protocol_decoder_t *dec, plato_terminal_t *term, uint32_t word) {
     uint16_t address = (uint16_t)dec->load_address;
     terminal_ram_write_word(term, address, (uint16_t)word);
+    dec->checksum += (uint16_t)word;
+    if (term->transport) plato_transport_log_msg(term->transport, "[RAM WRITE] addr:0x%04X word:0x%04X sum:0x%04X\n", address, (uint16_t)word, dec->checksum);
 
-    /* I due bit alti della Word Mode 2 specificano l operazione; 0 significa load data. */
+    
+    if (term->transport) {
+        plato_transport_log_msg(term->transport, "[RAM WRITE] addr:0x%04X word:0x%04X (op:%u)\n",
+                                address, (uint16_t)word, (word >> 16) & 0x03u);
+    }
+
+
+
     if (((word >> 16) & 0x03u) == 0) {
         uint16_t c2origin = terminal_ram_read_word(term, PLATO_C2ORIGIN_ADDRESS);
         uint16_t c3origin = terminal_ram_read_word(term, PLATO_C3ORIGIN_ADDRESS);
@@ -242,11 +271,10 @@ static void mode2_word_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
             return;
         }
 
-        uint8_t glyph = (uint8_t)(offset >> 4);
-        uint16_t glyph_address = (uint16_t)(origin + ((uint16_t)glyph << 4));
+        uint8_t glyph = (uint8_t)(offset / 16);
+        uint16_t glyph_address = (uint16_t)(origin + glyph * 16);
         rebuild_programmable_glyph(term, charset, (uint8_t)(0x20u + glyph), glyph_address);
     }
-
     dec->load_address = (uint16_t)(address + 2u);
 }
 
@@ -295,9 +323,9 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             dec->state = STATE_NORMAL;
             if (dec->word_param_command == 'W') {
                 dec->load_address = word;
+                dec->checksum = 0;
             } else if (dec->word_param_command == 'Q') {
-                plato_transport_log_msg(term->transport, "[ESC Q WORD] hex:0x%05X octal:%06o (raw: %02X %02X %02X)\n",
-                                        word, word, dec->word_buf[0], dec->word_buf[1], dec->word_buf[2]);
+                plato_transport_log_msg(term->transport, "[ESC Q SSF WORD] hex:0x%05X octal:%06o\n", word, word);
             } else if (dec->word_param_command == 'R') {
                 if (word >= 0x0A40 && word <= 0x0A7F) {
                     int size_val = (int)(word - 0x0A40);
@@ -370,7 +398,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         switch (byte) {
             case 0x02:
                 dec->plato_mode = true; dec->data_mode = PLATO_MODE_ALPHA; dec->screen_mode = PLATO_SCREEN_REWRITE;
-                dec->mode7_active = false; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode6_active = false; dec->mode7_active = false; dec->mode2_active = false;
                 dec->word_idx = 0; dec->word_param_command = 0;
                 break;
             case 0x03: break;
@@ -380,7 +408,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
                 plato_terminal_clear_text(term);
                 dec->char_size = 1;
                 dec->screen_mode = PLATO_SCREEN_REWRITE; dec->data_mode = PLATO_MODE_ALPHA;
-                dec->mode7_active = false; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode6_active = false; dec->mode7_active = false; dec->mode2_active = false;
                 dec->word_idx = 0; dec->word_param_command = 0;
                 break;
             case 0x11: dec->screen_mode = PLATO_SCREEN_INVERSE; break;
@@ -389,21 +417,37 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             case 0x14: dec->screen_mode = PLATO_SCREEN_REWRITE; break;
             case '2': dec->state = STATE_LOAD_COORD; break;
             case 'P': case 'S':
-                /* entrambi selezionano Mode 2, che scrive Word nella RAM terminale. */
-                dec->mode7_active = false; dec->mode2_active = true; dec->word_idx = 0;
+                /* Modo 2: Caricamento RAM / Font Set M2 */
+                dec->mode2_active = true; dec->mode5_active = false;
+                dec->mode6_active = false; dec->mode7_active = false;
+                dec->word_idx = 0;
+                break;
+            case 'T':
+                /* Modo 5: Esecuzione programma Micro Tutor M5ORIGIN (0x2300) */
+                dec->mode5_active = true; dec->mode2_active = false;
+                dec->mode6_active = false; dec->mode7_active = false;
+                dec->word_idx = 0;
+                break;
+            case 'U':
+                /* Modo 6: Esecuzione programma Micro Tutor M6ORIGIN (0x2302) */
+                dec->mode6_active = true; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode7_active = false;
+                dec->word_idx = 0;
+                break;
+            case 'V':
+                /* Modo 7: Esecuzione programma Micro Tutor M7ORIGIN (0x2304) */
+                dec->mode7_active = true; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode6_active = false;
+                dec->word_idx = 0;
                 break;
             case 'Q': case 'R': case 'W':
-                /* Comandi Word transitori; soltanto W modifica il memory address register. */
+                /* Comandi Word transitori: W (LDA / Memory Address), Q (SSF), R (EXT) */
                 dec->state = STATE_WORD_PARAM; dec->word_idx = 0; dec->word_param_command = byte;
                 break;
             case 'X':
                 dec->state = STATE_PMD;
                 dec->pmd_len = 0;
                 dec->pmd_buf[0] = '\0';
-                break;
-            case 'V':
-                /* SetMode(mMode7, tWord): persiste fino a un vero cambio di modalita. */
-                dec->mode2_active = false; dec->mode7_active = true; dec->word_idx = 0;
                 break;
             case 'Y': dec->state = STATE_ECHO_WORD; dec->word_idx = 0; break;
             case 'a': case 'b': dec->state = STATE_COLOR_PARAM; dec->color_cmd = byte; dec->color_idx = 0; break;
@@ -432,8 +476,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         int step = (8 * scale) + tracking;
         switch (byte) {
             case 0x00:
-                /* TUTOR pause / -delay- NOP */
-                term->delay_requested = true;
+                /* NOP: padding di rete, ignorare senza creare delay */
                 break;
             case 0x08:
 
@@ -468,22 +511,22 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
                 if (term->y < 0) term->y += PLATO_HEIGHT;
                 break;
             case 0x19:
-                dec->mode7_active = false; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode6_active = false; dec->mode7_active = false; dec->mode2_active = false;
                 dec->word_idx = 0; dec->word_param_command = 0;
                 dec->data_mode = PLATO_MODE_BLOCK; dec->first_block_coord = true;
                 break;
             case 0x1C:
-                dec->mode7_active = false; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode6_active = false; dec->mode7_active = false; dec->mode2_active = false;
                 dec->word_idx = 0; dec->word_param_command = 0;
                 dec->data_mode = PLATO_MODE_POINT;
                 break;
             case 0x1D:
-                dec->mode7_active = false; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode6_active = false; dec->mode7_active = false; dec->mode2_active = false;
                 dec->word_idx = 0; dec->word_param_command = 0;
                 dec->data_mode = PLATO_MODE_LINE; dec->first_line_coord = true;
                 break;
             case 0x1F:
-                dec->mode7_active = false; dec->mode2_active = false;
+                dec->mode5_active = false; dec->mode6_active = false; dec->mode7_active = false; dec->mode2_active = false;
                 dec->word_idx = 0; dec->word_param_command = 0;
                 dec->data_mode = PLATO_MODE_ALPHA;
                 break;
@@ -491,12 +534,20 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         }
         return;
     }
-    if (dec->mode7_active || dec->mode2_active) {
+    if (dec->mode2_active || dec->mode5_active || dec->mode6_active || dec->mode7_active) {
         dec->word_buf[dec->word_idx++] = byte;
         if (dec->word_idx >= 3) {
             uint32_t word = decode_word18(dec->word_buf);
             dec->word_idx = 0;
-            if (dec->mode2_active) mode2_word_complete(dec, term, word);
+            if (dec->mode2_active) {
+                mode2_word_complete(dec, term, word);
+            } else if (dec->mode5_active) {
+                plato_microtutor_mode5(&term->mt, word);
+            } else if (dec->mode6_active) {
+                plato_microtutor_mode6(&term->mt, word);
+            } else if (dec->mode7_active) {
+                plato_microtutor_progmode(&term->mt, word, 0x2304);
+            }
         }
         return;
     }

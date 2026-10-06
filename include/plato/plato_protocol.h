@@ -31,10 +31,13 @@ typedef struct {
     int word_idx;
     int skip_bytes_remaining;
     uint8_t last_raw_byte; /* TELNET IAC FF FF unescaping */
+    bool mode5_active;
+    bool mode6_active;
     bool mode7_active;     /* ESC V: modalita persistente Word, dati ignorati */
     bool mode2_active;      /* ESC P / ESC S: scrittura persistente nella RAM terminale */
     uint8_t word_param_command;
     uint32_t load_address;
+    uint16_t checksum;
     char pmd_buf[1024];
     int pmd_len;
     uint8_t color_cmd;

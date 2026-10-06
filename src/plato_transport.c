@@ -176,7 +176,22 @@ void plato_transport_set_logging(plato_transport_t *t, bool enabled) {
     if (!t) return;
     pthread_mutex_lock(&t->log_mutex);
     if (enabled && !t->logging_enabled) {
-        t->log_file = fopen("PlatoLives.log", "w");
+        char log_path[1024];
+        const char *home = getenv("HOME");
+        if (!home) home = getenv("USERPROFILE");
+        if (home) {
+            snprintf(log_path, sizeof(log_path), "%s/Desktop/PlatoLives.log", home);
+        } else {
+            snprintf(log_path, sizeof(log_path), "PlatoLives.log");
+        }
+        t->log_file = fopen(log_path, "w");
+        if (!t->log_file && home) {
+            snprintf(log_path, sizeof(log_path), "%s/PlatoLives.log", home);
+            t->log_file = fopen(log_path, "w");
+        }
+        if (t->log_file) {
+            printf("[*] Protocol Diagnostic Log attivo in: %s\n", log_path);
+        }
         if (t->log_file) {
             char timestamp[32];
             format_time(timestamp, sizeof(timestamp));

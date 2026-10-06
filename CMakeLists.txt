@@ -27,7 +27,7 @@ else()
 endif()
 
 
-project(PlatoLives VERSION 4.3 LANGUAGES C OBJC)
+project(PlatoLives VERSION 4.5 LANGUAGES C OBJC)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -36,7 +36,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter -O2)
 endif()
 
-include_directories(include)
+include_directories(include include/plato)
 
 # Core library: libplato, pure C11
 set(LIBPLATO_SOURCES
@@ -48,6 +48,8 @@ set(LIBPLATO_SOURCES
     src/plato_profile.c
     src/plato_script.c
     src/plato_optical.c
+    src/z80emu.c
+    src/plato_microtutor.c
     src/plato_terminal.c
     src/plato_ringbuf.c
     src/plato_transport.c
@@ -120,3 +122,7 @@ endif()
 add_executable(test_script tests/test_script.c)
 target_link_libraries(test_script plato)
 add_test(NAME test_script COMMAND test_script)
+
+add_executable(test_microtutor tests/test_microtutor.c)
+target_link_libraries(test_microtutor plato)
+add_test(NAME test_microtutor COMMAND test_microtutor)

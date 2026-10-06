@@ -6,6 +6,25 @@ static void terminal_ram_write_word(plato_terminal_t *term, uint16_t address, ui
     term->ram[(uint16_t)(address + 1u)] = (uint8_t)(value >> 8);
 }
 
+void plato_terminal_reset(plato_terminal_t *term) {
+    if (!term) return;
+
+    term->x = 0;
+    term->y = 496;
+    term->margin_x = 0;
+    term->delay_requested = false;
+
+    memset(term->ram, 0, sizeof(term->ram));
+    terminal_ram_write_word(term, PLATO_C2ORIGIN_ADDRESS, PLATO_DEFAULT_M2_ORIGIN);
+    terminal_ram_write_word(term, PLATO_C3ORIGIN_ADDRESS, PLATO_DEFAULT_M3_ORIGIN);
+
+    plato_font_init(&term->font);
+    plato_protocol_init(&term->decoder);
+    plato_microtutor_init(&term->mt, term);
+    plato_fb_clear(&term->fb);
+    plato_terminal_clear_text(term);
+}
+
 void plato_terminal_init(plato_terminal_t *term) {
     if (!term) return;
     term->x = 0;
@@ -30,6 +49,7 @@ void plato_terminal_init(plato_terminal_t *term) {
     plato_fb_init(&term->fb);
     plato_font_init(&term->font);
     plato_protocol_init(&term->decoder);
+    plato_microtutor_init(&term->mt, term);
     plato_terminal_clear_text(term);
 }
 
@@ -43,6 +63,7 @@ size_t plato_terminal_feed(plato_terminal_t *term, const uint8_t *data, size_t l
             break;
         }
     }
+
     return i;
 }
 
@@ -309,4 +330,30 @@ size_t plato_terminal_get_text_area(const plato_terminal_t *term,
 
     out_buf[out_idx] = '\0';
     return out_idx;
+}
+
+void plato_terminal_tick(plato_terminal_t *term, int ms) {
+    if (!term || ms <= 0) return;
+
+    /* 1. M_CLOCK timer indipendente a 17 ms (RAM 0x22EC), come m_Mclock in pterm */
+    term->mclock_acc_ms += ms;
+    while (term->mclock_acc_ms >= 17) {
+        term->mclock_acc_ms -= 17;
+        uint16_t m_clock = (uint16_t)term->ram[0x22EC] | ((uint16_t)term->ram[0x22ED] << 8);
+        m_clock++;
+        term->ram[0x22EC] = (uint8_t)(m_clock & 0xFF);
+        term->ram[0x22ED] = (uint8_t)((m_clock >> 8) & 0xFF);
+    }
+
+    /* 2. Gestione ripresa da yield (R_EXEC / R_WAIT16) e background execution come in pterm */
+    if (term->mt.in_r_exec) {
+        term->mt.r_exec_wait_ms -= ms;
+        if (term->mt.r_exec_wait_ms <= ms) {
+            term->mt.in_r_exec = false;
+            term->mt.r_exec_wait_ms = 0;
+            plato_microtutor_emulate(&term->mt);
+        }
+    } else if (term->mt.running) {
+        plato_microtutor_emulate(&term->mt);
+    }
 }

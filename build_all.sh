@@ -20,7 +20,7 @@ ctest --test-dir build --output-on-failure
 # 2. CROSS-COMPILAZIONE LINUX ARM64 (aarch64-linux-musl)
 echo ""
 echo "[2/4] Cross-compilazione Linux ARM64 statica (Zig cc)..."
-zig cc -target aarch64-linux-musl -std=c11 -O2 -s -Iinclude \
+zig cc -target aarch64-linux-musl -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/console_main.c \
     src/console_runner.c \
     src/plato_protocol.c \
@@ -34,13 +34,15 @@ zig cc -target aarch64-linux-musl -std=c11 -O2 -s -Iinclude \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
+    src/z80emu.c \
+    src/plato_microtutor.c \
     -pthread -static \
     -o build/PlatoLives-linux-arm64
 
 # 3. CROSS-COMPILAZIONE LINUX INTEL (x86_64-linux-musl)
 echo ""
 echo "[3/4] Cross-compilazione Linux Intel x86_64 statica (Zig cc)..."
-zig cc -target x86_64-linux-musl -std=c11 -O2 -s -Iinclude \
+zig cc -target x86_64-linux-musl -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/console_main.c \
     src/console_runner.c \
     src/plato_protocol.c \
@@ -54,13 +56,15 @@ zig cc -target x86_64-linux-musl -std=c11 -O2 -s -Iinclude \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
+    src/z80emu.c \
+    src/plato_microtutor.c \
     -pthread -static \
     -o build/PlatoLives-linux-x86_64
 
 # 4. CROSS-COMPILAZIONE WINDOWS GUI (Direct3D 11 + Win32)
 echo ""
 echo "[4/4] Cross-compilazione Windows GUI x86_64 (Zig cc Win32/D3D11)..."
-zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude \
+zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     platolives-win/win_main.c \
     platolives-win/win_menu.c \
     platolives-win/win_profiles.c platolives-win/win_scripts.c \
@@ -80,8 +84,10 @@ zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
+    src/z80emu.c \
+    src/plato_microtutor.c \
     src/console_runner.c \
-    -luser32 -lgdi32 -ld3d11 -ldxgi -lws2_32 \
+    -luser32 -lgdi32 -ld3d11 -ldxgi -lws2_32 -lcomdlg32 \
     -Wl,--subsystem,console \
     -o build/PlatoLives-windows-x86_64.exe
 

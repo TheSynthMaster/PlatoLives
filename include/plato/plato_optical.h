@@ -23,4 +23,6 @@ bool plato_optical_render(plato_optical_t *opt,
                           double now_sec,
                           uint32_t *out_bgra);
 
+void plato_optical_unwarp_touch(int *x, int *y, int display_mode, int plasma_distortion, int crt_distortion);
+
 #endif /* PLATO_OPTICAL_H */

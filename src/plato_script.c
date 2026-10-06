@@ -919,7 +919,7 @@ int plato_script_run_file(const char *filepath, const char *host, int port) {
 
 static const char *s_manual_part1 =
 "================================================================================\n"
-"                    PLATOLIVES SCRIPTING ENGINE REFERENCE (v4.3)\n"
+"                    PLATOLIVES SCRIPTING ENGINE REFERENCE (v4.5)\n"
 "================================================================================\n\n"
 "1. GENERAL SYNTAX & RULES\n"
 "--------------------------------------------------------------------------------\n"

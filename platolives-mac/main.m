@@ -16,7 +16,7 @@ static void macos_console_clipboard(const char *text, size_t len) {
 }
 
 static void print_help(const char *progname) {
-    printf("PlatoLives v4.3 - CDC PLATO IV & Cyber1 Terminal Emulator\n\n");
+    printf("PlatoLives v4.5 - CDC PLATO IV & Cyber1 Terminal Emulator\n\n");
     printf("Usage:\n  %s [options] [host] [port]\n\n", progname);
     printf("Options:\n");
     printf("  --script <file>        Execute a PLATO script autonomously (headless)\n");
@@ -43,7 +43,7 @@ int main(int argc, const char * argv[]) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--v") == 0 || strcmp(argv[i], "-V") == 0) {
-            printf("PlatoLives v4.3\n");
+            printf("PlatoLives v4.5\n");
             return 0;
         }
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--h") == 0) {
