@@ -127,6 +127,12 @@ static void plato_mac_beep(void *context) {
     [self.window setTitle:[NSString stringWithFormat:@"PlatoLives - %@ (%@:%d)", name, host, port]];
     [self.window makeKeyAndOrderFront:nil];
 
+    // Sincronizza istantaneamente la barra dei menu con il nuovo profilo applicato
+    PLATOAppDelegate *appDelegate = (PLATOAppDelegate *)[NSApp delegate];
+    if ([appDelegate respondsToSelector:@selector(activeWindowDidChange:)]) {
+        [appDelegate activeWindowDidChange:self];
+    }
+
     if (!syncFullScreen) return;
     BOOL wantFull = [p[@"fullScreen"] boolValue];
     BOOL isFull = ((self.window.styleMask & NSWindowStyleMaskFullScreen) != 0);
