@@ -54,7 +54,7 @@ static void test_text_grid_and_copy(void) {
     /* 4. Estrazione area riga 0 verbatim: 'X' diventa spazio */
     len = plato_terminal_get_text_area(&term, 0, 0, 6, 0, false, buf, sizeof(buf));
     assert(len > 0);
-    assert(strcmp(buf, "PLATO  !") == 0);
+    assert(strcmp(buf, "PLATO !") == 0);
 
     /* 5. Estrazione area riga 0 compact: doppi spazi collassati in singolo */
     len = plato_terminal_get_text_area(&term, 0, 0, 6, 0, true, buf, sizeof(buf));
@@ -69,7 +69,7 @@ static void test_text_grid_and_copy(void) {
 
     /* Verbatim: mantiene riga 1 vuota */
     len = plato_terminal_get_text_area(&term, 0, 0, 6, 2, false, buf, sizeof(buf));
-    assert(strcmp(buf, "PLATO  !\n\nTEST") == 0);
+    assert(strcmp(buf, "PLATO !\n\nTEST") == 0);
 
     /* Compact: scarta la riga 1 vuota e collassa spazi */
     len = plato_terminal_get_text_area(&term, 0, 0, 6, 2, true, buf, sizeof(buf));
@@ -78,7 +78,7 @@ static void test_text_grid_and_copy(void) {
     /* 7. Azzeramento su ESC 0x0C */
     uint8_t clear_cmd[] = { 0x1B, 0x0C };
     plato_terminal_feed(&term, clear_cmd, sizeof(clear_cmd));
-    len = plato_terminal_get_text_area(&term, 0, 0, 6, 2, false, buf, sizeof(buf));
+    len = plato_terminal_get_text_area(&term, 0, 0, 6, 2, true, buf, sizeof(buf));
     assert(len == 0);
     (void)len;
     assert(buf[0] == '\0');

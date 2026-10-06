@@ -47,12 +47,13 @@ int main(void) {
     assert(term.mt.cpu.registers.byte[Z80_A] == 3);
     assert(term.ram[0x1234] == 3);
     assert(term.mt.io_ports[0x02] == 3);
-    assert(term.mt.halted);
+    assert(term.mt.cpu.pc == 0x000E);
+    assert(term.mt.running);
 
     printf("[+] Eseguiti %d cicli CPU Z80.\n", cycles);
     printf("[+] Verifica RAM[0x1234] = %d (atteso 3)\n", term.ram[0x1234]);
     printf("[+] Verifica CPU A = %d (atteso 3)\n", term.mt.cpu.registers.byte[Z80_A]);
-    printf("[+] Verifica CPU Halted = %s\n", term.mt.halted ? "true" : "false");
+    printf("[+] Verifica CPU PC = 0x%04X (atteso 0x000E)\n", term.mt.cpu.pc);
     printf("[+] test_microtutor Z80 SUPERATO CON SUCCESSO!\n");
 
     return 0;
