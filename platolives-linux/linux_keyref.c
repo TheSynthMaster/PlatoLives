@@ -113,7 +113,7 @@ void linux_keyref_toggle(void) {
     );
     if (!g_kr_win) return;
 
-    g_kr_ren = SDL_CreateRenderer(g_kr_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    g_kr_ren = SDL_CreateRenderer(g_kr_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_kr_ren) {
         g_kr_ren = SDL_CreateRenderer(g_kr_win, -1, 0);
     }

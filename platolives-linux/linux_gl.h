@@ -26,6 +26,8 @@ extern void (APIENTRY *glEnable_ptr)(GLenum cap);
 extern void (APIENTRY *glDisable_ptr)(GLenum cap);
 extern void (APIENTRY *glBlendFunc_ptr)(GLenum sfactor, GLenum dfactor);
 extern void (APIENTRY *glDrawArrays_ptr)(GLenum mode, GLint first, GLsizei count);
+extern const GLubyte* (APIENTRY *glGetString_ptr)(GLenum name);
+extern void (APIENTRY *glBindAttribLocation_ptr)(GLuint program, GLuint index, const GLchar *name);
 
 extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays_ptr;
 extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray_ptr;
@@ -66,6 +68,8 @@ extern PFNGLDELETEPROGRAMPROC glDeleteProgram_ptr;
 #define glDisable                glDisable_ptr
 #define glBlendFunc              glBlendFunc_ptr
 #define glDrawArrays             glDrawArrays_ptr
+#define glGetString              glGetString_ptr
+#define glBindAttribLocation     glBindAttribLocation_ptr
 
 #define glGenVertexArrays        glGenVertexArrays_ptr
 #define glBindVertexArray        glBindVertexArray_ptr

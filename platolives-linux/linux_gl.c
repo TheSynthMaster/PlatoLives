@@ -16,6 +16,8 @@ void (APIENTRY *glEnable_ptr)(GLenum cap) = NULL;
 void (APIENTRY *glDisable_ptr)(GLenum cap) = NULL;
 void (APIENTRY *glBlendFunc_ptr)(GLenum sfactor, GLenum dfactor) = NULL;
 void (APIENTRY *glDrawArrays_ptr)(GLenum mode, GLint first, GLsizei count) = NULL;
+const GLubyte* (APIENTRY *glGetString_ptr)(GLenum name) = NULL;
+void (APIENTRY *glBindAttribLocation_ptr)(GLuint program, GLuint index, const GLchar *name) = NULL;
 
 PFNGLGENVERTEXARRAYSPROC glGenVertexArrays_ptr = NULL;
 PFNGLBINDVERTEXARRAYPROC glBindVertexArray_ptr = NULL;
@@ -72,10 +74,15 @@ bool linux_gl_load_procs(void) {
     LOAD_PROC(glDisable, void (APIENTRY *)(GLenum));
     LOAD_PROC(glBlendFunc, void (APIENTRY *)(GLenum, GLenum));
     LOAD_PROC(glDrawArrays, void (APIENTRY *)(GLenum, GLint, GLsizei));
+    LOAD_PROC(glGetString, const GLubyte* (APIENTRY *)(GLenum));
+    LOAD_PROC(glBindAttribLocation, void (APIENTRY *)(GLuint, GLuint, const GLchar*));
 
-    LOAD_PROC(glGenVertexArrays, PFNGLGENVERTEXARRAYSPROC);
-    LOAD_PROC(glBindVertexArray, PFNGLBINDVERTEXARRAYPROC);
-    LOAD_PROC(glDeleteVertexArrays, PFNGLDELETEVERTEXARRAYSPROC);
+    glGenVertexArrays_ptr = (PFNGLGENVERTEXARRAYSPROC)SDL_GL_GetProcAddress("glGenVertexArrays");
+    if (!glGenVertexArrays_ptr) glGenVertexArrays_ptr = (PFNGLGENVERTEXARRAYSPROC)SDL_GL_GetProcAddress("glGenVertexArraysARB");
+    glBindVertexArray_ptr = (PFNGLBINDVERTEXARRAYPROC)SDL_GL_GetProcAddress("glBindVertexArray");
+    if (!glBindVertexArray_ptr) glBindVertexArray_ptr = (PFNGLBINDVERTEXARRAYPROC)SDL_GL_GetProcAddress("glBindVertexArrayARB");
+    glDeleteVertexArrays_ptr = (PFNGLDELETEVERTEXARRAYSPROC)SDL_GL_GetProcAddress("glDeleteVertexArrays");
+    if (!glDeleteVertexArrays_ptr) glDeleteVertexArrays_ptr = (PFNGLDELETEVERTEXARRAYSPROC)SDL_GL_GetProcAddress("glDeleteVertexArraysARB");
     LOAD_PROC(glGenBuffers, PFNGLGENBUFFERSPROC);
     LOAD_PROC(glBindBuffer, PFNGLBINDBUFFERPROC);
     LOAD_PROC(glBufferData, PFNGLBUFFERDATAPROC);

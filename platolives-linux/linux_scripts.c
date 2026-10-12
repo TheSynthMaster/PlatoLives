@@ -258,7 +258,7 @@ void linux_scripts_show(plato_script_list_t *list, linux_script_run_cb run_cb, v
     );
     if (!g_scr_win) return;
 
-    g_scr_ren = SDL_CreateRenderer(g_scr_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    g_scr_ren = SDL_CreateRenderer(g_scr_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_scr_ren) {
         g_scr_ren = SDL_CreateRenderer(g_scr_win, -1, 0);
     }

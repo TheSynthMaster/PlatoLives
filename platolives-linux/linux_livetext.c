@@ -169,7 +169,7 @@ void linux_livetext_show(plato_terminal_t *term) {
     );
     if (!g_lt_win) return;
 
-    g_lt_ren = SDL_CreateRenderer(g_lt_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    g_lt_ren = SDL_CreateRenderer(g_lt_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_lt_ren) {
         g_lt_ren = SDL_CreateRenderer(g_lt_win, -1, 0);
     }

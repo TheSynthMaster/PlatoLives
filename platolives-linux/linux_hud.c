@@ -88,7 +88,7 @@ void linux_hud_toggle(void) {
     );
     if (!g_hud_win) return;
 
-    g_hud_ren = SDL_CreateRenderer(g_hud_win, -1, SDL_RENDERER_ACCELERATED);
+    g_hud_ren = SDL_CreateRenderer(g_hud_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_hud_ren) {
         g_hud_ren = SDL_CreateRenderer(g_hud_win, -1, 0);
     }

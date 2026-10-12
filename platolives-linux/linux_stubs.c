@@ -75,3 +75,7 @@ void* SDL_memset(void *dst, int c, size_t len) { (void)c; (void)len; return dst;
 void* SDL_CreateRGBSurfaceFrom(void *pixels, int width, int height, int depth, int pitch, uint32_t Rmask, uint32_t Gmask, uint32_t Bmask, uint32_t Amask) { (void)pixels; (void)width; (void)height; (void)depth; (void)pitch; (void)Rmask; (void)Gmask; (void)Bmask; (void)Amask; return (void*)1; }
 void  SDL_SetWindowIcon(void *window, void *icon) { (void)window; (void)icon; }
 void  SDL_FreeSurface(void *surface) { (void)surface; }
+
+void SDL_GL_ResetAttributes(void) {}
+
+int SDL_GL_MakeCurrent(void *window, void *context) { (void)window; (void)context; return 0; }

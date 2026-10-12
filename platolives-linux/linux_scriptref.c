@@ -114,7 +114,7 @@ void linux_scriptref_toggle(void) {
     );
     if (!g_sr_win) return;
 
-    g_sr_ren = SDL_CreateRenderer(g_sr_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    g_sr_ren = SDL_CreateRenderer(g_sr_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_sr_ren) {
         g_sr_ren = SDL_CreateRenderer(g_sr_win, -1, 0);
     }

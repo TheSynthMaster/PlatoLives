@@ -50,7 +50,8 @@
 #define TEXTURE_WIDTH       PLATO_OPTICAL_WIDTH   /* 2048 */
 #define TEXTURE_HEIGHT      PLATO_OPTICAL_HEIGHT  /* 2048 */
 
-static const char *vertex_shader_source =
+/* Shader OpenGL 3.3 Core Profile */
+static const char *vs_330 =
     "#version 330 core\n"
     "layout (location = 0) in vec2 aPos;\n"
     "layout (location = 1) in vec2 aTexCoord;\n"
@@ -60,13 +61,32 @@ static const char *vertex_shader_source =
     "    TexCoord = aTexCoord;\n"
     "}\n";
 
-static const char *fragment_shader_source =
+static const char *fs_330 =
     "#version 330 core\n"
     "in vec2 TexCoord;\n"
     "out vec4 FragColor;\n"
     "uniform sampler2D screenTexture;\n"
     "void main() {\n"
     "    FragColor = texture(screenTexture, TexCoord);\n"
+    "}\n";
+
+/* Shader Fallback OpenGL 2.1 / GLSL 1.20 Legacy */
+static const char *vs_120 =
+    "#version 120\n"
+    "attribute vec2 aPos;\n"
+    "attribute vec2 aTexCoord;\n"
+    "varying vec2 TexCoord;\n"
+    "void main() {\n"
+    "    gl_Position = vec4(aPos, 0.0, 1.0);\n"
+    "    TexCoord = aTexCoord;\n"
+    "}\n";
+
+static const char *fs_120 =
+    "#version 120\n"
+    "varying vec2 TexCoord;\n"
+    "uniform sampler2D screenTexture;\n"
+    "void main() {\n"
+    "    gl_FragColor = texture2D(screenTexture, TexCoord);\n"
     "}\n";
 
 typedef struct {
@@ -104,19 +124,52 @@ typedef struct {
     int vp_x, vp_y, vp_side;
 } linux_client_t;
 
-static GLuint compile_shader(GLenum type, const char *source) {
+static GLuint compile_shader_checked(GLenum type, const char *source) {
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, NULL);
     glCompileShader(shader);
+    GLint success = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char info[512];
+        glGetShaderInfoLog(shader, sizeof(info), NULL, info);
+        glDeleteShader(shader);
+        return 0;
+    }
     return shader;
 }
 
 static GLuint create_shader_program(void) {
-    GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
+    /* Tentativo 1: Shader GLSL 330 Core */
+    GLuint vs = compile_shader_checked(GL_VERTEX_SHADER, vs_330);
+    GLuint fs = compile_shader_checked(GL_FRAGMENT_SHADER, fs_330);
+    bool use_120 = (!vs || !fs);
+
+    if (use_120) {
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        printf("[OpenGL] Commutazione su shader di fallback GLSL 1.20 (OpenGL 2.1 Legacy)...\n");
+        vs = compile_shader_checked(GL_VERTEX_SHADER, vs_120);
+        fs = compile_shader_checked(GL_FRAGMENT_SHADER, fs_120);
+    } else {
+        printf("[OpenGL] Shader GLSL 330 Core compilati con successo.\n");
+    }
+
+    if (!vs || !fs) {
+        fprintf(stderr, "[!] Errore fatale compilazione shader OpenGL.\n");
+        return 0;
+    }
+
     GLuint prog = glCreateProgram();
     glAttachShader(prog, vs);
     glAttachShader(prog, fs);
+
+    /* Assegnazione esplicita degli attributi (compatibile sia con 120 che con 330) */
+    if (glBindAttribLocation) {
+        glBindAttribLocation(prog, 0, "aPos");
+        glBindAttribLocation(prog, 1, "aTexCoord");
+    }
+
     glLinkProgram(prog);
     glDeleteShader(vs);
     glDeleteShader(fs);
@@ -245,6 +298,7 @@ static void set_renderer_log_state(bool enabled) {
 }
 
 static bool update_and_render_frame(linux_client_t *app, double now_sec) {
+    SDL_GL_MakeCurrent(app->window, app->gl_context);
     /* 1. Generazione frame ottico terminale e telemetria reale */
     bool fb_was_dirty = app->terminal.fb.dirty;
     bool is_animating = plato_optical_render(app->optical, &app->terminal, &app->profile, now_sec, app->render_buffer);
@@ -434,7 +488,15 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
 
     glViewport(app->vp_x, app->vp_y, app->vp_side, app->vp_side);
     glUseProgram(app->shader_program);
-    glBindVertexArray(app->term_vao);
+    if (glBindVertexArray && app->term_vao != 0) {
+        glBindVertexArray(app->term_vao);
+    } else {
+        glBindBuffer(GL_ARRAY_BUFFER, app->term_vbo);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+    }
     glBindTexture(GL_TEXTURE_2D, app->texture_id);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -503,9 +565,17 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
              1.0f,  y_top_ndc,     1.0f, 0.0f
         };
 
-        glBindVertexArray(app->ui_vao);
+        if (glBindVertexArray && app->ui_vao != 0) {
+            glBindVertexArray(app->ui_vao);
+        }
         glBindBuffer(GL_ARRAY_BUFFER, app->ui_vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(ui_verts), ui_verts);
+        if (!glBindVertexArray || app->ui_vao == 0) {
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+            glEnableVertexAttribArray(1);
+        }
 
         glBindTexture(GL_TEXTURE_2D, app->menu_ctx.ui_texture_id);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -1395,10 +1465,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+    /* Configurazione contesto: tenta 3.3 Core senza flag restrittivi */
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
     linux_client_t app;
@@ -1428,10 +1499,22 @@ int main(int argc, char *argv[]) {
         SDL_FreeSurface(icon_surface);
     }
 
+    /* Tentativo 1: OpenGL 3.3 Core */
     app.gl_context = SDL_GL_CreateContext(app.window);
-    if (app.gl_context) { linux_gl_load_procs(); }
     if (!app.gl_context) {
-        fprintf(stderr, "Errore creazione contesto OpenGL: %s\n", SDL_GetError());
+        /* Tentativo 2: Fallback a OpenGL 2.1 (Legacy) */
+        SDL_GL_ResetAttributes();
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+        app.gl_context = SDL_GL_CreateContext(app.window);
+    }
+    
+    if (app.gl_context) { 
+        if (!linux_gl_load_procs()) {
+             fprintf(stderr, "[!] Driver OpenGL trovato ma caricamento simboli fallito.\n");
+        }
+    } else {
+        fprintf(stderr, "Errore fatale creazione contesto OpenGL: %s\n", SDL_GetError());
         SDL_DestroyWindow(app.window);
         SDL_Quit();
         return 1;

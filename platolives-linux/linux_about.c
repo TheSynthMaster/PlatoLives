@@ -104,7 +104,7 @@ void linux_about_show(void) {
     );
     if (!g_ab_win) return;
 
-    g_ab_ren = SDL_CreateRenderer(g_ab_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    g_ab_ren = SDL_CreateRenderer(g_ab_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_ab_ren) {
         g_ab_ren = SDL_CreateRenderer(g_ab_win, -1, 0);
     }

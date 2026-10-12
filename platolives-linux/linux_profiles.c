@@ -254,7 +254,7 @@ void linux_profiles_show(plato_profile_list_t *list, linux_profile_connect_cb cb
     );
     if (!g_prof_win) return;
 
-    g_prof_ren = SDL_CreateRenderer(g_prof_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    g_prof_ren = SDL_CreateRenderer(g_prof_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_prof_ren) {
         g_prof_ren = SDL_CreateRenderer(g_prof_win, -1, 0);
     }

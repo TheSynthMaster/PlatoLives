@@ -1,4 +1,4 @@
-# PlatoLives (v4.5.1)
+# PlatoLives (v4.5.2)
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Windows%2010%2F11%20%7C%20Linux%20ARM64%20%26%20x86__64-orange.svg)](#)
 [![Language](https://img.shields.io/badge/language-C%20%7C%20Direct3D%2011%20%7C%20Cocoa%2FMetal%20%7C%20OpenGL%203.3-blue.svg)](#)
@@ -13,7 +13,7 @@ It connects to PLATO systems such as **Cyber1/CYBIS** and **IRATA.ONLINE**, whil
 
 The display can be rendered as either the original-style **orange gas-plasma display** or as a **color CRT**, complete with phosphor persistence, beam characteristics, scanlines and subtle glass curvature. The result is not simply a terminal window displaying PLATO graphics, but an authentic reproduction of the hardware that originally displayed them.
 
-At the same time, PlatoLives is a modern client. It supports copy and paste, scripting, automation, SSH/headless operation and modern Unicode text. Version 4.5.1 adds a full Linux desktop GUI alongside the existing native macOS and Windows applications; Linux console and headless operation remain available too.
+At the same time, PlatoLives is a modern client. It supports copy and paste, scripting, automation, SSH/headless operation and modern Unicode text. Version 4.5.2 adds a full Linux desktop GUI alongside the existing native macOS and Windows applications; Linux console and headless operation remain available too.
 
 In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to execute standalone MicroTutor floppy disk images locally without connecting to a host, returning cleanly to an online PLATO session when finished.
 
@@ -21,9 +21,10 @@ In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to 
 
 ---
 
-# What's new in v4.5.1
+# What's new in v4.5.2
 
-Version 4.5.1 introduces the **full graphical Linux client**. Earlier Linux builds provided a reduced text-based interface; this release brings Linux users a desktop application much closer to the macOS and Windows versions.
+- **Enhanced Linux Compatibility**: Implemented a universal OpenGL fallback chain supporting legacy virtualized GPUs (e.g., OpenGL 2.1 via Mesa/VirGL) and pure Wayland/EGL environments. Secondary auxiliary windows now utilize robust software rendering to prevent context hijacking crashes on diverse display servers.
+Version 4.5.2 introduces the **full graphical Linux client**. Earlier Linux builds provided a reduced text-based interface; this release brings Linux users a desktop application much closer to the macOS and Windows versions.
 
 - **Linux graphical client**: a full desktop interface for Linux ARM64 and x86_64, with OpenGL rendering, native window integration and improved desktop packaging.
 - **Desktop integration**: the application icon is included, and a desktop entry and user-level installer make it easier to add PlatoLives to the Linux desktop without administrator privileges.
