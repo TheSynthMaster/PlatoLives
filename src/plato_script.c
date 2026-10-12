@@ -367,7 +367,7 @@ static void plato_png_write_chunk(FILE *f, const char *type, const uint8_t *data
     fwrite(crc_bytes, 1, 4, f);
 }
 
-static int plato_script_save_png(const char *path, int width, int height, const uint32_t *bgra_pixels) {
+int plato_script_save_png(const char *path, int width, int height, const uint32_t *bgra_pixels) {
     FILE *f = fopen(path, "wb");
     if (!f) return -1;
     const uint8_t sig[8] = { 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A };
@@ -425,7 +425,7 @@ static int plato_script_save_png(const char *path, int width, int height, const 
     return 0;
 }
 
-static int plato_script_save_bmp(const char *path, int width, int height, const uint32_t *bgra_pixels) {
+int plato_script_save_bmp(const char *path, int width, int height, const uint32_t *bgra_pixels) {
     FILE *f = fopen(path, "wb");
     if (!f) return -1;
     uint32_t image_size = (uint32_t)(width * height * 4);

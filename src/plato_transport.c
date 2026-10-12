@@ -181,12 +181,18 @@ void plato_transport_set_logging(plato_transport_t *t, bool enabled) {
         if (!home) home = getenv("USERPROFILE");
         if (home) {
             snprintf(log_path, sizeof(log_path), "%s/Desktop/PlatoLives.log", home);
-        } else {
-            snprintf(log_path, sizeof(log_path), "PlatoLives.log");
+            t->log_file = fopen(log_path, "w");
+            if (!t->log_file) {
+                snprintf(log_path, sizeof(log_path), "%s/Scrivania/PlatoLives.log", home);
+                t->log_file = fopen(log_path, "w");
+            }
+            if (!t->log_file) {
+                snprintf(log_path, sizeof(log_path), "%s/PlatoLives.log", home);
+                t->log_file = fopen(log_path, "w");
+            }
         }
-        t->log_file = fopen(log_path, "w");
-        if (!t->log_file && home) {
-            snprintf(log_path, sizeof(log_path), "%s/PlatoLives.log", home);
+        if (!t->log_file) {
+            snprintf(log_path, sizeof(log_path), "PlatoLives.log");
             t->log_file = fopen(log_path, "w");
         }
         if (t->log_file) {

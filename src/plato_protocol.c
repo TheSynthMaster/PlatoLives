@@ -476,7 +476,8 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         int step = (8 * scale) + tracking;
         switch (byte) {
             case 0x00:
-                /* NOP: padding di rete, ignorare senza creare delay */
+                /* TUTOR pause / -delay- NOP (pacing storico pterm Paul Koning) */
+                term->delay_requested = true;
                 break;
             case 0x08:
 

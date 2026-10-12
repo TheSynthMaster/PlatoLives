@@ -1,3 +1,4 @@
+#include "plato/plato_version.h"
 #include "plato/plato_script.h"
 #import "mac_window.h"
 #import "test_runner.h"
@@ -38,6 +39,7 @@ static void plato_mac_beep(void *context) {
                                                            NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable)
                                                   backing:NSBackingStoreBuffered defer:NO];
     [win setColorSpace:[NSColorSpace sRGBColorSpace]];
+    [win setTabbingMode:NSWindowTabbingModePreferred];
 
     self = [super initWithWindow:win];
     if (self) {
@@ -1396,6 +1398,10 @@ static void plato_mac_beep(void *context) {
     [windowMenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
     [windowMenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
     [windowMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *newTabItem = [[NSMenuItem alloc] initWithTitle:@"New Tab" action:@selector(newTab:) keyEquivalent:@"t"];
+    [newTabItem setTarget:self];
+    [windowMenu addItem:newTabItem];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
 
     [windowMenu addItemWithTitle:@"Show Previous Tab" action:@selector(selectPreviousTab:) keyEquivalent:@"["];
     [windowMenu addItemWithTitle:@"Show Next Tab" action:@selector(selectNextTab:) keyEquivalent:@"]"];
@@ -1753,6 +1759,11 @@ static void plato_mac_beep(void *context) {
     NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"Quit PlatoLives" action:@selector(terminate:) keyEquivalent:@"q"];
     [quit setTarget:NSApp];
     [self.statusMenu addItem:quit];
+}
+
+- (void)newTab:(id)sender {
+    NSDictionary *defProf = [PLATOProfileManager defaultProfile];
+    [self openNewTabWithProfile:defProf];
 }
 
 - (void)newWindow:(id)sender {
@@ -2128,7 +2139,7 @@ static void plato_mac_beep(void *context) {
 
 - (void)showAbout:(id)sender {
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    if (!version) version = @"4.3";
+    if (!version) version = @PLATO_VERSION_STRING;
     NSDictionary *options = @{
         NSAboutPanelOptionApplicationName: @"PlatoLives",
         NSAboutPanelOptionApplicationVersion: version,

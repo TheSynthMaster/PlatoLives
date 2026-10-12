@@ -129,5 +129,9 @@ int64_t plato_script_get_var(plato_script_runner_t *runner, const char *name, bo
 bool    plato_script_set_var(plato_script_runner_t *runner, const char *name, int64_t val);
 
 
+
+int plato_script_save_png(const char *path, int width, int height, const uint32_t *bgra_pixels);
+int plato_script_save_bmp(const char *path, int width, int height, const uint32_t *bgra_pixels);
+
 const char* plato_script_get_manual_text(void);
 #endif /* PLATO_SCRIPT_H */

@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include "win_about.h"
+#include "plato/plato_version.h"
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -82,7 +83,7 @@ static LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             SetTextColor(hdc, PLATO_PLASMA_BRIGHT);
             SelectObject(hdc, ctx->hFontTitle);
             RECT rcTitle = { 0, 92, rcClient.right, 122 };
-            DrawTextW(hdc, L"PlatoLives v4.5", -1, &rcTitle, DT_CENTER | DT_SINGLELINE);
+            DrawTextW(hdc, L"PlatoLives v" PLATO_VERSION_WSTRING, -1, &rcTitle, DT_CENTER | DT_SINGLELINE);
 
             /* 3. Sottotitolo */
             SetTextColor(hdc, PLATO_PLASMA_COLOR);

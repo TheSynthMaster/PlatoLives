@@ -27,7 +27,9 @@ else()
 endif()
 
 
-project(PlatoLives VERSION 4.5 LANGUAGES C OBJC)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PLATO_VERSION_RAW LIMIT_COUNT 1)
+string(STRIP "${PLATO_VERSION_RAW}" PLATO_PROJECT_VERSION)
+project(PlatoLives VERSION ${PLATO_PROJECT_VERSION} LANGUAGES C OBJC)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -48,8 +50,9 @@ set(LIBPLATO_SOURCES
     src/plato_profile.c
     src/plato_script.c
     src/plato_optical.c
-    src/z80emu.c
+    
     src/plato_microtutor.c
+    src/z80emu.c
     src/plato_terminal.c
     src/plato_ringbuf.c
     src/plato_transport.c
@@ -126,3 +129,39 @@ add_test(NAME test_script COMMAND test_script)
 add_executable(test_microtutor tests/test_microtutor.c)
 target_link_libraries(test_microtutor plato)
 add_test(NAME test_microtutor COMMAND test_microtutor)
+
+# --- Target Linux GUI (SDL2 + OpenGL 3.3) - Solo per Linux Nativo ---
+if(NOT APPLE AND NOT WIN32)
+    find_package(SDL2 QUIET)
+    find_package(OpenGL QUIET)
+
+    if(SDL2_FOUND AND OPENGL_FOUND)
+        message(STATUS "Configurazione target GUI SDL2/OpenGL (PlatoLives-linux)...")
+        add_executable(PlatoLives-linux
+            platolives-linux/linux_main.c
+            platolives-linux/linux_menu.c
+            platolives-linux/linux_gl.c
+            platolives-linux/linux_keyref.c
+            platolives-linux/linux_profiles.c
+            platolives-linux/linux_scriptref.c
+            platolives-linux/linux_scripts.c
+            platolives-linux/linux_livetext.c
+            platolives-linux/linux_about.c
+            platolives-linux/linux_hud.c
+            platolives-linux/linux_audio.c
+            platolives-linux/stb_impl.c
+        )
+        target_include_directories(PlatoLives-linux PRIVATE
+            include
+            ${SDL2_INCLUDE_DIRS}
+            ${OPENGL_INCLUDE_DIR}
+        )
+        target_link_libraries(PlatoLives-linux PRIVATE
+            plato
+            ${SDL2_LIBRARIES}
+            ${OPENGL_LIBRARIES}
+            m
+            pthread
+        )
+    endif()
+endif()

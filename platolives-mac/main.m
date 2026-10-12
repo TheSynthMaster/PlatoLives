@@ -1,3 +1,4 @@
+#include "plato/plato_version.h"
 #import <Cocoa/Cocoa.h>
 #import "mac_window.h"
 #include "plato/console_runner.h"
@@ -43,7 +44,7 @@ int main(int argc, const char * argv[]) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--v") == 0 || strcmp(argv[i], "-V") == 0) {
-            printf("PlatoLives v4.5\n");
+            printf("PlatoLives v" PLATO_VERSION_STRING "\n");
             return 0;
         }
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--h") == 0) {

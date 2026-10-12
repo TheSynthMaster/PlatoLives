@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=PlatoLives
+GenericName=PLATO Terminal
+Comment=CDC PLATO IV / Cyber1 Network Terminal Emulator
+Exec=platolives %U
+Icon=platolives
+Terminal=false
+Categories=Network;Emulator;Utility;
+Keywords=PLATO;Cyber1;CDC;Terminal;Retro;
+StartupWMClass=PlatoLives

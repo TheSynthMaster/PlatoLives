@@ -465,14 +465,21 @@ void plato_microtutor_set_logging(plato_microtutor_t *mt, bool enabled) {
         char log_path[1024];
         const char *home = getenv("HOME");
         if (!home) home = getenv("USERPROFILE");
+        FILE *f = NULL;
         if (home) {
             snprintf(log_path, sizeof(log_path), "%s/Desktop/PlatoLives_z80.log", home);
-        } else {
-            snprintf(log_path, sizeof(log_path), "PlatoLives_z80.log");
+            f = fopen(log_path, "w");
+            if (!f) {
+                snprintf(log_path, sizeof(log_path), "%s/Scrivania/PlatoLives_z80.log", home);
+                f = fopen(log_path, "w");
+            }
+            if (!f) {
+                snprintf(log_path, sizeof(log_path), "%s/PlatoLives_z80.log", home);
+                f = fopen(log_path, "w");
+            }
         }
-        FILE *f = fopen(log_path, "w");
-        if (!f && home) {
-            snprintf(log_path, sizeof(log_path), "%s/PlatoLives_z80.log", home);
+        if (!f) {
+            snprintf(log_path, sizeof(log_path), "PlatoLives_z80.log");
             f = fopen(log_path, "w");
         }
         if (f) {
