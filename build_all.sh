@@ -238,6 +238,11 @@ EOF
 
 chmod +x build/linux_desktop_install/install.sh
 
+# Generazione archivio tarball del pacchetto Linux Desktop Installer
+tar -czf build/PlatoLives-linux-desktop-install.tar.gz -C build linux_desktop_install
+echo "[*] Creato archivio build/PlatoLives-linux-desktop-install.tar.gz"
+
+
 echo ">>> BUILD COMPLETATA CON SUCCESSO PER TUTTI I TARGET!"
 echo "================================================================="
 file build/PlatoLives-linux-gui-arm64
