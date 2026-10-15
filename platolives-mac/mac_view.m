@@ -692,6 +692,19 @@ static void* network_worker(void *arg) {
     [overlayLayer setNeedsDisplay];
 }
 
+- (void)toggleWASDMode {
+    plato_arrow_mode_t m = plato_keyboard_cycle_arrow_mode(&keyboardState);
+    const char *desc = (m == PLATO_ARROW_MODE_WASD) ? "WASD GAMING MODE (Up=W, Down=S, Left=A, Right=D)" :
+                       (m == PLATO_ARROW_MODE_WASX) ? "WASX / AVATAR MODE (Up=W, Down=X, Left=A, Right=D)" :
+                       "PLATO STANDARD (SUPER/SUB/ERASE/TAB)";
+    printf("[Keyboard] Modalità Frecce macOS: %s (Cmd+Shift+G / Ctrl+Shift+G)\n", desc);
+    fflush(stdout);
+}
+
+- (BOOL)isWASDMode {
+    return plato_keyboard_get_wasd_mode(&keyboardState);
+}
+
 - (void)setPlasmaDecayDuration:(NSTimeInterval)duration {
     if (duration < 0.02) duration = 0.02;
     opticalProfile.persistence_ms = (int)(duration * 1000.0 + 0.5);
@@ -977,6 +990,18 @@ static void* network_worker(void *arg) {
     unichar c = [chars characterAtIndex:0];
     unichar uc = ([unmod length] > 0) ? [unmod characterAtIndex:0] : 0;
 
+
+
+    /* 0. Toggle immediato WASD Mode (Ctrl+Shift+G o Cmd+Shift+G) */
+    if ((ev.ctrl || ev.gui) && ev.shift && !ev.alt && (uc == 'g')) {
+        [self toggleWASDMode];
+        PLATOAppDelegate *ad = (PLATOAppDelegate *)[NSApp delegate];
+        if (ad && [ad respondsToSelector:@selector(updateWASDMenuItems)]) {
+            [ad updateWASDMenuItems];
+        }
+        return;
+    }
+
     /* 1. Durante l'esecuzione dello script, blocca qualsiasi input tranne Ctrl+Shift+X */
     if (self.scriptRunner && plato_script_is_running(self.scriptRunner)) {
         if (ev.ctrl && ev.shift && !ev.alt && (uc == 'x')) {
@@ -1011,6 +1036,10 @@ static void* network_worker(void *arg) {
 
     ev.codepoint = c;
     ev.unmod_codepoint = uc;
+    if (c == '@' || (c >= 32 && c <= 126 && ev.alt && !ev.ctrl && !ev.gui)) {
+        /* Risoluzione universale dead-key e composizione Option (Option+ç per '@', Option+à per '#', ecc.) */
+        ev.alt = false;
+    }
 
     if (c >= NSF1FunctionKey && c <= NSF12FunctionKey) {
         ev.vkey = (plato_virtual_key_t)(PLATO_VKEY_F1 + (c - NSF1FunctionKey));

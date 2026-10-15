@@ -1063,6 +1063,8 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSMenu *crtDistortionMenu;
 @property (nonatomic, strong) NSMenuItem *keyboardReferenceMenuItem;
 @property (nonatomic, strong) NSMenuItem *fpsCounterMenuItem;
+@property (nonatomic, strong) NSMenuItem *wasdMenuItem;
+@property (nonatomic, strong) NSMenuItem *wasxMenuItem;
 @property (nonatomic) BOOL keyboardReferenceEnabled;
 @property (nonatomic) BOOL fpsCounterEnabled;
 @property (nonatomic, strong) NSStatusItem *statusItem;
@@ -1328,13 +1330,6 @@ static void plato_mac_beep(void *context) {
 
     [viewMenu addItem:[NSMenuItem separatorItem]];
 
-    self.keyboardReferenceMenuItem = [[NSMenuItem alloc] initWithTitle:@"Show Keyboard Reference" action:@selector(toggleKeyboardReference:) keyEquivalent:@"k"];
-    [self.keyboardReferenceMenuItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
-    [self.keyboardReferenceMenuItem setTarget:self];
-    [self.keyboardReferenceMenuItem setState:NSControlStateValueOff];
-    [viewMenu addItem:self.keyboardReferenceMenuItem];
-    [viewMenu addItem:[NSMenuItem separatorItem]];
-
     unichar fullScreenKey = NSF11FunctionKey, fpsCounterKey = NSF12FunctionKey;
     NSMenuItem *fullScreenItem = [[NSMenuItem alloc] initWithTitle:@"Toggle Full Screen" action:@selector(toggleMainFullScreen:) keyEquivalent:[NSString stringWithCharacters:&fullScreenKey length:1]];
     [fullScreenItem setKeyEquivalentModifierMask:0]; [fullScreenItem setTarget:self]; [viewMenu addItem:fullScreenItem];
@@ -1343,6 +1338,35 @@ static void plato_mac_beep(void *context) {
     [self.fpsCounterMenuItem setKeyEquivalentModifierMask:0]; [self.fpsCounterMenuItem setTarget:self]; [self.fpsCounterMenuItem setState:NSControlStateValueOff];
     [viewMenu addItem:self.fpsCounterMenuItem];
     [viewMenuItem setSubmenu:viewMenu];
+
+    // =============================================================
+    // Keyboard (Posizione tra View ed Edit)
+    // =============================================================
+    NSMenuItem *keyboardMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *keyboardMenu = [[NSMenu alloc] initWithTitle:@"Keyboard"];
+
+    self.wasdMenuItem = [[NSMenuItem alloc] initWithTitle:@"Arrow Keys: WASD Mode" action:@selector(selectArrowModeWASD:) keyEquivalent:@""];
+    [self.wasdMenuItem setTarget:self];
+    [keyboardMenu addItem:self.wasdMenuItem];
+
+    self.wasxMenuItem = [[NSMenuItem alloc] initWithTitle:@"Arrow Keys: WASX / Avatar Mode" action:@selector(selectArrowModeWASX:) keyEquivalent:@""];
+    [self.wasxMenuItem setTarget:self];
+    [keyboardMenu addItem:self.wasxMenuItem];
+
+    NSMenuItem *cycleArrowItem = [[NSMenuItem alloc] initWithTitle:@"Cycle Arrow Mode (WASD / WASX / Standard)" action:@selector(cycleArrowMode:) keyEquivalent:@"G"];
+    [cycleArrowItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [cycleArrowItem setTarget:self];
+    [keyboardMenu addItem:cycleArrowItem];
+
+    [keyboardMenu addItem:[NSMenuItem separatorItem]];
+
+    self.keyboardReferenceMenuItem = [[NSMenuItem alloc] initWithTitle:@"Show Keyboard Reference" action:@selector(toggleKeyboardReference:) keyEquivalent:@"k"];
+    [self.keyboardReferenceMenuItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
+    [self.keyboardReferenceMenuItem setTarget:self];
+    [self.keyboardReferenceMenuItem setState:NSControlStateValueOff];
+    [keyboardMenu addItem:self.keyboardReferenceMenuItem];
+
+    [keyboardMenuItem setSubmenu:keyboardMenu];
 
     // =============================================================
     // 4. Edit
@@ -1452,7 +1476,8 @@ static void plato_mac_beep(void *context) {
     [mainMenu addItem:connMenuItem];       // 1. Connection
     [mainMenu addItem:scriptsMenuItem];    // 2. Scripts
     [mainMenu addItem:viewMenuItem];       // 3. View
-    [mainMenu addItem:editMenuItem];       // 4. Edit
+    [mainMenu addItem:keyboardMenuItem];   // 4. Keyboard
+    [mainMenu addItem:editMenuItem];       // 5. Edit
     [mainMenu addItem:microTutorMenuItem]; // 5. Micro Tutor
     [mainMenu addItem:windowMenuItem];     // 6. Window
     [mainMenu addItem:toolsMenuItem];      // 7. Tools
@@ -2028,6 +2053,42 @@ static void plato_mac_beep(void *context) {
     [self.view setFPSCounterVisible:self.fpsCounterEnabled];
     [self.fpsCounterMenuItem setTitle:self.fpsCounterEnabled ? @"Hide Performance HUD (FPS/CPU)" : @"Show Performance HUD (FPS/CPU)"];
     [self.fpsCounterMenuItem setState:self.fpsCounterEnabled ? NSControlStateValueOn : NSControlStateValueOff];
+}
+
+- (void)selectArrowModeWASD:(id)sender {
+    if (!self.view) return;
+    plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&self.view->keyboardState);
+    plato_keyboard_set_arrow_mode(&self.view->keyboardState, (cur == PLATO_ARROW_MODE_WASD) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASD);
+    [self updateWASDMenuItems];
+    printf("[Keyboard] Modalità Frecce: %s\n", (cur == PLATO_ARROW_MODE_WASD) ? "PLATO Standard" : "WASD Mode");
+    fflush(stdout);
+}
+
+- (void)selectArrowModeWASX:(id)sender {
+    if (!self.view) return;
+    plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&self.view->keyboardState);
+    plato_keyboard_set_arrow_mode(&self.view->keyboardState, (cur == PLATO_ARROW_MODE_WASX) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASX);
+    [self updateWASDMenuItems];
+    printf("[Keyboard] Modalità Frecce: %s\n", (cur == PLATO_ARROW_MODE_WASX) ? "PLATO Standard" : "WASX / Avatar Mode");
+    fflush(stdout);
+}
+
+- (void)cycleArrowMode:(id)sender {
+    if (!self.view) return;
+    plato_arrow_mode_t m = plato_keyboard_cycle_arrow_mode(&self.view->keyboardState);
+    [self updateWASDMenuItems];
+    const char *desc = (m == PLATO_ARROW_MODE_WASD) ? "WASD Mode (Up=W, Down=S, Left=A, Right=D)" :
+                       (m == PLATO_ARROW_MODE_WASX) ? "WASX / Avatar Mode (Up=W, Down=X, Left=A, Right=D)" :
+                       "PLATO Standard (SUPER/SUB/ERASE/TAB)";
+    printf("[Keyboard] Modalità Frecce Ciclica: %s\n", desc);
+    fflush(stdout);
+}
+
+- (void)updateWASDMenuItems {
+    if (!self.view) return;
+    plato_arrow_mode_t m = plato_keyboard_get_arrow_mode(&self.view->keyboardState);
+    if (self.wasdMenuItem) [self.wasdMenuItem setState:(m == PLATO_ARROW_MODE_WASD) ? NSControlStateValueOn : NSControlStateValueOff];
+    if (self.wasxMenuItem) [self.wasxMenuItem setState:(m == PLATO_ARROW_MODE_WASX) ? NSControlStateValueOn : NSControlStateValueOff];
 }
 
 - (void)toggleKeyboardReference:(id)sender {

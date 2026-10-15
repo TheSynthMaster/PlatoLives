@@ -820,6 +820,7 @@ static void linux_reset_terminal(linux_client_t *app) {
     app->menu_ctx.connected = false;
     plato_terminal_reset(&app->terminal);
     plato_keyboard_state_init(&app->kbd_state);
+    plato_keyboard_set_arrow_mode(&app->kbd_state, app->menu_ctx.arrow_mode);
     app->feed_len = 0;
     app->feed_pos = 0;
     app->pace_until_sec = 0.0;
@@ -981,6 +982,7 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
                 plato_transport_disconnect(app->transport);
                 plato_terminal_reset(&app->terminal);
                 plato_keyboard_state_init(&app->kbd_state);
+                plato_keyboard_set_arrow_mode(&app->kbd_state, app->menu_ctx.arrow_mode);
                 plato_terminal_set_color_mode(&app->terminal, new_is_color);
                 plato_optical_invalidate(app->optical);
                 app->terminal.fb.dirty = true;
@@ -1065,6 +1067,37 @@ sync_optical_view:
         case ACT_TOOLS_LIVE_TEXT:
             linux_livetext_toggle(&app->terminal);
             break;
+        case ACT_TOOLS_WASD_MODE: {
+            plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&app->kbd_state);
+            plato_arrow_mode_t target = (cur == PLATO_ARROW_MODE_WASD) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASD;
+            plato_keyboard_set_arrow_mode(&app->kbd_state, target);
+            app->menu_ctx.arrow_mode = target;
+            app->menu_ctx.wasd_mode = (target != PLATO_ARROW_MODE_STANDARD);
+            printf("[Keyboard] Modalita Frecce Linux: %s\n", (target == PLATO_ARROW_MODE_WASD) ? "WASD Mode (Up=W, Down=S, Left=A, Right=D)" : "PLATO Standard");
+            fflush(stdout);
+            break;
+        }
+        case ACT_TOOLS_WASX_MODE: {
+            plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&app->kbd_state);
+            plato_arrow_mode_t target = (cur == PLATO_ARROW_MODE_WASX) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASX;
+            plato_keyboard_set_arrow_mode(&app->kbd_state, target);
+            app->menu_ctx.arrow_mode = target;
+            app->menu_ctx.wasd_mode = (target != PLATO_ARROW_MODE_STANDARD);
+            printf("[Keyboard] Modalita Frecce Linux: %s\n", (target == PLATO_ARROW_MODE_WASX) ? "WASX / Avatar Mode (Up=W, Down=X, Left=A, Right=D)" : "PLATO Standard");
+            fflush(stdout);
+            break;
+        }
+        case ACT_TOOLS_CYCLE_ARROW_MODE: {
+            plato_arrow_mode_t m = plato_keyboard_cycle_arrow_mode(&app->kbd_state);
+            app->menu_ctx.arrow_mode = m;
+            app->menu_ctx.wasd_mode = (m != PLATO_ARROW_MODE_STANDARD);
+            const char *desc = (m == PLATO_ARROW_MODE_WASD) ? "WASD Mode (Up=W, Down=S, Left=A, Right=D)" :
+                               (m == PLATO_ARROW_MODE_WASX) ? "WASX / Avatar Mode (Up=W, Down=X, Left=A, Right=D)" :
+                               "PLATO Standard (SUPER/SUB/ERASE/TAB)";
+            printf("[Keyboard] Modalita Frecce Ciclica Linux: %s (Ctrl+Shift+G)\n", desc);
+            fflush(stdout);
+            break;
+        }
         case ACT_EDIT_COPY_IMAGE:
             linux_copy_screen_image(app);
             break;
@@ -1139,6 +1172,10 @@ static void handle_sdl_key(linux_client_t *app, SDL_KeyboardEvent *key, double n
     }
     if ((ctrl || gui) && shift && key->keysym.sym == SDLK_m) {
         apply_menu_action(app, ACT_VIEW_HIDE_MENU_BAR);
+        return;
+    }
+    if ((ctrl || gui) && shift && key->keysym.sym == SDLK_g) {
+        apply_menu_action(app, ACT_TOOLS_CYCLE_ARROW_MODE);
         return;
     }
 
@@ -1265,6 +1302,15 @@ static void handle_sdl_key(linux_client_t *app, SDL_KeyboardEvent *key, double n
         case SDLK_F8:  ev.vkey = PLATO_VKEY_F8; break;
         case SDLK_F9:  ev.vkey = PLATO_VKEY_F9; break;
         case SDLK_F10: ev.vkey = PLATO_VKEY_F10; break;
+        case SDLK_AT: {
+            ev.vkey = PLATO_VKEY_NONE;
+            ev.codepoint = 64; /* '@' */
+            ev.unmod_codepoint = 64;
+            app->last_direct_key_char = ev.codepoint;
+            app->last_direct_key_time = now_sec;
+            plato_keyboard_dispatch(&app->kbd_state, &app->terminal, &ev, now_sec);
+            return;
+        }
         case SDLK_QUOTE: {
             ev.vkey = PLATO_VKEY_NONE;
             ev.codepoint = shift ? (uint32_t)'"' : 39; /* 39 = ''' */
@@ -1364,9 +1410,9 @@ static void handle_sdl_text(linux_client_t *app, const char *text, double now_se
             ev.codepoint = cp;
             ev.unmod_codepoint = (cp >= 'A' && cp <= 'Z') ? (cp + 32) : cp;
             ev.shift = shift;
-            ev.ctrl = ctrl;
-            ev.alt = alt;
-            ev.gui = gui;
+            ev.ctrl = false; /* SDL_TEXTINPUT è testo composto finale: no comandi di controllo */
+            ev.alt = false;
+            ev.gui = false;
 
             plato_keyboard_dispatch(&app->kbd_state, &app->terminal, &ev, now_sec);
         }

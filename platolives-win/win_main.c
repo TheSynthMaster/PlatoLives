@@ -170,6 +170,12 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data);
 static void win_launch_instance(const char *profile_name);
 static void win_setup_ownerdraw_menu(HMENU hMenu, bool is_top_bar);
 
+static void win_update_arrow_menu_items(HMENU menu, plato_arrow_mode_t m) {
+    if (!menu) return;
+    CheckMenuItem(menu, IDM_TOOLS_WASD_MODE, (m == PLATO_ARROW_MODE_WASD) ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+    CheckMenuItem(menu, IDM_TOOLS_WASX_MODE, (m == PLATO_ARROW_MODE_WASX) ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+}
+
 static void win_beep_callback(void *context) {
     (void)context;
     MessageBeep(MB_OK);
@@ -1038,6 +1044,7 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
     if (ev.ctrl && ev.shift && !ev.alt) {
         if (wParam == 'C') { win_copy_text_to_clipboard(app, true); return; }
         if (wParam == 'T') { win_text_buffer_show(app->hwnd, &app->terminal); return; }
+        if (wParam == 'G') { SendMessage(app->hwnd, WM_COMMAND, MAKEWPARAM(IDM_TOOLS_CYCLE_ARROW_MODE, 0), 0); return; }
     }
 
     switch (wParam) {
@@ -1441,20 +1448,35 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             if (hdc) {
                 RECT rc = pudmi->dis.rcItem;
 
-                const wchar_t *defaults[] = { L"Connection", L"Scripts", L"View", L"Edit", L"Micro Tutor", L"Tools", L"Help" };
+                static const wchar_t *defaults[] = {
+                    L"Connection", L"Scripts", L"View", L"Keyboard",
+                    L"Edit", L"Micro Tutor", L"Tools", L"Help"
+                };
+                wchar_t dynamic_title[64] = {0};
                 const wchar_t *item_name = L"";
 
                 DWORD pos = pudmi->umi.iPosition;
-                if (pos < (sizeof(defaults) / sizeof(defaults[0]))) {
+                /* Lettura dinamica dalla menubar di sistema */
+                if (pudmi->uahMenu.hmenu && GetMenuStringW(pudmi->uahMenu.hmenu, pos, dynamic_title, 63, MF_BYPOSITION) > 0) {
+                    wchar_t clean_title[64] = {0};
+                    int ci = 0;
+                    for (int k = 0; dynamic_title[k]; k++) {
+                        if (dynamic_title[k] != L'&') clean_title[ci++] = dynamic_title[k];
+                    }
+                    clean_title[ci] = L'\0';
+                    wcsncpy(dynamic_title, clean_title, 63);
+                    item_name = dynamic_title;
+                } else if (pos < (sizeof(defaults) / sizeof(defaults[0]))) {
                     item_name = defaults[pos];
                 } else {
-                    if (rc.left < 85) item_name = defaults[0];       /* Connection */
-                    else if (rc.left < 145) item_name = defaults[1];  /* Scripts */
-                    else if (rc.left < 190) item_name = defaults[2];  /* View */
-                    else if (rc.left < 230) item_name = defaults[3];  /* Edit */
-                    else if (rc.left < 325) item_name = defaults[4];  /* Micro Tutor */
-                    else if (rc.left < 375) item_name = defaults[5];  /* Tools */
-                    else item_name = defaults[6];                    /* Help */
+                    if (rc.left < 85) item_name = defaults[0];        /* Connection */
+                    else if (rc.left < 145) item_name = defaults[1];   /* Scripts */
+                    else if (rc.left < 190) item_name = defaults[2];   /* View */
+                    else if (rc.left < 265) item_name = defaults[3];   /* Keyboard */
+                    else if (rc.left < 310) item_name = defaults[4];   /* Edit */
+                    else if (rc.left < 405) item_name = defaults[5];   /* Micro Tutor */
+                    else if (rc.left < 455) item_name = defaults[6];   /* Tools */
+                    else item_name = defaults[7];                     /* Help */
                 }
 
                 bool is_hover = (pudmi->umi.dwStateId == 2) || ((pudmi->dis.itemState & ODS_HOTLIGHT) != 0);
@@ -1736,6 +1758,40 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     win_copy_screen_text(&g_app);
                     MessageBoxW(hwnd, L"Screen text saved to screen.txt and clipboard.", L"PlatoLives", MB_OK | MB_ICONINFORMATION);
                     return 0;
+                case IDM_TOOLS_WASD_MODE:
+                    {
+                        plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&g_app.keyboard_state);
+                        plato_arrow_mode_t target = (cur == PLATO_ARROW_MODE_WASD) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASD;
+                        plato_keyboard_set_arrow_mode(&g_app.keyboard_state, target);
+                        win_update_arrow_menu_items(g_app.menu, target);
+                        printf("[Keyboard] Modalita Frecce Windows: %s\n", (target == PLATO_ARROW_MODE_WASD) ? "WASD Mode (Up=W, Down=S, Left=A, Right=D)" : "PLATO Standard");
+                        fflush(stdout);
+                        return 0;
+                    }
+
+                case IDM_TOOLS_WASX_MODE:
+                    {
+                        plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&g_app.keyboard_state);
+                        plato_arrow_mode_t target = (cur == PLATO_ARROW_MODE_WASX) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASX;
+                        plato_keyboard_set_arrow_mode(&g_app.keyboard_state, target);
+                        win_update_arrow_menu_items(g_app.menu, target);
+                        printf("[Keyboard] Modalita Frecce Windows: %s\n", (target == PLATO_ARROW_MODE_WASX) ? "WASX / Avatar Mode (Up=W, Down=X, Left=A, Right=D)" : "PLATO Standard");
+                        fflush(stdout);
+                        return 0;
+                    }
+
+                case IDM_TOOLS_CYCLE_ARROW_MODE:
+                    {
+                        plato_arrow_mode_t m = plato_keyboard_cycle_arrow_mode(&g_app.keyboard_state);
+                        win_update_arrow_menu_items(g_app.menu, m);
+                        const char *desc = (m == PLATO_ARROW_MODE_WASD) ? "WASD Mode (Up=W, Down=S, Left=A, Right=D)" :
+                                           (m == PLATO_ARROW_MODE_WASX) ? "WASX / Avatar Mode (Up=W, Down=X, Left=A, Right=D)" :
+                                           "PLATO Standard (SUPER/SUB/ERASE/TAB)";
+                        printf("[Keyboard] Modalita Frecce Ciclica Windows: %s (Ctrl+Shift+G)\n", desc);
+                        fflush(stdout);
+                        return 0;
+                    }
+
                 case IDM_TOOLS_DIAG_LOG:
                     g_app.diag_log = !g_app.diag_log;
                     plato_transport_set_logging(g_app.transport, g_app.diag_log);
@@ -1964,6 +2020,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     win_apply_dark_theme(NULL);
     g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
     win_setup_ownerdraw_menu(g_app.menu, true);
+    win_update_arrow_menu_items(g_app.menu, plato_keyboard_get_arrow_mode(&g_app.keyboard_state));
     g_app.distortion = 2;
 
     g_app.hwnd = CreateWindowExW(

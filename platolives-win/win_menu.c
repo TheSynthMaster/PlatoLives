@@ -126,14 +126,23 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hCrtDist, L"CRT Distortion");
 
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_KEYBOARD_REF, L"Keyboard Reference\tCtrl+K");
-    AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FULLSCREEN, L"Full Screen\tF11");
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FPS_HUD, L"Show Performance HUD (FPS/CPU)\tF12");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hView, L"&View");
 
     /* ============================================================= */
-    /* 4. Edit                                                       */
+    /* 4. Keyboard (Posizione tra View ed Edit)                       */
+    /* ============================================================= */
+    HMENU hKeyboard = CreatePopupMenu();
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_WASD_MODE, L"Arrow Keys: WASD Mode");
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_WASX_MODE, L"Arrow Keys: WASX / Avatar Mode");
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_CYCLE_ARROW_MODE, L"Cycle Arrow Mode (WASD / WASX / Standard)\tCtrl+Shift+G");
+    AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hKeyboard, MF_STRING, IDM_VIEW_KEYBOARD_REF, L"Keyboard Reference\tCtrl+K");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hKeyboard, L"&Keyboard");
+
+    /* ============================================================= */
+    /* 5. Edit                                                       */
     /* ============================================================= */
     HMENU hEdit = CreatePopupMenu();
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_COPY_TEXT_VERBATIM, L"Copy All Text Verbatim\tCtrl+C");

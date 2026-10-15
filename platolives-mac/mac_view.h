@@ -80,6 +80,8 @@ FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
 - (void)writePlasmaProfileWithTag:(NSString *)tag;
 - (void)setRendererPerformanceLogEnabled:(BOOL)enabled;
 - (void)setFPSCounterVisible:(BOOL)visible;
+- (void)toggleWASDMode;
+- (BOOL)isWASDMode;
 - (void)setPlasmaDecayDuration:(NSTimeInterval)duration;
 - (NSTimeInterval)plasmaDecayDuration;
 - (void)setCRTDecayDuration:(NSTimeInterval)duration;

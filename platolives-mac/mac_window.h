@@ -52,6 +52,10 @@
 - (void)toggleRendererPerformanceLog:(id)sender;
 - (void)toggleMainFullScreen:(id)sender;
 - (void)toggleFPSCounter:(id)sender;
+- (void)selectArrowModeWASD:(id)sender;
+- (void)selectArrowModeWASX:(id)sender;
+- (void)cycleArrowMode:(id)sender;
+- (void)updateWASDMenuItems;
 - (void)showAbout:(id)sender;
 - (void)rebuildConnectionMenu;
 - (void)showProfilesWindow:(id)sender;

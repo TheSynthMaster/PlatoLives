@@ -76,6 +76,9 @@
 #define IDM_TOOLS_MT_LOG                1404
 #define IDM_TOOLS_DUMP_RAM              1405
 #define IDM_TOOLS_BOOT_MTE              1406
+#define IDM_TOOLS_WASD_MODE             1407
+#define IDM_TOOLS_WASX_MODE             1408
+#define IDM_TOOLS_CYCLE_ARROW_MODE      1409
 
 
 /* Menu Scripts */

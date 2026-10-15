@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include "plato/plato_profile.h"
 #include "plato/plato_script.h"
+#include "plato/plato_keyboard.h"
 
 #define MENU_BAR_HEIGHT 28
 
@@ -67,6 +68,9 @@ typedef enum {
     ACT_MT_TOGGLE_LOG,
 
     ACT_TOOLS_LIVE_TEXT = 800,
+    ACT_TOOLS_WASD_MODE,
+    ACT_TOOLS_WASX_MODE,
+    ACT_TOOLS_CYCLE_ARROW_MODE,
     ACT_TOOLS_DIAG_LOG,
     ACT_TOOLS_RENDERER_LOG,
 
@@ -94,6 +98,8 @@ typedef struct {
     bool connected;
     bool diag_log;
     bool renderer_log;
+    bool wasd_mode;
+    plato_arrow_mode_t arrow_mode;
     bool z80_log;
     bool fps_hud;
     bool fullscreen;

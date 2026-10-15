@@ -5,7 +5,6 @@ cd /share/Personale/PlatoLives/
 put build/PlatoLives-console-linux-x86_64
 put build/PlatoLives-windows-x86_64.exe
 put -r build/linux_desktop_install
-mput screenshots/*
 cd /share/Container/netshoot
 put build/PlatoLives-console-linux-arm64
 bye

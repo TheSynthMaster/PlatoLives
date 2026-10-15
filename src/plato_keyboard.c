@@ -60,12 +60,44 @@ void plato_keyboard_state_init(plato_keyboard_state_t *state) {
     if (!state) return;
     memset(state, 0, sizeof(*state));
     state->double_tap_enabled = true;
+    state->arrow_mode = PLATO_ARROW_MODE_STANDARD;
+    state->arrows_wasd_mode = false;
 }
 
 void plato_keyboard_set_feedback_cb(plato_keyboard_state_t *state, plato_feedback_callback_t cb, void *user_data) {
     if (!state) return;
     state->feedback_cb = cb;
     state->user_data = user_data;
+}
+
+void plato_keyboard_set_arrow_mode(plato_keyboard_state_t *state, plato_arrow_mode_t mode) {
+    if (!state) return;
+    state->arrow_mode = mode;
+    state->arrows_wasd_mode = (mode != PLATO_ARROW_MODE_STANDARD);
+}
+
+plato_arrow_mode_t plato_keyboard_get_arrow_mode(const plato_keyboard_state_t *state) {
+    return state ? state->arrow_mode : PLATO_ARROW_MODE_STANDARD;
+}
+
+plato_arrow_mode_t plato_keyboard_cycle_arrow_mode(plato_keyboard_state_t *state) {
+    if (!state) return PLATO_ARROW_MODE_STANDARD;
+    state->arrow_mode = (plato_arrow_mode_t)((state->arrow_mode + 1) % 3);
+    state->arrows_wasd_mode = (state->arrow_mode != PLATO_ARROW_MODE_STANDARD);
+    return state->arrow_mode;
+}
+
+void plato_keyboard_set_wasd_mode(plato_keyboard_state_t *state, bool enabled) {
+    plato_keyboard_set_arrow_mode(state, enabled ? PLATO_ARROW_MODE_WASD : PLATO_ARROW_MODE_STANDARD);
+}
+
+bool plato_keyboard_get_wasd_mode(const plato_keyboard_state_t *state) {
+    return state ? (state->arrow_mode != PLATO_ARROW_MODE_STANDARD) : false;
+}
+
+bool plato_keyboard_toggle_wasd_mode(plato_keyboard_state_t *state) {
+    plato_arrow_mode_t mode = plato_keyboard_cycle_arrow_mode(state);
+    return (mode != PLATO_ARROW_MODE_STANDARD);
 }
 
 void plato_keyboard_flush(plato_keyboard_state_t *state, plato_terminal_t *term) {
@@ -133,6 +165,17 @@ static void trigger_key_double_tap(plato_keyboard_state_t *state,
     state->pending_expiry = now_sec + 0.50;
 }
 
+void plato_keyboard_send_ascii(plato_terminal_t *term, uint8_t ch) {
+    if (!term) return;
+    if (term->mt.local_boot || ((term->ram[0x22FA] & 1) != 0)) {
+        plato_microtutor_send_ascii_key(&term->mt, ch);
+        return;
+    }
+    if (term->transport && term->transport->connected) {
+        plato_transport_send(term->transport, &ch, 1);
+    }
+}
+
 static inline void send_raw_byte(plato_terminal_t *term, uint8_t b) {
     if (!term) return;
     if (term->mt.local_boot || ((term->ram[0x22FA] & 1) != 0)) {
@@ -149,6 +192,8 @@ bool plato_keyboard_dispatch(plato_keyboard_state_t *state,
                              const plato_key_event_t *ev,
                              double now_sec) {
     if (!ev) return false;
+
+
 
     plato_keyboard_poll(state, term, now_sec);
 
@@ -271,6 +316,21 @@ bool plato_keyboard_dispatch(plato_keyboard_state_t *state,
         }
     }
 
+
+    /* 1. Modalità WASD o WASX Gaming attiva: le frecce doppiano i comandi cardinali */
+    if (state && state->arrow_mode == PLATO_ARROW_MODE_WASD) {
+        if (ev->vkey == PLATO_VKEY_UP)    { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'W' : 'w'); return true; }
+        if (ev->vkey == PLATO_VKEY_DOWN)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'S' : 's'); return true; }
+        if (ev->vkey == PLATO_VKEY_LEFT)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'A' : 'a'); return true; }
+        if (ev->vkey == PLATO_VKEY_RIGHT) { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'D' : 'd'); return true; }
+    } else if (state && state->arrow_mode == PLATO_ARROW_MODE_WASX) {
+        if (ev->vkey == PLATO_VKEY_UP)    { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'W' : 'w'); return true; }
+        if (ev->vkey == PLATO_VKEY_DOWN)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'X' : 'x'); return true; }
+        if (ev->vkey == PLATO_VKEY_LEFT)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'A' : 'a'); return true; }
+        if (ev->vkey == PLATO_VKEY_RIGHT) { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'D' : 'd'); return true; }
+    }
+
+    /* 2. Modalità Standard PLATO (videoscrittura e navigazione TUTOR canonica) */
     if (ev->vkey == PLATO_VKEY_LEFT) {
         plato_keyboard_flush(state, term);
         if (term) plato_protocol_send_key(term, plato_keyboard_keycode(PLATO_KEY_ERASE, ev->shift));
@@ -308,10 +368,47 @@ bool plato_keyboard_dispatch(plato_keyboard_state_t *state,
         return true;
     }
 
-    if (ev->codepoint >= 32 && ev->codepoint <= 126 && !ev->ctrl && !ev->alt && !ev->gui) {
-        plato_keyboard_flush(state, term);
-        send_raw_byte(term, (uint8_t)ev->codepoint);
-        return true;
+    /* La Vera Tavola di Rosetta PLATO (da ptermkeytabs.h di Paul Koning).
+       Traduce ogni ASCII (incluso '@', '[', ']' e ' ') nell'esatta sequenza di tasti PLATO. */
+    static const uint32_t pterm_ascii_to_plato[128] = {
+    #define K(a,b,c,d) (((uint32_t)(a)&0xFF) | (((uint32_t)(b)&0xFF)<<8) | (((uint32_t)(c)&0xFF)<<16) | (((uint32_t)(d)&0xFF)<<24))
+    #define N 0xFF
+    #define NONE 0xFFFFFFFF
+       NONE, K(0022, N, N, N), K(0030, N, N, N), K(0033, N, N, N), K(0031, N, N, N), K(0027, N, N, N), K(0064, N, N, N), K(0013, N, N, N),
+       K(0025, N, N, N), NONE, NONE, NONE, K(0035, N, N, N), K(0024, N, N, N), K(0026, N, N, N), NONE,
+       K(0020, N, N, N), K(0034, N, N, N), K(0023, N, N, N), K(0032, N, N, N), K(0062, N, N, N), NONE, NONE, NONE,
+       K(0012, N, N, N), K(0021, N, N, N), NONE, NONE, NONE, NONE, NONE, NONE,
+       K(0100, N, N, N), K(0176, N, N, N), K(0177, N, N, N), K(0074, 0044, N, N), K(0044, N, N, N), K(0045, N, N, N), K(0074, 0016, N, N), K(0047, N, N, N),
+       K(0051, N, N, N), K(0173, N, N, N), K(0050, N, N, N), K(0016, N, N, N), K(0137, N, N, N), K(0017, N, N, N), K(0136, N, N, N), K(0135, N, N, N),
+       K(0000, N, N, N), K(0001, N, N, N), K(0002, N, N, N), K(0003, N, N, N), K(0004, N, N, N), K(0005, N, N, N), K(0006, N, N, N), K(0007, N, N, N),
+       K(0010, N, N, N), K(0011, N, N, N), K(0174, N, N, N), K(0134, N, N, N), K(0040, N, N, N), K(0133, N, N, N), K(0041, N, N, N), K(0175, N, N, N),
+       K(0074, 0005, N, N), K(0141, N, N, N), K(0142, N, N, N), K(0143, N, N, N), K(0144, N, N, N), K(0145, N, N, N), K(0146, N, N, N), K(0147, N, N, N),
+       K(0150, N, N, N), K(0151, N, N, N), K(0152, N, N, N), K(0153, N, N, N), K(0154, N, N, N), K(0155, N, N, N), K(0156, N, N, N), K(0157, N, N, N),
+       K(0160, N, N, N), K(0161, N, N, N), K(0162, N, N, N), K(0163, N, N, N), K(0164, N, N, N), K(0165, N, N, N), K(0166, N, N, N), K(0167, N, N, N),
+       K(0170, N, N, N), K(0171, N, N, N), K(0172, N, N, N), K(0042, N, N, N), K(0074, 0135, N, N), K(0043, N, N, N), K(0100, 0074, 0130, N), K(0046, N, N, N),
+       K(0100, 0074, 0121, N), K(0101, N, N, N), K(0102, N, N, N), K(0103, N, N, N), K(0104, N, N, N), K(0105, N, N, N), K(0106, N, N, N), K(0107, N, N, N),
+       K(0110, N, N, N), K(0111, N, N, N), K(0112, N, N, N), K(0113, N, N, N), K(0114, N, N, N), K(0115, N, N, N), K(0116, N, N, N), K(0117, N, N, N),
+       K(0120, N, N, N), K(0121, N, N, N), K(0122, N, N, N), K(0123, N, N, N), K(0124, N, N, N), K(0125, N, N, N), K(0126, N, N, N), K(0127, N, N, N),
+       K(0130, N, N, N), K(0131, N, N, N), K(0132, N, N, N), K(0074, 0042, N, N), K(0074, 0151, N, N), K(0074, 0043, N, N), K(0100, 0074, 0116, N), NONE
+    #undef K
+    #undef N
+    #undef NONE
+    };
+
+    if (ev->codepoint >= 32 && ev->codepoint <= 126 && !ev->ctrl && !ev->gui) {
+        uint32_t seq = pterm_ascii_to_plato[ev->codepoint];
+        if (seq != 0xFFFFFFFF) {
+            plato_keyboard_flush(state, term);
+            if (term) {
+                for (int i = 0; i < 4; i++) {
+                    uint8_t k = (seq >> (i * 8)) & 0xFF;
+                    if (k != 0xFF) {
+                        plato_protocol_send_key(term, k);
+                    }
+                }
+            }
+            return true;
+        }
     }
 
     return false;

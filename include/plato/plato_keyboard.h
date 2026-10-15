@@ -35,8 +35,16 @@ typedef struct {
 
 typedef void (*plato_feedback_callback_t)(const char *message, double duration_sec, void *user_data);
 
+typedef enum {
+    PLATO_ARROW_MODE_STANDARD = 0, /* PLATO Standard: SUPER, SUB, ERASE, TAB */
+    PLATO_ARROW_MODE_WASD,         /* WASD Gaming: Up=W, Down=S, Left=A, Right=D */
+    PLATO_ARROW_MODE_WASX          /* WASX Gaming (Avatar/Oubliette): Up=W, Down=X, Left=A, Right=D */
+} plato_arrow_mode_t;
+
 typedef struct {
     bool double_tap_enabled;
+    plato_arrow_mode_t arrow_mode; /* Modalità frecce direzionali */
+    bool arrows_wasd_mode;         /* Retrocompatibilità booleana */
     plato_special_key_t pending_key;
     double pending_start_time;
     double pending_expiry;
@@ -46,6 +54,13 @@ typedef struct {
 
 void plato_keyboard_state_init(plato_keyboard_state_t *state);
 void plato_keyboard_set_feedback_cb(plato_keyboard_state_t *state, plato_feedback_callback_t cb, void *user_data);
+void plato_keyboard_send_ascii(plato_terminal_t *term, uint8_t ch);
+void plato_keyboard_set_arrow_mode(plato_keyboard_state_t *state, plato_arrow_mode_t mode);
+plato_arrow_mode_t plato_keyboard_get_arrow_mode(const plato_keyboard_state_t *state);
+plato_arrow_mode_t plato_keyboard_cycle_arrow_mode(plato_keyboard_state_t *state);
+void plato_keyboard_set_wasd_mode(plato_keyboard_state_t *state, bool enabled);
+bool plato_keyboard_get_wasd_mode(const plato_keyboard_state_t *state);
+bool plato_keyboard_toggle_wasd_mode(plato_keyboard_state_t *state);
 void plato_keyboard_poll(plato_keyboard_state_t *state, plato_terminal_t *term, double now_sec);
 void plato_keyboard_flush(plato_keyboard_state_t *state, plato_terminal_t *term);
 

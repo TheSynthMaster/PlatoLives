@@ -234,7 +234,7 @@ void linux_menu_destroy(linux_menu_context_t *ctx) {
 /* Costruzione Dinamica Menu Principali */
 static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, gui_top_menu_t *top) {
     int x_cur = 12;
-    int count = 7;
+    int count = 8;
 
     /* 1. Connection */
     top[0].title = "Connection";
@@ -308,21 +308,35 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"CRT Persistence", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_CRT_DECAY, false, false, !isCRT};
         it[n++] = (gui_menu_item_t){"CRT Distortion", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_CRT_DIST, false, false, !isCRT};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
-        it[n++] = (gui_menu_item_t){"Keyboard Reference", "Ctrl+K", ACT_VIEW_KEYBOARD_REF, TYPE_ITEM, 0, false, false, false};
-        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Full Screen", "F11", ACT_VIEW_FULLSCREEN, TYPE_ITEM, 0, false, ctx->fullscreen, false};
         it[n++] = (gui_menu_item_t){"Show Performance HUD (FPS/CPU)", "F12", ACT_VIEW_FPS_HUD, TYPE_ITEM, 0, false, linux_hud_is_open(), false};
         it[n++] = (gui_menu_item_t){"Hide Menu Bar", "Ctrl+Shift+M", ACT_VIEW_HIDE_MENU_BAR, TYPE_ITEM, 0, true, ctx->hide_menu_bar, false};
         top[2].item_count = n;
     }
 
-    /* 4. Edit */
-    top[3].title = "Edit";
+    /* 4. Keyboard (Posizione tra View ed Edit) */
+    top[3].title = "Keyboard";
     top[3].x = x_cur;
     top[3].width = get_text_width(top[3].title) + 18;
     x_cur += top[3].width + 4;
     {
         gui_menu_item_t *it = top[3].items;
+        int n = 0;
+        it[n++] = (gui_menu_item_t){"Arrow Keys: WASD Mode", NULL, ACT_TOOLS_WASD_MODE, TYPE_ITEM, 0, false, ctx->arrow_mode == PLATO_ARROW_MODE_WASD, false};
+        it[n++] = (gui_menu_item_t){"Arrow Keys: WASX / Avatar Mode", NULL, ACT_TOOLS_WASX_MODE, TYPE_ITEM, 0, false, ctx->arrow_mode == PLATO_ARROW_MODE_WASX, false};
+        it[n++] = (gui_menu_item_t){"Cycle Arrow Mode (WASD / WASX / Standard)", "Ctrl+Shift+G", ACT_TOOLS_CYCLE_ARROW_MODE, TYPE_ITEM, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Keyboard Reference", "Ctrl+K", ACT_VIEW_KEYBOARD_REF, TYPE_ITEM, 0, false, ctx->show_keyref, false};
+        top[3].item_count = n;
+    }
+
+    /* 5. Edit */
+    top[4].title = "Edit";
+    top[4].x = x_cur;
+    top[4].width = get_text_width(top[4].title) + 18;
+    x_cur += top[4].width + 4;
+    {
+        gui_menu_item_t *it = top[4].items;
         int n = 0;
         it[n++] = (gui_menu_item_t){"Copy All Text Verbatim", "Ctrl+C", ACT_EDIT_COPY_VERBATIM, TYPE_ITEM, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Copy All Text Compact", "Ctrl+Shift+C", ACT_EDIT_COPY_COMPACT, TYPE_ITEM, 0, false, false, false};
@@ -331,46 +345,46 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Paste Text", "Ctrl+V", ACT_EDIT_PASTE, TYPE_ITEM, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Cancel Paste", "Ctrl+.", ACT_EDIT_CANCEL_PASTE, TYPE_ITEM, 0, false, false, false};
-        top[3].item_count = n;
-    }
-
-    /* 5. Micro Tutor */
-    top[4].title = "Micro Tutor";
-    top[4].x = x_cur;
-    top[4].width = get_text_width(top[4].title) + 18;
-    x_cur += top[4].width + 4;
-    {
-        gui_menu_item_t *it = top[4].items;
-        int n = 0;
-        it[n++] = (gui_menu_item_t){"Load and Boot from MTE...", NULL, ACT_MT_BOOT_MTE, TYPE_ITEM, 0, false, false, false};
-        it[n++] = (gui_menu_item_t){"Enable Z80 Diagnostic Log", NULL, ACT_MT_TOGGLE_LOG, TYPE_ITEM, 0, false, ctx->z80_log, false};
         top[4].item_count = n;
     }
 
-    /* 6. Tools */
-    top[5].title = "Tools";
+    /* 6. Micro Tutor */
+    top[5].title = "Micro Tutor";
     top[5].x = x_cur;
     top[5].width = get_text_width(top[5].title) + 18;
     x_cur += top[5].width + 4;
     {
         gui_menu_item_t *it = top[5].items;
         int n = 0;
-        it[n++] = (gui_menu_item_t){"Show Live Text Buffer", "Ctrl+Shift+T", ACT_TOOLS_LIVE_TEXT, TYPE_ITEM, 0, false, false, false};
-        it[n++] = (gui_menu_item_t){"Enable Diagnostic Log", NULL, ACT_TOOLS_DIAG_LOG, TYPE_ITEM, 0, false, ctx->diag_log, false};
-        it[n++] = (gui_menu_item_t){"Enable Renderer Performance Log", NULL, ACT_TOOLS_RENDERER_LOG, TYPE_ITEM, 0, false, ctx->renderer_log, false};
+        it[n++] = (gui_menu_item_t){"Load and Boot from MTE...", NULL, ACT_MT_BOOT_MTE, TYPE_ITEM, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Enable Z80 Diagnostic Log", NULL, ACT_MT_TOGGLE_LOG, TYPE_ITEM, 0, false, ctx->z80_log, false};
         top[5].item_count = n;
     }
 
-    /* 7. Help */
-    top[6].title = "Help";
+    /* 7. Tools */
+    top[6].title = "Tools";
     top[6].x = x_cur;
     top[6].width = get_text_width(top[6].title) + 18;
     x_cur += top[6].width + 4;
     {
         gui_menu_item_t *it = top[6].items;
         int n = 0;
-        it[n++] = (gui_menu_item_t){"About PlatoLives...", NULL, ACT_HELP_ABOUT, TYPE_ITEM, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Show Live Text Buffer", "Ctrl+Shift+T", ACT_TOOLS_LIVE_TEXT, TYPE_ITEM, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Enable Diagnostic Log", NULL, ACT_TOOLS_DIAG_LOG, TYPE_ITEM, 0, false, ctx->diag_log, false};
+        it[n++] = (gui_menu_item_t){"Enable Renderer Performance Log", NULL, ACT_TOOLS_RENDERER_LOG, TYPE_ITEM, 0, false, ctx->renderer_log, false};
         top[6].item_count = n;
+    }
+
+    /* 8. Help */
+    top[7].title = "Help";
+    top[7].x = x_cur;
+    top[7].width = get_text_width(top[7].title) + 18;
+    x_cur += top[7].width + 4;
+    {
+        gui_menu_item_t *it = top[7].items;
+        int n = 0;
+        it[n++] = (gui_menu_item_t){"About PlatoLives...", NULL, ACT_HELP_ABOUT, TYPE_ITEM, 0, false, false, false};
+        top[7].item_count = n;
     }
 
     return count;
@@ -437,8 +451,28 @@ static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, in
 #define SUB_POPUP_WIDTH  250
 #define ITEM_HEIGHT      24
 
+/* Calcolo Dinamico Larghezza Popup Principale */
+static int get_main_popup_width(const gui_top_menu_t *top) {
+    int max_w = MAIN_POPUP_WIDTH;
+    if (!top) return max_w;
+    for (int j = 0; j < top->item_count; ++j) {
+        const gui_menu_item_t *it = &top->items[j];
+        if (it->type == TYPE_SEPARATOR) continue;
+        int text_w = get_text_width(it->label);
+        int sc_w = 0;
+        if (it->type == TYPE_SUBMENU) {
+            sc_w = 20;
+        } else if (it->shortcut) {
+            sc_w = get_text_width(it->shortcut) + 24;
+        }
+        int req_w = 26 + text_w + 24 + sc_w + 16;
+        if (req_w > max_w) max_w = req_w;
+    }
+    return max_w;
+}
+
 menu_action_code_t linux_menu_handle_mouse(linux_menu_context_t *ctx, const plato_profile_t *profile, int mouse_x, int mouse_y, bool clicked) {
-    gui_top_menu_t top[7];
+    gui_top_menu_t top[8];
     plato_profile_t dummy;
     memset(&dummy, 0, sizeof(dummy));
     const plato_profile_t *cur_p = profile ? profile : &dummy;
@@ -496,7 +530,7 @@ menu_action_code_t linux_menu_handle_mouse(linux_menu_context_t *ctx, const plat
         gui_top_menu_t *cur_top = &top[ctx->active_top_menu];
         int px = cur_top->x;
         int py = MENU_BAR_HEIGHT + DROPDOWN_GAP;
-        int pw = MAIN_POPUP_WIDTH;
+        int pw = get_main_popup_width(cur_top);
         int ph = cur_top->item_count * ITEM_HEIGHT;
 
         /* Controllo se siamo nel sottomenu secondario */
@@ -576,7 +610,7 @@ void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t 
         memset(ctx->ui_surface, 0, req_size * sizeof(uint32_t));
     }
 
-    gui_top_menu_t top[7];
+    gui_top_menu_t top[8];
     int top_count = build_top_menus(ctx, p, top);
 
     /* 1. Disegno Sfondo Barra Menu Superiore */
@@ -598,7 +632,7 @@ void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t 
         gui_top_menu_t *cur_top = &top[ctx->active_top_menu];
         int px = cur_top->x;
         int py = MENU_BAR_HEIGHT + DROPDOWN_GAP;
-        int pw = MAIN_POPUP_WIDTH;
+        int pw = get_main_popup_width(cur_top);
         int ph = cur_top->item_count * ITEM_HEIGHT;
 
         /* Sfondo con bordi */
