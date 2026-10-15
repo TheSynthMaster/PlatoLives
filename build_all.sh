@@ -7,6 +7,20 @@ echo "================================================================="
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
+
+# Sincronizzazione automatica SSOT: genera include/plato/plato_version.h da VERSION
+VERSION_STR=$(cat "$ROOT_DIR/VERSION" | tr -d ' \n\r')
+cat << EOF > "$ROOT_DIR/include/plato/plato_version.h"
+/* Single Source of Truth - PlatoLives Version Header */
+/* Automatically generated from VERSION file - DO NOT EDIT MANUALLY */
+#ifndef PLATO_VERSION_H
+#define PLATO_VERSION_H
+
+#define PLATO_VERSION_STRING "${VERSION_STR}"
+#define PLATO_VERSION_WSTRING L"${VERSION_STR}"
+
+#endif /* PLATO_VERSION_H */
+EOF
 mkdir -p build/stubs_arm64 build/stubs_x86_64
 
 SDL2_INC="/opt/homebrew/include"

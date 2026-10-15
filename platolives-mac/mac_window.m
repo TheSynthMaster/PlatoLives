@@ -2200,11 +2200,11 @@ static void plato_mac_beep(void *context) {
 
 - (void)showAbout:(id)sender {
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    if (!version) version = @PLATO_VERSION_STRING;
+    if (!version || [version length] == 0) version = @PLATO_VERSION_STRING;
     NSDictionary *options = @{
         NSAboutPanelOptionApplicationName: @"PlatoLives",
-        NSAboutPanelOptionApplicationVersion: version,
-        NSAboutPanelOptionVersion: @"Build 1",
+        NSAboutPanelOptionApplicationVersion: [NSString stringWithFormat:@"Version %@", version],
+        NSAboutPanelOptionVersion: [NSString stringWithFormat:@"v%@", version],
         NSAboutPanelOptionCredits: [[NSAttributedString alloc] initWithString:
             @"A modern, native PLATO terminal emulator for macOS.\n\nCreated by Fabio Montarsolo\nfabio.montarsolo@gmail.com\n\n"
              "Open-source software. Keeping the PLATO experience alive on modern hardware."]
