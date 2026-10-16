@@ -292,6 +292,12 @@ bool plato_keymap_profile_add_binding(plato_keymap_profile_t *prof, const plato_
     return true;
 }
 
+bool plato_keymap_profile_set_binding(plato_keymap_profile_t *prof, int index, const plato_key_binding_t *binding) {
+    if (!prof || !binding || prof->is_builtin || index < 0 || index >= prof->binding_count) return false;
+    prof->bindings[index] = *binding;
+    return true;
+}
+
 bool plato_keymap_profile_remove_binding(plato_keymap_profile_t *prof, int binding_index) {
     if (!prof || prof->is_builtin || binding_index < 0 || binding_index >= prof->binding_count) return false;
     for (int i = binding_index; i < prof->binding_count - 1; i++) {

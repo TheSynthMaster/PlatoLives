@@ -14,7 +14,7 @@
 @property (nonatomic, strong) NSButton *deleteBtn;
 
 @property (nonatomic, strong) NSButton *recordKeyBtn;
-@property (nonatomic, strong) NSButton *addBindingBtn;
+@property (nonatomic, strong) NSButton *editBindingBtn;
 @property (nonatomic, strong) NSButton *removeBindingBtn;
 @property (nonatomic, strong) NSButton *setActiveBtn;
 
@@ -235,6 +235,8 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
 
     [_bindingsTable setDataSource:self];
     [_bindingsTable setDelegate:self];
+    [_bindingsTable setTarget:self];
+    [_bindingsTable setDoubleAction:@selector(onTableDoubleClicked:)];
     [bindScroll setDocumentView:_bindingsTable];
     [content addSubview:bindScroll];
 
@@ -245,12 +247,12 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     [_recordKeyBtn setAction:@selector(onRecordKey:)];
     [content addSubview:_recordKeyBtn];
 
-    _addBindingBtn = [[NSButton alloc] initWithFrame:NSMakeRect(490, 72, 120, 30)];
-    [_addBindingBtn setBezelStyle:NSBezelStyleRounded];
-    [_addBindingBtn setTitle:@"+ Add Binding"];
-    [_addBindingBtn setTarget:self];
-    [_addBindingBtn setAction:@selector(onAddBinding:)];
-    [content addSubview:_addBindingBtn];
+    _editBindingBtn = [[NSButton alloc] initWithFrame:NSMakeRect(490, 72, 120, 30)];
+    [_editBindingBtn setBezelStyle:NSBezelStyleRounded];
+    [_editBindingBtn setTitle:@"✎ Edit Binding..."];
+    [_editBindingBtn setTarget:self];
+    [_editBindingBtn setAction:@selector(onEditBinding:)];
+    [content addSubview:_editBindingBtn];
 
     _removeBindingBtn = [[NSButton alloc] initWithFrame:NSMakeRect(615, 72, 140, 30)];
     [_removeBindingBtn setBezelStyle:NSBezelStyleRounded];
@@ -310,8 +312,10 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     [_renameBtn setEnabled:!isBuiltin];
     [_deleteBtn setEnabled:!isBuiltin];
     [_recordKeyBtn setEnabled:!isBuiltin];
-    [_addBindingBtn setEnabled:!isBuiltin];
-    [_removeBindingBtn setEnabled:!isBuiltin];
+    NSInteger selRow = [_bindingsTable selectedRow];
+    BOOL canEditBind = (!isBuiltin && selRow >= 0 && selRow < p->binding_count);
+    [_editBindingBtn setEnabled:canEditBind];
+    [_removeBindingBtn setEnabled:canEditBind];
 
     BOOL isActive = (_selectedProfileIndex == _keymapManager->active_profile_index);
     [_setActiveBtn setEnabled:!isActive];
@@ -401,7 +405,12 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         }
 
         _isRecordingKey = NO;
-        [self showUniversalActionPickerForVKey:vk codepoint:cp modifiers:mods defaultChar:chars];
+        plato_key_binding_t newB;
+        memset(&newB, 0, sizeof(newB));
+        newB.vkey = vk;
+        newB.codepoint = cp;
+        newB.modifiers = mods;
+        [self showUniversalActionPickerForBinding:&newB isEditing:NO editIndex:-1];
         return;
     }
     [super keyDown:event];
@@ -410,15 +419,12 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
 // =========================================================
 // UNIVERSAL ACTION PICKER: Tasti PLATO o Qualsiasi Carattere
 // =========================================================
-- (void)showUniversalActionPickerForVKey:(uint16_t)vk codepoint:(uint32_t)cp modifiers:(uint8_t)mods defaultChar:(NSString *)defChar {
-    plato_key_binding_t b;
-    memset(&b, 0, sizeof(b));
-    b.vkey = vk;
-    b.codepoint = cp;
-    b.modifiers = mods;
+- (void)showUniversalActionPickerForBinding:(const plato_key_binding_t *)initBind isEditing:(BOOL)isEditing editIndex:(int)editIndex {
+    if (!initBind) return;
+    plato_key_binding_t b = *initBind;
 
     NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:@"Assign Target Action"];
+    [alert setMessageText:isEditing ? @"Edit Target Action" : @"Assign Target Action"];
     [alert setInformativeText:[NSString stringWithFormat:@"Physical Key: %@\nChoose what this key will send:", formatPhysicalKey(&b)]];
 
     // Accessory View interattiva
@@ -430,7 +436,7 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
                                                                          target:nil
                                                                          action:nil];
     [modeSeg setFrame:NSMakeRect(10, 105, 340, 26)];
-    [modeSeg setSelectedSegment:(vk != 0 && (vk < PLATO_VKEY_NUMPAD0 || vk > PLATO_VKEY_NUMPAD9)) ? 1 : 0];
+    [modeSeg setSelectedSegment:(b.type == PLATO_BIND_ACTION_PLATO_KEY || (b.type == 0 && b.vkey != 0 && (b.vkey < PLATO_VKEY_NUMPAD0 || b.vkey > PLATO_VKEY_NUMPAD9))) ? 1 : 0];
     [acc addSubview:modeSeg];
 
     // 2. Controlli Carattere Libero (NSTextField)
@@ -441,8 +447,13 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     NSTextField *charInput = [[NSTextField alloc] initWithFrame:NSMakeRect(245, 73, 50, 24)];
     [charInput setAlignment:NSTextAlignmentCenter];
     [charInput setFont:[NSFont boldSystemFontOfSize:15]];
-    NSString *initChar = (defChar && [defChar length] > 0) ? defChar : @"";
-    [charInput setStringValue:initChar];
+    if (b.type == PLATO_BIND_ACTION_RAW_BYTE && b.target.raw_byte >= 32) {
+        [charInput setStringValue:[NSString stringWithFormat:@"%c", (char)b.target.raw_byte]];
+    } else if (b.codepoint >= 32 && b.codepoint <= 126) {
+        [charInput setStringValue:[NSString stringWithFormat:@"%c", (char)b.codepoint]];
+    } else {
+        [charInput setStringValue:@""];
+    }
     [acc addSubview:charInput];
 
     // 3. Controlli Tasto Speciale PLATO (NSPopUpButton)
@@ -457,15 +468,31 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         @"ERASE (Left)", @"ACCESS / TAB", @"ANS", @"TERM", @"SQUARE"
     ];
     [platoPopup addItemsWithTitles:platoKeyNames];
+    static const plato_special_key_t pkeys[] = {
+        PLATO_KEY_NEXT, PLATO_KEY_BACK, PLATO_KEY_HELP, PLATO_KEY_LAB,
+        PLATO_KEY_DATA, PLATO_KEY_STOP, PLATO_KEY_EDIT, PLATO_KEY_COPY,
+        PLATO_KEY_MICRO, PLATO_KEY_FONT, PLATO_KEY_SUPER, PLATO_KEY_SUB,
+        PLATO_KEY_ERASE, PLATO_KEY_ACCESS, PLATO_KEY_ANS, PLATO_KEY_TERM, PLATO_KEY_SQUARE
+    };
+    NSInteger selPlato = 0;
+    if (b.type == PLATO_BIND_ACTION_PLATO_KEY) {
+        for (int i = 0; i < 17; i++) {
+            if (pkeys[i] == b.target.plato_key) { selPlato = i; break; }
+        }
+    }
+    [platoPopup selectItemAtIndex:selPlato];
     [acc addSubview:platoPopup];
 
     // 4. Descrizione Opzionale
     NSTextField *descInput = [[NSTextField alloc] initWithFrame:NSMakeRect(10, 8, 335, 22)];
     [descInput setPlaceholderString:@"Optional description (e.g. Move Forward, Fire)"];
+    if (strlen(b.label) > 0) {
+        [descInput setStringValue:[NSString stringWithUTF8String:b.label]];
+    }
     [acc addSubview:descInput];
 
     [alert setAccessoryView:acc];
-    [alert addButtonWithTitle:@"Assign"];
+    [alert addButtonWithTitle:isEditing ? @"Save" : @"Assign"];
     [alert addButtonWithTitle:@"Cancel"];
 
     if ([alert runModal] == NSAlertFirstButtonReturn) {
@@ -487,12 +514,6 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         } else {
             // Tasto Funzione PLATO
             b.type = PLATO_BIND_ACTION_PLATO_KEY;
-            static const plato_special_key_t pkeys[] = {
-                PLATO_KEY_NEXT, PLATO_KEY_BACK, PLATO_KEY_HELP, PLATO_KEY_LAB,
-                PLATO_KEY_DATA, PLATO_KEY_STOP, PLATO_KEY_EDIT, PLATO_KEY_COPY,
-                PLATO_KEY_MICRO, PLATO_KEY_FONT, PLATO_KEY_SUPER, PLATO_KEY_SUB,
-                PLATO_KEY_ERASE, PLATO_KEY_ACCESS, PLATO_KEY_ANS, PLATO_KEY_TERM, PLATO_KEY_SQUARE
-            };
             NSInteger sel = [platoPopup indexOfSelectedItem];
             if (sel >= 0 && sel < 17) {
                 b.target.plato_key = (uint16_t)pkeys[sel];
@@ -507,7 +528,11 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         }
 
         plato_keymap_profile_t *p = &_keymapManager->profiles[_selectedProfileIndex];
-        plato_keymap_profile_add_binding(p, &b);
+        if (isEditing && editIndex >= 0 && editIndex < p->binding_count) {
+            plato_keymap_profile_set_binding(p, editIndex, &b);
+        } else {
+            plato_keymap_profile_add_binding(p, &b);
+        }
         plato_keymap_save_profile(p);
         [self updateSelectedProfileView];
 
@@ -625,8 +650,14 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     }
 }
 
-- (void)onAddBinding:(id)sender {
-    [self onRecordKey:sender];
+- (void)onEditBinding:(id)sender {
+    if (!_keymapManager || _selectedProfileIndex < 0 || _selectedProfileIndex >= _keymapManager->profile_count) return;
+    plato_keymap_profile_t *p = &_keymapManager->profiles[_selectedProfileIndex];
+    if (p->is_builtin) return;
+    NSInteger selRow = [_bindingsTable selectedRow];
+    if (selRow < 0 || selRow >= p->binding_count) return;
+
+    [self showUniversalActionPickerForBinding:&p->bindings[selRow] isEditing:YES editIndex:(int)selRow];
 }
 
 - (void)onRemoveBinding:(id)sender {
@@ -717,6 +748,20 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
             _selectedProfileIndex = row;
             [self updateSelectedProfileView];
         }
+    } else if ([notification object] == _bindingsTable) {
+        if (_selectedProfileIndex >= 0 && _selectedProfileIndex < _keymapManager->profile_count) {
+            BOOL isBuiltin = _keymapManager->profiles[_selectedProfileIndex].is_builtin;
+            NSInteger selRow = [_bindingsTable selectedRow];
+            BOOL canEdit = (!isBuiltin && selRow >= 0 && selRow < _keymapManager->profiles[_selectedProfileIndex].binding_count);
+            [_editBindingBtn setEnabled:canEdit];
+            [_removeBindingBtn setEnabled:canEdit];
+        }
+    }
+}
+
+- (void)onTableDoubleClicked:(id)sender {
+    if (sender == _bindingsTable) {
+        [self onEditBinding:sender];
     }
 }
 

@@ -37,6 +37,9 @@ static int  g_rename_field = 0; /* 0 = Name, 1 = Description */
 static char g_char_buf[8] = {0};
 static int g_pick_mode = 0; /* 0 = Character, 1 = PLATO Key */
 static int g_pick_plato_sel = 0;
+static char g_label_buf[32] = {0};
+static bool g_is_editing_bind = false;
+static int  g_pick_field = 0; /* 0 = Char/Key, 1 = Description/Label */
 
 static void k_init_font(void) {
     if (g_kfont_ready || !g_kren) return;
@@ -266,47 +269,88 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
             }
             return;
         } else if (g_kstate == KSTATE_PICK_ACTION) {
+            int mx = K_WIN_W/2 - 260;
+            int my = K_WIN_H/2 - 190;
+
             // Modal Tabs: [ Custom Character ] vs [ PLATO Function Key ]
-            if (k_pt_in(x, y, K_WIN_W/2 - 200, K_WIN_H/2 - 130, 195, 26)) g_pick_mode = 0;
-            if (k_pt_in(x, y, K_WIN_W/2 + 5,   K_WIN_H/2 - 130, 195, 26)) g_pick_mode = 1;
+            if (k_pt_in(x, y, mx + 60, my + 40, 195, 26)) { g_pick_mode = 0; g_pick_field = 0; }
+            if (k_pt_in(x, y, mx + 265, my + 40, 195, 26)) { g_pick_mode = 1; }
 
             if (g_pick_mode == 1) {
                 // Selezione Tasto PLATO
                 for (int i = 0; i < 17; i++) {
-                    int bx = K_WIN_W/2 - 210 + (i % 3) * 142;
-                    int by = K_WIN_H/2 - 90 + (i / 3) * 32;
-                    if (k_pt_in(x, y, bx, by, 136, 26)) {
-                        static const plato_special_key_t pvals[] = {
-                            PLATO_KEY_NEXT, PLATO_KEY_BACK, PLATO_KEY_HELP, PLATO_KEY_LAB, PLATO_KEY_DATA, PLATO_KEY_STOP,
-                            PLATO_KEY_EDIT, PLATO_KEY_COPY, PLATO_KEY_MICRO, PLATO_KEY_FONT, PLATO_KEY_SUPER, PLATO_KEY_SUB,
-                            PLATO_KEY_ERASE, PLATO_KEY_ACCESS, PLATO_KEY_ANS, PLATO_KEY_TERM, PLATO_KEY_SQUARE
-                        };
-                        static const char* pkeys[] = {
+                    int bx = mx + 47 + (i % 3) * 144;
+                    int by = my + 75 + (i / 3) * 28;
+                    if (k_pt_in(x, y, bx, by, 138, 24)) {
+                        g_pick_plato_sel = i;
+                        static const char* pnames[] = {
                             "NEXT", "BACK", "HELP", "LAB", "DATA", "STOP", "EDIT", "COPY",
                             "MICRO", "FONT", "SUPER", "SUB", "ERASE", "ACCESS/TAB", "ANS", "TERM", "SQUARE"
                         };
-                        g_tmp_bind.type = PLATO_BIND_ACTION_PLATO_KEY;
-                        g_tmp_bind.target.plato_key = pvals[i];
-                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "PLATO: %s", pkeys[i]);
-                        plato_keymap_profile_add_binding(&g_kmgr->profiles[g_sel_prof], &g_tmp_bind);
-                        plato_keymap_save_profile(&g_kmgr->profiles[g_sel_prof]);
-                        g_kstate = KSTATE_NORMAL;
-                        return;
+                        if (strlen(g_label_buf) == 0) {
+                            snprintf(g_label_buf, sizeof(g_label_buf), "PLATO: %s", pnames[i]);
+                        }
                     }
                 }
+                // Click su box Descrizione
+                if (k_pt_in(x, y, mx + 47, my + 265, 426, 28)) g_pick_field = 1;
+
+                // Click su Save / Assign
+                if (k_pt_in(x, y, mx + 150, my + 310, 100, 30)) {
+                    static const plato_special_key_t pvals[] = {
+                        PLATO_KEY_NEXT, PLATO_KEY_BACK, PLATO_KEY_HELP, PLATO_KEY_LAB, PLATO_KEY_DATA, PLATO_KEY_STOP,
+                        PLATO_KEY_EDIT, PLATO_KEY_COPY, PLATO_KEY_MICRO, PLATO_KEY_FONT, PLATO_KEY_SUPER, PLATO_KEY_SUB,
+                        PLATO_KEY_ERASE, PLATO_KEY_ACCESS, PLATO_KEY_ANS, PLATO_KEY_TERM, PLATO_KEY_SQUARE
+                    };
+                    static const char* pnames[] = {
+                        "NEXT", "BACK", "HELP", "LAB", "DATA", "STOP", "EDIT", "COPY",
+                        "MICRO", "FONT", "SUPER", "SUB", "ERASE", "ACCESS/TAB", "ANS", "TERM", "SQUARE"
+                    };
+                    g_tmp_bind.type = PLATO_BIND_ACTION_PLATO_KEY;
+                    g_tmp_bind.target.plato_key = pvals[g_pick_plato_sel];
+                    if (strlen(g_label_buf) > 0) {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "%s", g_label_buf);
+                    } else {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "PLATO: %s", pnames[g_pick_plato_sel]);
+                    }
+                    if (g_is_editing_bind && g_sel_bind >= 0) {
+                        plato_keymap_profile_set_binding(&g_kmgr->profiles[g_sel_prof], g_sel_bind, &g_tmp_bind);
+                    } else {
+                        plato_keymap_profile_add_binding(&g_kmgr->profiles[g_sel_prof], &g_tmp_bind);
+                    }
+                    plato_keymap_save_profile(&g_kmgr->profiles[g_sel_prof]);
+                    g_kstate = KSTATE_NORMAL;
+                    return;
+                }
             } else {
-                // Assegna carattere digitato
-                if (k_pt_in(x, y, K_WIN_W/2 - 70, K_WIN_H/2 + 30, 140, 30) && strlen(g_char_buf) > 0) {
+                // Click su box Carattere
+                if (k_pt_in(x, y, mx + 230, my + 120, 60, 30)) g_pick_field = 0;
+                // Click su box Descrizione
+                if (k_pt_in(x, y, mx + 60, my + 185, 400, 28)) g_pick_field = 1;
+
+                // Click su Save / Assign
+                if (k_pt_in(x, y, mx + 150, my + 235, 100, 30) && strlen(g_char_buf) > 0) {
                     g_tmp_bind.type = PLATO_BIND_ACTION_RAW_BYTE;
                     g_tmp_bind.target.raw_byte = g_char_buf[0];
-                    snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "Type '%c'", g_char_buf[0]);
-                    plato_keymap_profile_add_binding(&g_kmgr->profiles[g_sel_prof], &g_tmp_bind);
+                    if (strlen(g_label_buf) > 0) {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "%s", g_label_buf);
+                    } else {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "Type '%c'", g_char_buf[0]);
+                    }
+                    if (g_is_editing_bind && g_sel_bind >= 0) {
+                        plato_keymap_profile_set_binding(&g_kmgr->profiles[g_sel_prof], g_sel_bind, &g_tmp_bind);
+                    } else {
+                        plato_keymap_profile_add_binding(&g_kmgr->profiles[g_sel_prof], &g_tmp_bind);
+                    }
                     plato_keymap_save_profile(&g_kmgr->profiles[g_sel_prof]);
                     g_kstate = KSTATE_NORMAL;
                     return;
                 }
             }
-            if (k_pt_in(x, y, K_WIN_W/2 - 50, K_WIN_H/2 + 130, 100, 28)) g_kstate = KSTATE_NORMAL; // Cancel
+
+            // Pulsante Cancel (comune ad entrambi i mode)
+            int cancel_y = (g_pick_mode == 1) ? (my + 310) : (my + 235);
+            if (k_pt_in(x, y, mx + 270, cancel_y, 100, 30)) g_kstate = KSTATE_NORMAL;
         } else if (g_kstate == KSTATE_NORMAL) {
             // Selezione Profilo a sinistra (y: 55..550)
             if (k_pt_in(x, y, 20, 55, 250, 495)) {
@@ -344,10 +388,36 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
 
             // Pulsanti Sotto Tabella Mapping (y: 528..558)
             if (k_pt_in(x, y, 290, 528, 185, 30) && !g_kmgr->profiles[g_sel_prof].is_builtin) {
+                g_is_editing_bind = false;
+                g_label_buf[0] = 0;
+                g_char_buf[0] = 0;
+                g_pick_field = 0;
                 g_kstate = KSTATE_RECORD_KEY;
             }
-            if (k_pt_in(x, y, 485, 528, 120, 30) && !g_kmgr->profiles[g_sel_prof].is_builtin) {
-                g_kstate = KSTATE_RECORD_KEY;
+            if (k_pt_in(x, y, 485, 528, 120, 30)) {
+                if (!g_kmgr->profiles[g_sel_prof].is_builtin && g_sel_bind >= 0 && g_sel_bind < g_kmgr->profiles[g_sel_prof].binding_count) {
+                    g_is_editing_bind = true;
+                    g_tmp_bind = g_kmgr->profiles[g_sel_prof].bindings[g_sel_bind];
+                    snprintf(g_label_buf, sizeof(g_label_buf), "%s", g_tmp_bind.label);
+                    if (g_tmp_bind.type == PLATO_BIND_ACTION_RAW_BYTE) {
+                        g_pick_mode = 0;
+                        g_char_buf[0] = (char)g_tmp_bind.target.raw_byte;
+                        g_char_buf[1] = 0;
+                    } else {
+                        g_pick_mode = 1;
+                        static const plato_special_key_t pvals_find[] = {
+                            PLATO_KEY_NEXT, PLATO_KEY_BACK, PLATO_KEY_HELP, PLATO_KEY_LAB, PLATO_KEY_DATA, PLATO_KEY_STOP,
+                            PLATO_KEY_EDIT, PLATO_KEY_COPY, PLATO_KEY_MICRO, PLATO_KEY_FONT, PLATO_KEY_SUPER, PLATO_KEY_SUB,
+                            PLATO_KEY_ERASE, PLATO_KEY_ACCESS, PLATO_KEY_ANS, PLATO_KEY_TERM, PLATO_KEY_SQUARE
+                        };
+                        g_pick_plato_sel = 0;
+                        for (int pi = 0; pi < 17; pi++) {
+                            if (pvals_find[pi] == g_tmp_bind.target.plato_key) { g_pick_plato_sel = pi; break; }
+                        }
+                    }
+                    g_pick_field = 0;
+                    g_kstate = KSTATE_PICK_ACTION;
+                }
             }
             if (k_pt_in(x, y, 615, 528, 140, 30) && g_sel_bind >= 0 && !g_kmgr->profiles[g_sel_prof].is_builtin) {
                 plato_keymap_profile_remove_binding(&g_kmgr->profiles[g_sel_prof], g_sel_bind);
@@ -383,16 +453,55 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
                 if (l > 0) buf[l-1] = '\0';
             }
         } else if (g_kstate == KSTATE_PICK_ACTION) {
-            if (g_pick_mode == 0) {
-                if (ev->key.keysym.sym == SDLK_RETURN && strlen(g_char_buf) > 0) {
+            if (ev->key.keysym.sym == SDLK_TAB) {
+                g_pick_field = 1 - g_pick_field;
+            } else if (ev->key.keysym.sym == SDLK_BACKSPACE) {
+                if (g_pick_field == 1) {
+                    size_t l = strlen(g_label_buf);
+                    if (l > 0) g_label_buf[l-1] = '\0';
+                } else if (g_pick_mode == 0) {
+                    g_char_buf[0] = '\0';
+                }
+            } else if (ev->key.keysym.sym == SDLK_RETURN) {
+                if (g_pick_mode == 0 && strlen(g_char_buf) > 0) {
                     g_tmp_bind.type = PLATO_BIND_ACTION_RAW_BYTE;
                     g_tmp_bind.target.raw_byte = g_char_buf[0];
-                    snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "Type '%c'", g_char_buf[0]);
-                    plato_keymap_profile_add_binding(&g_kmgr->profiles[g_sel_prof], &g_tmp_bind);
+                    if (strlen(g_label_buf) > 0) {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "%s", g_label_buf);
+                    } else {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "Type '%c'", g_char_buf[0]);
+                    }
+                    if (g_is_editing_bind && g_sel_bind >= 0) {
+                        plato_keymap_profile_set_binding(&g_kmgr->profiles[g_sel_prof], g_sel_bind, &g_tmp_bind);
+                    } else {
+                        plato_keymap_profile_add_binding(&g_kmgr->profiles[g_sel_prof], &g_tmp_bind);
+                    }
                     plato_keymap_save_profile(&g_kmgr->profiles[g_sel_prof]);
                     g_kstate = KSTATE_NORMAL;
-                } else if (ev->key.keysym.sym == SDLK_BACKSPACE) {
-                    g_char_buf[0] = '\0';
+                } else if (g_pick_mode == 1) {
+                    static const plato_special_key_t pvals[] = {
+                        PLATO_KEY_NEXT, PLATO_KEY_BACK, PLATO_KEY_HELP, PLATO_KEY_LAB, PLATO_KEY_DATA, PLATO_KEY_STOP,
+                        PLATO_KEY_EDIT, PLATO_KEY_COPY, PLATO_KEY_MICRO, PLATO_KEY_FONT, PLATO_KEY_SUPER, PLATO_KEY_SUB,
+                        PLATO_KEY_ERASE, PLATO_KEY_ACCESS, PLATO_KEY_ANS, PLATO_KEY_TERM, PLATO_KEY_SQUARE
+                    };
+                    static const char* pnames[] = {
+                        "NEXT", "BACK", "HELP", "LAB", "DATA", "STOP", "EDIT", "COPY",
+                        "MICRO", "FONT", "SUPER", "SUB", "ERASE", "ACCESS/TAB", "ANS", "TERM", "SQUARE"
+                    };
+                    g_tmp_bind.type = PLATO_BIND_ACTION_PLATO_KEY;
+                    g_tmp_bind.target.plato_key = pvals[g_pick_plato_sel];
+                    if (strlen(g_label_buf) > 0) {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "%s", g_label_buf);
+                    } else {
+                        snprintf(g_tmp_bind.label, sizeof(g_tmp_bind.label), "PLATO: %s", pnames[g_pick_plato_sel]);
+                    }
+                    if (g_is_editing_bind && g_sel_bind >= 0) {
+                        plato_keymap_profile_set_binding(&g_kmgr->profiles[g_sel_prof], g_sel_bind, &g_tmp_bind);
+                    } else {
+                        plato_keymap_profile_add_binding(&g_kmgr->profiles[g_sel_prof], &g_tmp_bind);
+                    }
+                    plato_keymap_save_profile(&g_kmgr->profiles[g_sel_prof]);
+                    g_kstate = KSTATE_NORMAL;
                 }
             }
         } else if (g_kstate == KSTATE_RECORD_KEY) {
@@ -436,6 +545,9 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
             g_tmp_bind.vkey = vk;
             g_tmp_bind.codepoint = cp;
             g_kstate = KSTATE_PICK_ACTION;
+            g_is_editing_bind = false;
+            g_label_buf[0] = '\0';
+            g_pick_field = 0;
             g_pick_mode = (vk != 0 && (vk < PLATO_VKEY_NUMPAD0 || vk > PLATO_VKEY_NUMPAD9)) ? 1 : 0;
             if (cp >= 32 && cp <= 126) {
                 g_char_buf[0] = (char)cp;
@@ -451,8 +563,14 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
             if (strlen(buf) + strlen(ev->text.text) < max_len) {
                 strcat(buf, ev->text.text);
             }
-        } else if (g_kstate == KSTATE_PICK_ACTION && g_pick_mode == 0) {
-            snprintf(g_char_buf, sizeof(g_char_buf), "%s", ev->text.text);
+        } else if (g_kstate == KSTATE_PICK_ACTION) {
+            if (g_pick_field == 1) {
+                if (strlen(g_label_buf) + strlen(ev->text.text) < sizeof(g_label_buf)) {
+                    strcat(g_label_buf, ev->text.text);
+                }
+            } else if (g_pick_mode == 0) {
+                snprintf(g_char_buf, sizeof(g_char_buf), "%s", ev->text.text);
+            }
         }
     } else if (ev->type == SDL_MOUSEWHEEL && ev->wheel.windowID == wid) {
         if (g_kstate == KSTATE_NORMAL) {
@@ -550,7 +668,7 @@ void linux_keymap_render(void) {
 
     // Pulsanti Sotto Tabella Mapping (Identici a macOS)
     k_draw_btn(290, 528, 185, 30, "◉ Press Key to Bind...", false);
-    k_draw_btn(485, 528, 120, 30, "+ Add Binding", false);
+    k_draw_btn(485, 528, 120, 30, "✎ Edit Binding", false);
     k_draw_btn(615, 528, 140, 30, "- Remove Binding", false);
 
     // =========================================================
@@ -602,12 +720,16 @@ void linux_keymap_render(void) {
         k_draw_text(K_WIN_W/2 - 215, K_WIN_H/2 - 10, "◉ PRESS ANY KEY OR COMBINATION", 255, 255, 255);
         k_draw_text(K_WIN_W/2 - 90,  K_WIN_H/2 + 20, "(Press Esc to Cancel)", 255, 215, 180);
     } else if (g_kstate == KSTATE_PICK_ACTION) {
-        k_draw_rect(K_WIN_W/2 - 260, K_WIN_H/2 - 170, 520, 340, 28, 16, 8, true, 255, 140, 20);
-        k_draw_text(K_WIN_W/2 - 240, K_WIN_H/2 - 145, "ASSIGN TARGET ACTION", 255, 110, 0);
+        int mx = K_WIN_W/2 - 260;
+        int my = K_WIN_H/2 - 190;
+        int mh = (g_pick_mode == 1) ? 360 : 285;
+
+        k_draw_rect(mx, my, 520, mh, 28, 16, 8, true, 255, 140, 20);
+        k_draw_text(mx + 20, my + 25, g_is_editing_bind ? "EDIT TARGET ACTION" : "ASSIGN TARGET ACTION", 255, 110, 0);
 
         // Tabs
-        k_draw_btn(K_WIN_W/2 - 200, K_WIN_H/2 - 130, 195, 26, "Custom Character", g_pick_mode == 0);
-        k_draw_btn(K_WIN_W/2 + 5,   K_WIN_H/2 - 130, 195, 26, "PLATO Function Key", g_pick_mode == 1);
+        k_draw_btn(mx + 60, my + 40, 195, 26, "Custom Character", g_pick_mode == 0);
+        k_draw_btn(mx + 265, my + 40, 195, 26, "PLATO Function Key", g_pick_mode == 1);
 
         if (g_pick_mode == 1) {
             const char* pkeys[] = {
@@ -615,22 +737,37 @@ void linux_keymap_render(void) {
                 "MICRO", "FONT", "SUPER", "SUB", "ERASE", "TAB", "ANS", "TERM", "SQUARE"
             };
             for (int i = 0; i < 17; i++) {
-                int bx = K_WIN_W/2 - 210 + (i % 3) * 142;
-                int by = K_WIN_H/2 - 90 + (i / 3) * 32;
-                k_draw_btn(bx, by, 136, 26, pkeys[i], false);
+                int bx = mx + 47 + (i % 3) * 144;
+                int by = my + 75 + (i / 3) * 28;
+                k_draw_btn(bx, by, 138, 24, pkeys[i], g_pick_plato_sel == i);
             }
+
+            k_draw_text(mx + 47, my + 258, "Description / Action Label (Optional):", 210, 200, 190);
+            bool sel_lbl = (g_pick_field == 1);
+            k_draw_rect(mx + 47, my + 265, 426, 28, 18, 12, 8, true, sel_lbl ? 255 : 80, sel_lbl ? 140 : 40, sel_lbl ? 20 : 10);
+            char dlbl[64]; snprintf(dlbl, sizeof(dlbl), "%s%s", g_label_buf, sel_lbl ? "_" : "");
+            k_draw_text(mx + 53, my + 285, dlbl, 255, 255, 255);
+
+            k_draw_btn(mx + 150, my + 310, 100, 30, g_is_editing_bind ? "Save" : "Assign", true);
+            k_draw_btn(mx + 270, my + 310, 100, 30, "Cancel", false);
         } else {
-            k_draw_text(K_WIN_W/2 - 200, K_WIN_H/2 - 50, "Type any character or symbol to send:", 210, 200, 190);
-            k_draw_text(K_WIN_W/2 - 200, K_WIN_H/2 - 20, "(Letters, numbers, symbols: +, -, ;, @, etc.)", 150, 145, 140);
+            k_draw_text(mx + 47, my + 95, "Type any character or symbol to send:", 210, 200, 190);
+            k_draw_text(mx + 47, my + 115, "(Letters, numbers, symbols: +, -, ;, @, etc.)", 150, 145, 140);
 
-            k_draw_rect(K_WIN_W/2 - 35, K_WIN_H/2 - 10, 70, 32, 10, 10, 10, true, 255, 140, 20);
-            char d[16]; snprintf(d, sizeof(d), "%s_", g_char_buf);
-            k_draw_text(K_WIN_W/2 - 8, K_WIN_H/2 + 12, d, 255, 255, 255);
+            bool sel_chr = (g_pick_field == 0);
+            k_draw_rect(mx + 230, my + 120, 60, 30, 10, 10, 10, true, sel_chr ? 255 : 80, sel_chr ? 140 : 40, sel_chr ? 20 : 10);
+            char dchr[16]; snprintf(dchr, sizeof(dchr), "%s%s", g_char_buf, sel_chr ? "_" : "");
+            k_draw_text(mx + 254, my + 142, dchr, 255, 255, 255);
 
-            k_draw_btn(K_WIN_W/2 - 70, K_WIN_H/2 + 30, 140, 30, "Assign Character", true);
+            k_draw_text(mx + 60, my + 175, "Description / Action Label (Optional):", 210, 200, 190);
+            bool sel_lbl = (g_pick_field == 1);
+            k_draw_rect(mx + 60, my + 185, 400, 28, 18, 12, 8, true, sel_lbl ? 255 : 80, sel_lbl ? 140 : 40, sel_lbl ? 20 : 10);
+            char dlbl[64]; snprintf(dlbl, sizeof(dlbl), "%s%s", g_label_buf, sel_lbl ? "_" : "");
+            k_draw_text(mx + 66, my + 205, dlbl, 255, 255, 255);
+
+            k_draw_btn(mx + 150, my + 235, 100, 30, g_is_editing_bind ? "Save" : "Assign", true);
+            k_draw_btn(mx + 270, my + 235, 100, 30, "Cancel", false);
         }
-
-        k_draw_btn(K_WIN_W/2 - 50, K_WIN_H/2 + 130, 100, 28, "Cancel", false);
     }
 
     SDL_RenderPresent(g_kren);

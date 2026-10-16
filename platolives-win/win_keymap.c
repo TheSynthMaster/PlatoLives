@@ -22,6 +22,7 @@
 #define IDC_K_BTN_DEL     806
 #define IDC_K_BTN_REC     807
 #define IDC_K_BTN_REM     808
+#define IDC_K_BTN_EDIT    814
 #define IDC_K_BTN_SET     809
 #define IDC_K_BTN_CLOSE   810
 #define IDC_K_LBL_TITLE   811
@@ -34,6 +35,7 @@
 #define IDC_ACT_COMBO_PLATO 904
 #define IDC_ACT_BTN_ASSIGN  905
 #define IDC_ACT_BTN_CANCEL  906
+#define IDC_ACT_EDIT_DESC   907
 
 typedef struct {
     HWND hwnd;
@@ -44,7 +46,7 @@ typedef struct {
 
     HWND hListProf, hListBind;
     HWND hBtnNew, hBtnDup, hBtnRen, hBtnDel;
-    HWND hBtnRec, hBtnRem, hBtnSet, hBtnClose;
+    HWND hBtnRec, hBtnEdit, hBtnRem, hBtnSet, hBtnClose;
     HWND hLblTitle, hLblDesc, hLblStat;
 
     HBRUSH hbrBg, hbrBox, hbrHover;
@@ -165,6 +167,7 @@ typedef struct {
     HWND hwnd;
     HWND hRadioChar, hRadioPlato;
     HWND hEditChar, hComboPlato;
+    HWND hEditLabel;
     HWND hBtnAssign, hBtnCancel;
     HBRUSH hbrBg, hbrBox;
     HPEN hPenBorder, hPenHighlight;
@@ -237,19 +240,30 @@ static LRESULT CALLBACK ActionPickerProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
                 ctx->result_binding.codepoint = ctx->captured_cp;
                 ctx->result_binding.modifiers = ctx->captured_mods;
 
+                char user_desc[32] = {0};
+                GetWindowTextA(ctx->hEditLabel, user_desc, sizeof(user_desc) - 1);
+
                 if (is_char) {
                     char buf[8] = {0};
                     GetWindowTextA(ctx->hEditChar, buf, 7);
                     char c = buf[0] ? buf[0] : ' ';
                     ctx->result_binding.type = PLATO_BIND_ACTION_RAW_BYTE;
                     ctx->result_binding.target.raw_byte = (uint8_t)c;
-                    snprintf(ctx->result_binding.label, sizeof(ctx->result_binding.label), "Type '%c'", c);
+                    if (strlen(user_desc) > 0) {
+                        snprintf(ctx->result_binding.label, sizeof(ctx->result_binding.label), "%s", user_desc);
+                    } else {
+                        snprintf(ctx->result_binding.label, sizeof(ctx->result_binding.label), "Type '%c'", c);
+                    }
                 } else {
                     int sel = (int)SendMessage(ctx->hComboPlato, CB_GETCURSEL, 0, 0);
                     if (sel < 0 || sel >= 17) sel = 0;
                     ctx->result_binding.type = PLATO_BIND_ACTION_PLATO_KEY;
                     ctx->result_binding.target.plato_key = (uint16_t)s_plato_keys[sel];
-                    snprintf(ctx->result_binding.label, sizeof(ctx->result_binding.label), "PLATO: %s", s_plato_names[sel]);
+                    if (strlen(user_desc) > 0) {
+                        snprintf(ctx->result_binding.label, sizeof(ctx->result_binding.label), "%s", user_desc);
+                    } else {
+                        snprintf(ctx->result_binding.label, sizeof(ctx->result_binding.label), "PLATO: %s", s_plato_names[sel]);
+                    }
                 }
                 ctx->confirmed = true;
                 DestroyWindow(hwnd);
@@ -268,11 +282,13 @@ static LRESULT CALLBACK ActionPickerProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
-static bool win_action_picker_show(HWND hParent, uint16_t vk, uint32_t cp, uint8_t mods, plato_key_binding_t *out_bind) {
+static bool win_action_picker_show(HWND hParent, const plato_key_binding_t *init_bind, plato_key_binding_t *out_bind) {
     memset(&g_picker, 0, sizeof(g_picker));
-    g_picker.captured_vk = vk;
-    g_picker.captured_cp = cp;
-    g_picker.captured_mods = mods;
+    if (!init_bind) return false;
+
+    g_picker.captured_vk = init_bind->vkey;
+    g_picker.captured_cp = init_bind->codepoint;
+    g_picker.captured_mods = init_bind->modifiers;
     g_picker.confirmed = false;
 
     g_picker.hbrBg = CreateSolidBrush(PLATO_BG_DARK);
@@ -291,9 +307,9 @@ static bool win_action_picker_show(HWND hParent, uint16_t vk, uint32_t cp, uint8
 
     HWND hwnd = CreateWindowExW(
         WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
-        wc.lpszClassName, L"Assign Target Action - PlatoLives",
+        wc.lpszClassName, (init_bind->type != 0) ? L"Edit Target Action - PlatoLives" : L"Assign Target Action - PlatoLives",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        CW_USEDEFAULT, CW_USEDEFAULT, 460, 260,
+        CW_USEDEFAULT, CW_USEDEFAULT, 460, 290,
         hParent, NULL, wc.hInstance, NULL
     );
     if (!hwnd) return false;
@@ -301,37 +317,56 @@ static bool win_action_picker_show(HWND hParent, uint16_t vk, uint32_t cp, uint8
 
     g_picker.hFontUI = CreateFontW(15,0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
 
-    plato_key_binding_t dummy = { .vkey = vk, .codepoint = cp, .modifiers = mods };
-    char kstr[64]; format_key_str(&dummy, kstr, sizeof(kstr));
+    char kstr[64]; format_key_str(init_bind, kstr, sizeof(kstr));
     wchar_t cap_w[128]; swprintf(cap_w, 127, L"Physical Key: %hs", kstr);
 
-    CreateWindowW(L"STATIC", cap_w, WS_CHILD | WS_VISIBLE, 20, 15, 400, 20, hwnd, NULL, wc.hInstance, NULL);
+    CreateWindowW(L"STATIC", cap_w, WS_CHILD | WS_VISIBLE, 20, 15, 410, 20, hwnd, NULL, wc.hInstance, NULL);
 
-    g_picker.hRadioChar = CreateWindowW(L"BUTTON", L"Type Character / Symbol (e.g. f, +, ;, @):", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 20, 48, 320, 20, hwnd, (HMENU)IDC_ACT_RADIO_CHAR, wc.hInstance, NULL);
-    g_picker.hEditChar = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_CENTER, 350, 46, 40, 24, hwnd, (HMENU)IDC_ACT_EDIT_CHAR, wc.hInstance, NULL);
+    g_picker.hRadioChar = CreateWindowW(L"BUTTON", L"Type Character / Symbol (e.g. f, +, ;, @):", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 20, 44, 320, 20, hwnd, (HMENU)IDC_ACT_RADIO_CHAR, wc.hInstance, NULL);
+    g_picker.hEditChar = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_CENTER, 350, 42, 45, 24, hwnd, (HMENU)IDC_ACT_EDIT_CHAR, wc.hInstance, NULL);
 
-    g_picker.hRadioPlato = CreateWindowW(L"BUTTON", L"Or select PLATO Special Key:", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 20, 88, 380, 20, hwnd, (HMENU)IDC_ACT_RADIO_PLATO, wc.hInstance, NULL);
-    g_picker.hComboPlato = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, 40, 115, 350, 200, hwnd, (HMENU)IDC_ACT_COMBO_PLATO, wc.hInstance, NULL);
+    g_picker.hRadioPlato = CreateWindowW(L"BUTTON", L"Or select PLATO Special Key:", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 20, 78, 380, 20, hwnd, (HMENU)IDC_ACT_RADIO_PLATO, wc.hInstance, NULL);
+    g_picker.hComboPlato = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, 40, 102, 355, 200, hwnd, (HMENU)IDC_ACT_COMBO_PLATO, wc.hInstance, NULL);
 
     for (int i = 0; i < 17; i++) {
         WCHAR wn[64]; swprintf(wn, 63, L"%hs", s_plato_names[i]);
         SendMessageW(g_picker.hComboPlato, CB_ADDSTRING, 0, (LPARAM)wn);
     }
-    SendMessage(g_picker.hComboPlato, CB_SETCURSEL, 0, 0);
 
-    bool def_char = (vk == 0 || (vk >= PLATO_VKEY_NUMPAD0 && vk <= PLATO_VKEY_NUMPAD9));
-    SendMessage(g_picker.hRadioChar, BM_SETCHECK, def_char ? BST_CHECKED : BST_UNCHECKED, 0);
-    SendMessage(g_picker.hRadioPlato, BM_SETCHECK, def_char ? BST_UNCHECKED : BST_CHECKED, 0);
-    EnableWindow(g_picker.hEditChar, def_char);
-    EnableWindow(g_picker.hComboPlato, !def_char);
+    CreateWindowW(L"STATIC", L"Description / Label (Optional):", WS_CHILD | WS_VISIBLE, 20, 138, 380, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_picker.hEditLabel = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER, 20, 158, 395, 24, hwnd, (HMENU)IDC_ACT_EDIT_DESC, wc.hInstance, NULL);
 
-    if (cp >= 32 && cp <= 126) {
-        char def_s[2] = { (char)cp, 0 };
+    bool is_char_mode = false;
+    if (init_bind->type == PLATO_BIND_ACTION_RAW_BYTE) {
+        is_char_mode = true;
+        char def_s[2] = { (char)init_bind->target.raw_byte, 0 };
         SetWindowTextA(g_picker.hEditChar, def_s);
+        SetWindowTextA(g_picker.hEditLabel, init_bind->label);
+        SendMessage(g_picker.hComboPlato, CB_SETCURSEL, 0, 0);
+    } else if (init_bind->type == PLATO_BIND_ACTION_PLATO_KEY) {
+        is_char_mode = false;
+        int sel_idx = 0;
+        for (int i = 0; i < 17; i++) {
+            if (s_plato_keys[i] == init_bind->target.plato_key) { sel_idx = i; break; }
+        }
+        SendMessage(g_picker.hComboPlato, CB_SETCURSEL, sel_idx, 0);
+        SetWindowTextA(g_picker.hEditLabel, init_bind->label);
+    } else {
+        is_char_mode = (init_bind->vkey == 0 || (init_bind->vkey >= PLATO_VKEY_NUMPAD0 && init_bind->vkey <= PLATO_VKEY_NUMPAD9));
+        SendMessage(g_picker.hComboPlato, CB_SETCURSEL, 0, 0);
+        if (init_bind->codepoint >= 32 && init_bind->codepoint <= 126) {
+            char def_s[2] = { (char)init_bind->codepoint, 0 };
+            SetWindowTextA(g_picker.hEditChar, def_s);
+        }
     }
 
-    g_picker.hBtnAssign = CreateWindowW(L"BUTTON", L"Assign", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 230, 175, 95, 30, hwnd, (HMENU)IDC_ACT_BTN_ASSIGN, wc.hInstance, NULL);
-    g_picker.hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 335, 175, 80, 30, hwnd, (HMENU)IDC_ACT_BTN_CANCEL, wc.hInstance, NULL);
+    SendMessage(g_picker.hRadioChar, BM_SETCHECK, is_char_mode ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(g_picker.hRadioPlato, BM_SETCHECK, is_char_mode ? BST_UNCHECKED : BST_CHECKED, 0);
+    EnableWindow(g_picker.hEditChar, is_char_mode);
+    EnableWindow(g_picker.hComboPlato, !is_char_mode);
+
+    g_picker.hBtnAssign = CreateWindowW(L"BUTTON", (init_bind->type != 0) ? L"Save" : L"Assign", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 230, 205, 95, 30, hwnd, (HMENU)IDC_ACT_BTN_ASSIGN, wc.hInstance, NULL);
+    g_picker.hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 335, 205, 80, 30, hwnd, (HMENU)IDC_ACT_BTN_CANCEL, wc.hInstance, NULL);
 
     HWND hChild = GetWindow(hwnd, GW_CHILD);
     while (hChild) {
@@ -548,7 +583,9 @@ static void k_refresh_bind(void) {
     EnableWindow(g_kdlg.hBtnRen, !p->is_builtin);
     EnableWindow(g_kdlg.hBtnDel, !p->is_builtin);
     EnableWindow(g_kdlg.hBtnRec, !p->is_builtin);
-    EnableWindow(g_kdlg.hBtnRem, !p->is_builtin);
+    bool can_edit_bind = (!p->is_builtin && g_kdlg.cur_bind >= 0 && g_kdlg.cur_bind < p->binding_count);
+    EnableWindow(g_kdlg.hBtnRem, can_edit_bind);
+    EnableWindow(g_kdlg.hBtnEdit, can_edit_bind);
 
     bool isAct = (g_kdlg.cur_prof == g_kdlg.mgr->active_profile_index);
     /* Utilizzo di SetWindowTextW con Wide Character per eliminare i caratteri spuri */
@@ -706,8 +743,9 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 
                 ctx->is_recording = false;
 
+                plato_key_binding_t init_b = { .vkey = vk, .codepoint = cp, .modifiers = mods };
                 plato_key_binding_t new_b;
-                if (win_action_picker_show(hwnd, vk, cp, mods, &new_b)) {
+                if (win_action_picker_show(hwnd, &init_b, &new_b)) {
                     plato_keymap_profile_t *p = &ctx->mgr->profiles[ctx->cur_prof];
                     plato_keymap_profile_add_binding(p, &new_b);
                     plato_keymap_save_profile(p);
@@ -723,8 +761,31 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             if (wmId == IDC_K_LIST_PROF && HIWORD(wParam) == LBN_SELCHANGE) {
                 ctx->cur_prof = (int)SendMessage(ctx->hListProf, LB_GETCURSEL, 0, 0);
                 k_refresh_bind();
-            } else if (wmId == IDC_K_LIST_BIND && HIWORD(wParam) == LBN_SELCHANGE) {
-                ctx->cur_bind = (int)SendMessage(ctx->hListBind, LB_GETCURSEL, 0, 0);
+            } else if (wmId == IDC_K_LIST_BIND) {
+                if (HIWORD(wParam) == LBN_SELCHANGE) {
+                    ctx->cur_bind = (int)SendMessage(ctx->hListBind, LB_GETCURSEL, 0, 0);
+                    plato_keymap_profile_t *p = &ctx->mgr->profiles[ctx->cur_prof];
+                    bool can_edit_bind = (!p->is_builtin && ctx->cur_bind >= 0 && ctx->cur_bind < p->binding_count);
+                    EnableWindow(ctx->hBtnRem, can_edit_bind);
+                    EnableWindow(ctx->hBtnEdit, can_edit_bind);
+                } else if (HIWORD(wParam) == LBN_DBLCLK) {
+                    ctx->cur_bind = (int)SendMessage(ctx->hListBind, LB_GETCURSEL, 0, 0);
+                    if (ctx->cur_prof >= 0 && ctx->cur_bind >= 0 && !ctx->mgr->profiles[ctx->cur_prof].is_builtin) {
+                        SendMessage(hwnd, WM_COMMAND, MAKEWPARAM(IDC_K_BTN_EDIT, BN_CLICKED), 0);
+                    }
+                }
+            } else if (wmId == IDC_K_BTN_EDIT) {
+                if (ctx->cur_prof >= 0 && ctx->cur_bind >= 0 && !ctx->mgr->profiles[ctx->cur_prof].is_builtin) {
+                    plato_keymap_profile_t *p = &ctx->mgr->profiles[ctx->cur_prof];
+                    if (ctx->cur_bind < p->binding_count) {
+                        plato_key_binding_t updated_b;
+                        if (win_action_picker_show(hwnd, &p->bindings[ctx->cur_bind], &updated_b)) {
+                            plato_keymap_profile_set_binding(p, ctx->cur_bind, &updated_b);
+                            plato_keymap_save_profile(p);
+                            k_refresh_bind();
+                        }
+                    }
+                }
             } else if (wmId == IDC_K_BTN_CLOSE) {
                 DestroyWindow(hwnd);
             } else if (wmId == IDC_K_BTN_SET) {
@@ -896,8 +957,9 @@ void win_keymap_show(HWND hParent, plato_keyboard_state_t *kstate, HMENU hMenu) 
 
     g_kdlg.hListBind = CreateWindowExW(0, L"LISTBOX", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | LBS_NOTIFY | LBS_OWNERDRAWFIXED | LBS_HASSTRINGS, 280, 80, 640, 410, hwnd, (HMENU)IDC_K_LIST_BIND, wc.hInstance, NULL);
 
-    g_kdlg.hBtnRec = CreateWindowW(L"BUTTON", L"◉ Press Key to Bind...", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 280, 500, 180, 30, hwnd, (HMENU)IDC_K_BTN_REC, wc.hInstance, NULL);
-    g_kdlg.hBtnRem = CreateWindowW(L"BUTTON", L"- Remove Binding", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 470, 500, 140, 30, hwnd, (HMENU)IDC_K_BTN_REM, wc.hInstance, NULL);
+    g_kdlg.hBtnRec = CreateWindowW(L"BUTTON", L"◉ Press Key to Bind...", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 280, 500, 175, 30, hwnd, (HMENU)IDC_K_BTN_REC, wc.hInstance, NULL);
+    g_kdlg.hBtnEdit = CreateWindowW(L"BUTTON", L"✎ Edit Binding...", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 465, 500, 130, 30, hwnd, (HMENU)IDC_K_BTN_EDIT, wc.hInstance, NULL);
+    g_kdlg.hBtnRem = CreateWindowW(L"BUTTON", L"- Remove Binding", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 605, 500, 140, 30, hwnd, (HMENU)IDC_K_BTN_REM, wc.hInstance, NULL);
 
     g_kdlg.hLblStat = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 280, 545, 380, 25, hwnd, (HMENU)IDC_K_LBL_STAT, wc.hInstance, NULL);
 
