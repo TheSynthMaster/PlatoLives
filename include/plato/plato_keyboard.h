@@ -20,10 +20,13 @@ typedef enum {
     PLATO_VKEY_RETURN,
     PLATO_VKEY_BACKSPACE,
     PLATO_VKEY_ESCAPE,
-    PLATO_VKEY_TAB
+    PLATO_VKEY_TAB,
+    PLATO_VKEY_NUMPAD0, PLATO_VKEY_NUMPAD1, PLATO_VKEY_NUMPAD2,
+    PLATO_VKEY_NUMPAD3, PLATO_VKEY_NUMPAD4, PLATO_VKEY_NUMPAD5,
+    PLATO_VKEY_NUMPAD6, PLATO_VKEY_NUMPAD7, PLATO_VKEY_NUMPAD8, PLATO_VKEY_NUMPAD9
 } plato_virtual_key_t;
 
-typedef struct {
+typedef struct plato_key_event {
     plato_virtual_key_t vkey;
     uint32_t codepoint;       /* Unicode o ASCII stampabile (32..126) */
     uint32_t unmod_codepoint; /* Carattere base minuscolo senza modificatori */
@@ -32,6 +35,8 @@ typedef struct {
     bool alt;
     bool gui;                 /* Command su macOS, Win su Windows */
 } plato_key_event_t;
+
+#include "plato_keymap.h"
 
 typedef void (*plato_feedback_callback_t)(const char *message, double duration_sec, void *user_data);
 
@@ -43,13 +48,14 @@ typedef enum {
 
 typedef struct {
     bool double_tap_enabled;
-    plato_arrow_mode_t arrow_mode; /* Modalità frecce direzionali */
+    plato_arrow_mode_t arrow_mode; /* Modalità frecce direzionali (retrocompatibilità) */
     bool arrows_wasd_mode;         /* Retrocompatibilità booleana */
     plato_special_key_t pending_key;
     double pending_start_time;
     double pending_expiry;
     plato_feedback_callback_t feedback_cb;
     void *user_data;
+    plato_keymap_manager_t keymap_mgr; /* Gestore profili di tastiera universale */
 } plato_keyboard_state_t;
 
 void plato_keyboard_state_init(plato_keyboard_state_t *state);
@@ -63,6 +69,11 @@ bool plato_keyboard_get_wasd_mode(const plato_keyboard_state_t *state);
 bool plato_keyboard_toggle_wasd_mode(plato_keyboard_state_t *state);
 void plato_keyboard_poll(plato_keyboard_state_t *state, plato_terminal_t *term, double now_sec);
 void plato_keyboard_flush(plato_keyboard_state_t *state, plato_terminal_t *term);
+
+/* Accesso al gestore profili di tastiera */
+plato_keymap_manager_t *plato_keyboard_get_keymap_manager(plato_keyboard_state_t *state);
+const char *plato_keyboard_get_active_keymap_name(const plato_keyboard_state_t *state);
+bool plato_keyboard_set_active_keymap_by_index(plato_keyboard_state_t *state, int index);
 
 bool plato_keyboard_dispatch(plato_keyboard_state_t *state,
                              plato_terminal_t *term,

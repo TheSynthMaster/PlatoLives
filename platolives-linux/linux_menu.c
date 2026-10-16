@@ -171,7 +171,7 @@ typedef struct {
     const char *title;
     int x;
     int width;
-    gui_menu_item_t items[20];
+    gui_menu_item_t items[64];
     int item_count;
 } gui_top_menu_t;
 
@@ -314,7 +314,7 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         top[2].item_count = n;
     }
 
-    /* 4. Keyboard (Posizione tra View ed Edit) */
+    /* 4. Keyboard (Posizione tra View ed Edit) - Dinamico */
     top[3].title = "Keyboard";
     top[3].x = x_cur;
     top[3].width = get_text_width(top[3].title) + 18;
@@ -322,9 +322,20 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
     {
         gui_menu_item_t *it = top[3].items;
         int n = 0;
-        it[n++] = (gui_menu_item_t){"Arrow Keys: WASD Mode", NULL, ACT_TOOLS_WASD_MODE, TYPE_ITEM, 0, false, ctx->arrow_mode == PLATO_ARROW_MODE_WASD, false};
-        it[n++] = (gui_menu_item_t){"Arrow Keys: WASX / Avatar Mode", NULL, ACT_TOOLS_WASX_MODE, TYPE_ITEM, 0, false, ctx->arrow_mode == PLATO_ARROW_MODE_WASX, false};
-        it[n++] = (gui_menu_item_t){"Cycle Arrow Mode (WASD / WASX / Standard)", "Ctrl+Shift+G", ACT_TOOLS_CYCLE_ARROW_MODE, TYPE_ITEM, 0, false, false, false};
+        if (ctx->keymap_mgr) {
+            int activeIdx = plato_keymap_get_active_index(ctx->keymap_mgr);
+            for (int i = 0; i < plato_keymap_get_count(ctx->keymap_mgr); i++) {
+                const plato_keymap_profile_t *p = plato_keymap_get_profile(ctx->keymap_mgr, i);
+                if (!p) continue;
+                static char lbls[32][64];
+                snprintf(lbls[i], sizeof(lbls[i]), "%s%s", p->name, p->is_builtin ? " (Built-in)" : "");
+                it[n++] = (gui_menu_item_t){lbls[i], NULL, ACT_TOOLS_KEYMAP_PROFILE_BASE + i, TYPE_ITEM, 0, false, (i == activeIdx), false};
+            }
+        }
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Cycle Profile (Next Preset)", "Ctrl+Shift+G", ACT_TOOLS_CYCLE_ARROW_MODE, TYPE_ITEM, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Manage Keyboard Profiles...", NULL, ACT_TOOLS_KEYMAP_MANAGE, TYPE_ITEM, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Keyboard Reference", "Ctrl+K", ACT_VIEW_KEYBOARD_REF, TYPE_ITEM, 0, false, ctx->show_keyref, false};
         top[3].item_count = n;

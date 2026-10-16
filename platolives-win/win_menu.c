@@ -134,9 +134,10 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     /* 4. Keyboard (Posizione tra View ed Edit)                       */
     /* ============================================================= */
     HMENU hKeyboard = CreatePopupMenu();
-    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_WASD_MODE, L"Arrow Keys: WASD Mode");
-    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_WASX_MODE, L"Arrow Keys: WASX / Avatar Mode");
-    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_CYCLE_ARROW_MODE, L"Cycle Arrow Mode (WASD / WASX / Standard)\tCtrl+Shift+G");
+    /* I profili dinamici verranno inseriti qui da win_update_arrow_menu_items() */
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_CYCLE_ARROW_MODE, L"Cycle Profile (Next Preset)\tCtrl+Shift+G");
+    AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_KEYMAP_MANAGE, L"Manage Keyboard Profiles...");
     AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hKeyboard, MF_STRING, IDM_VIEW_KEYBOARD_REF, L"Keyboard Reference\tCtrl+K");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hKeyboard, L"&Keyboard");

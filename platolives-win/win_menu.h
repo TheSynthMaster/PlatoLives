@@ -95,4 +95,7 @@
 HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_list_t *scripts);
 void win_menu_update_state(HMENU menu, const plato_profile_t *active_p, bool connected, bool diag_log, bool renderer_log, bool fullscreen, const plato_profile_list_t *profiles, int current_profile_idx);
 
+#define IDM_TOOLS_KEYMAP_MANAGE        405
+#define IDM_TOOLS_KEYMAP_PROFILE_BASE  850 /* 850..881 */
+
 #endif /* WIN_MENU_H */

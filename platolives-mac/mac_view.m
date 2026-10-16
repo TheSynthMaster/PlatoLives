@@ -1063,6 +1063,20 @@ static void* network_worker(void *arg) {
         ev.vkey = PLATO_VKEY_ESCAPE;
     } else if (c == '\t' || c == 9) {
         ev.vkey = PLATO_VKEY_TAB;
+    } else if (flags & NSEventModifierFlagNumericPad) {
+        switch ([event keyCode]) {
+            case 82: ev.vkey = PLATO_VKEY_NUMPAD0; break;
+            case 83: ev.vkey = PLATO_VKEY_NUMPAD1; break;
+            case 84: ev.vkey = PLATO_VKEY_NUMPAD2; break;
+            case 85: ev.vkey = PLATO_VKEY_NUMPAD3; break;
+            case 86: ev.vkey = PLATO_VKEY_NUMPAD4; break;
+            case 87: ev.vkey = PLATO_VKEY_NUMPAD5; break;
+            case 88: ev.vkey = PLATO_VKEY_NUMPAD6; break;
+            case 89: ev.vkey = PLATO_VKEY_NUMPAD7; break;
+            case 91: ev.vkey = PLATO_VKEY_NUMPAD8; break;
+            case 92: ev.vkey = PLATO_VKEY_NUMPAD9; break;
+            default: break;
+        }
     }
 
     if (ev.vkey == PLATO_VKEY_F11) {

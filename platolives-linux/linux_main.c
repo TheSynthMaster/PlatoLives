@@ -35,6 +35,7 @@
 #include "linux_profiles.h"
 #include "linux_scriptref.h"
 #include "linux_scripts.h"
+#include "linux_keymap.h"
 #include "linux_livetext.h"
 #include "linux_about.h"
 #include "linux_hud.h"
@@ -1087,6 +1088,9 @@ sync_optical_view:
             fflush(stdout);
             break;
         }
+                case ACT_TOOLS_KEYMAP_MANAGE:
+            linux_keymap_show(&app->kbd_state.keymap_mgr);
+            break;
         case ACT_TOOLS_CYCLE_ARROW_MODE: {
             plato_arrow_mode_t m = plato_keyboard_cycle_arrow_mode(&app->kbd_state);
             app->menu_ctx.arrow_mode = m;
@@ -1576,6 +1580,7 @@ int main(int argc, char *argv[]) {
     app.script_runner = plato_script_create(&app.terminal);
     plato_keyboard_state_init(&app.kbd_state);
     linux_menu_init(&app.menu_ctx);
+    app.menu_ctx.keymap_mgr = &app.kbd_state.keymap_mgr;
     app.menu_ctx.menu_anim_y = 1.0f; /* Visibile di default all'avvio */
 
     /* Profilo Predefinito o Specificato da CLI */
@@ -1661,6 +1666,7 @@ int main(int argc, char *argv[]) {
             linux_profiles_handle_event(&event);
             linux_scriptref_handle_event(&event);
             linux_scripts_handle_event(&event);
+            linux_keymap_handle_event(&event);
             linux_livetext_handle_event(&event);
             linux_about_handle_event(&event);
             linux_hud_handle_event(&event);
@@ -1730,6 +1736,7 @@ int main(int argc, char *argv[]) {
             linux_profiles_render();
             linux_scriptref_render();
             linux_scripts_render();
+            linux_keymap_render();
             linux_livetext_render();
             linux_about_render();
             linux_hud_render();

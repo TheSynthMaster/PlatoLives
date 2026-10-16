@@ -62,6 +62,7 @@ void plato_keyboard_state_init(plato_keyboard_state_t *state) {
     state->double_tap_enabled = true;
     state->arrow_mode = PLATO_ARROW_MODE_STANDARD;
     state->arrows_wasd_mode = false;
+    plato_keymap_manager_init(&state->keymap_mgr);
 }
 
 void plato_keyboard_set_feedback_cb(plato_keyboard_state_t *state, plato_feedback_callback_t cb, void *user_data) {
@@ -74,17 +75,78 @@ void plato_keyboard_set_arrow_mode(plato_keyboard_state_t *state, plato_arrow_mo
     if (!state) return;
     state->arrow_mode = mode;
     state->arrows_wasd_mode = (mode != PLATO_ARROW_MODE_STANDARD);
+    if (mode == PLATO_ARROW_MODE_STANDARD) {
+        plato_keymap_set_active_by_name(&state->keymap_mgr, "Standard PLATO");
+    } else if (mode == PLATO_ARROW_MODE_WASD) {
+        plato_keymap_set_active_by_name(&state->keymap_mgr, "WASD Gaming");
+    } else if (mode == PLATO_ARROW_MODE_WASX) {
+        plato_keymap_set_active_by_name(&state->keymap_mgr, "WASX / Avatar");
+    }
 }
 
 plato_arrow_mode_t plato_keyboard_get_arrow_mode(const plato_keyboard_state_t *state) {
-    return state ? state->arrow_mode : PLATO_ARROW_MODE_STANDARD;
+    if (!state) return PLATO_ARROW_MODE_STANDARD;
+    const plato_keymap_profile_t *p = plato_keymap_get_active_profile(&state->keymap_mgr);
+    if (p) {
+        if (strcmp(p->name, "WASD Gaming") == 0) return PLATO_ARROW_MODE_WASD;
+        if (strcmp(p->name, "WASX / Avatar") == 0) return PLATO_ARROW_MODE_WASX;
+        if (strcmp(p->name, "Standard PLATO") == 0) return PLATO_ARROW_MODE_STANDARD;
+    }
+    return state->arrow_mode;
 }
 
 plato_arrow_mode_t plato_keyboard_cycle_arrow_mode(plato_keyboard_state_t *state) {
     if (!state) return PLATO_ARROW_MODE_STANDARD;
-    state->arrow_mode = (plato_arrow_mode_t)((state->arrow_mode + 1) % 3);
-    state->arrows_wasd_mode = (state->arrow_mode != PLATO_ARROW_MODE_STANDARD);
-    return state->arrow_mode;
+    int next_idx = plato_keymap_cycle_profile(&state->keymap_mgr);
+    const plato_keymap_profile_t *p = plato_keymap_get_profile(&state->keymap_mgr, next_idx);
+
+    plato_arrow_mode_t mode = PLATO_ARROW_MODE_STANDARD;
+    if (p) {
+        if (strcmp(p->name, "WASD Gaming") == 0) mode = PLATO_ARROW_MODE_WASD;
+        else if (strcmp(p->name, "WASX / Avatar") == 0) mode = PLATO_ARROW_MODE_WASX;
+        else mode = PLATO_ARROW_MODE_STANDARD;
+    }
+    state->arrow_mode = mode;
+    state->arrows_wasd_mode = (mode != PLATO_ARROW_MODE_STANDARD);
+
+    /* Feedback visivo unificato */
+    if (state->feedback_cb && p) {
+        char msg[128];
+        snprintf(msg, sizeof(msg), "Keyboard Profile: %s", p->name);
+        state->feedback_cb(msg, 1.5, state->user_data);
+    }
+    return mode;
+}
+
+plato_keymap_manager_t *plato_keyboard_get_keymap_manager(plato_keyboard_state_t *state) {
+    return state ? &state->keymap_mgr : NULL;
+}
+
+const char *plato_keyboard_get_active_keymap_name(const plato_keyboard_state_t *state) {
+    if (!state) return "Standard PLATO";
+    const plato_keymap_profile_t *p = plato_keymap_get_active_profile(&state->keymap_mgr);
+    return p ? p->name : "Standard PLATO";
+}
+
+bool plato_keyboard_set_active_keymap_by_index(plato_keyboard_state_t *state, int index) {
+    if (!state) return false;
+    bool ok = plato_keymap_set_active_by_index(&state->keymap_mgr, index);
+    if (ok) {
+        const plato_keymap_profile_t *p = plato_keymap_get_profile(&state->keymap_mgr, index);
+        if (p) {
+            if (strcmp(p->name, "WASD Gaming") == 0) state->arrow_mode = PLATO_ARROW_MODE_WASD;
+            else if (strcmp(p->name, "WASX / Avatar") == 0) state->arrow_mode = PLATO_ARROW_MODE_WASX;
+            else state->arrow_mode = PLATO_ARROW_MODE_STANDARD;
+            state->arrows_wasd_mode = (state->arrow_mode != PLATO_ARROW_MODE_STANDARD);
+
+            if (state->feedback_cb) {
+                char msg[128];
+                snprintf(msg, sizeof(msg), "Keyboard Profile: %s", p->name);
+                state->feedback_cb(msg, 1.5, state->user_data);
+            }
+        }
+    }
+    return ok;
 }
 
 void plato_keyboard_set_wasd_mode(plato_keyboard_state_t *state, bool enabled) {
@@ -317,17 +379,37 @@ bool plato_keyboard_dispatch(plato_keyboard_state_t *state,
     }
 
 
-    /* 1. Modalità WASD o WASX Gaming attiva: le frecce doppiano i comandi cardinali */
-    if (state && state->arrow_mode == PLATO_ARROW_MODE_WASD) {
-        if (ev->vkey == PLATO_VKEY_UP)    { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'W' : 'w'); return true; }
-        if (ev->vkey == PLATO_VKEY_DOWN)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'S' : 's'); return true; }
-        if (ev->vkey == PLATO_VKEY_LEFT)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'A' : 'a'); return true; }
-        if (ev->vkey == PLATO_VKEY_RIGHT) { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'D' : 'd'); return true; }
-    } else if (state && state->arrow_mode == PLATO_ARROW_MODE_WASX) {
-        if (ev->vkey == PLATO_VKEY_UP)    { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'W' : 'w'); return true; }
-        if (ev->vkey == PLATO_VKEY_DOWN)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'X' : 'x'); return true; }
-        if (ev->vkey == PLATO_VKEY_LEFT)  { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'A' : 'a'); return true; }
-        if (ev->vkey == PLATO_VKEY_RIGHT) { plato_keyboard_flush(state, term); send_raw_byte(term, ev->shift ? 'D' : 'd'); return true; }
+    /* 1. Lookup nel Profilo Tastiera Attivo (Keymap Manager) - Scansione O(1) */
+    if (state) {
+        const plato_keymap_profile_t *active_profile = plato_keymap_get_active_profile(&state->keymap_mgr);
+        if (active_profile && active_profile->binding_count > 0) {
+            const plato_key_binding_t *binding = plato_keymap_lookup(active_profile, ev);
+            if (binding) {
+                plato_keyboard_flush(state, term);
+                if (binding->type == PLATO_BIND_ACTION_RAW_BYTE) {
+                    uint8_t b = binding->target.raw_byte;
+                    /* Se il tasto premuto include shift e il target e' alfabetico, converti in maiuscolo */
+                    if (ev->shift && !ev->ctrl && !ev->alt && (b >= 'a' && b <= 'z')) {
+                        b = (uint8_t)(b - ('a' - 'A'));
+                    }
+                    send_raw_byte(term, b);
+                    return true;
+                } else if (binding->type == PLATO_BIND_ACTION_PLATO_KEY) {
+                    if (term) {
+                        plato_protocol_send_key(term, plato_keyboard_keycode((plato_special_key_t)binding->target.plato_key, ev->shift));
+                    }
+                    return true;
+                } else if (binding->type == PLATO_BIND_ACTION_PLATO_SEQ) {
+                    uint32_t seq = binding->target.sequence;
+                    for (int k = 0; k < 4; k++) {
+                        uint8_t oct = (uint8_t)((seq >> (k * 8)) & 0xFF);
+                        if (oct == 0xFF) break;
+                        if (term) plato_protocol_send_key(term, oct);
+                    }
+                    return true;
+                }
+            }
+        }
     }
 
     /* 2. Modalità Standard PLATO (videoscrittura e navigazione TUTOR canonica) */

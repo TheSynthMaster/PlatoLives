@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include "plato/plato_profile.h"
 #include "plato/plato_script.h"
+#include "plato/plato_keymap.h"
 #include "plato/plato_keyboard.h"
 
 #define MENU_BAR_HEIGHT 28
@@ -71,6 +72,8 @@ typedef enum {
     ACT_TOOLS_WASD_MODE,
     ACT_TOOLS_WASX_MODE,
     ACT_TOOLS_CYCLE_ARROW_MODE,
+    ACT_TOOLS_KEYMAP_MANAGE,
+    ACT_TOOLS_KEYMAP_PROFILE_BASE = 850, /* 850 .. 899 */
     ACT_TOOLS_DIAG_LOG,
     ACT_TOOLS_RENDERER_LOG,
 
@@ -93,6 +96,7 @@ typedef struct {
     /* Dati dinamici */
     plato_profile_list_t profiles;
     plato_script_list_t *scripts;
+    plato_keymap_manager_t *keymap_mgr;
     bool is_script_running;
     int current_profile_idx;
     bool connected;

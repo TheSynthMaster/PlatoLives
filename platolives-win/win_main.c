@@ -1,4 +1,5 @@
 #include "win_scripts.h"
+#include "win_keymap.h"
 #define COBJMACROS
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -170,10 +171,39 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data);
 static void win_launch_instance(const char *profile_name);
 static void win_setup_ownerdraw_menu(HMENU hMenu, bool is_top_bar);
 
+void win_update_keyboard_menu(HMENU menu, plato_keyboard_state_t *state) {
+    if (!menu || !state) return;
+    HMENU hKeyboard = GetSubMenu(menu, 3); /* Indice 3 = Keyboard */
+    if (!hKeyboard) return;
+
+    /* Rimuovi tutti gli elementi prima di "Cycle Profile" */
+    while (GetMenuItemCount(hKeyboard) > 0) {
+        DeleteMenu(hKeyboard, 0, MF_BYPOSITION);
+    }
+
+    plato_keymap_manager_t *mgr = &state->keymap_mgr;
+    int actIdx = mgr->active_profile_index;
+
+    for (int i = 0; i < mgr->profile_count && i < 32; i++) {
+        const plato_keymap_profile_t *p = plato_keymap_get_profile(mgr, i);
+        if (!p) continue;
+        WCHAR wname[128];
+        swprintf(wname, sizeof(wname)/sizeof(WCHAR), L"%hs%ls", p->name, p->is_builtin ? L" (Built-in)" : L"");
+        UINT flags = MF_STRING | ((i == actIdx) ? MF_CHECKED : MF_UNCHECKED);
+        AppendMenuW(hKeyboard, flags, IDM_TOOLS_KEYMAP_PROFILE_BASE + i, wname);
+    }
+
+    AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_CYCLE_ARROW_MODE, L"Cycle Profile (Next Preset)\tCtrl+Shift+G");
+    AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_KEYMAP_MANAGE, L"Manage Keyboard Profiles...");
+    AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hKeyboard, MF_STRING, IDM_VIEW_KEYBOARD_REF, L"Keyboard Reference\tCtrl+K");
+}
+
 static void win_update_arrow_menu_items(HMENU menu, plato_arrow_mode_t m) {
-    if (!menu) return;
-    CheckMenuItem(menu, IDM_TOOLS_WASD_MODE, (m == PLATO_ARROW_MODE_WASD) ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_TOOLS_WASX_MODE, (m == PLATO_ARROW_MODE_WASX) ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+    (void)m;
+    win_update_keyboard_menu(menu, &g_app.keyboard_state);
 }
 
 static void win_beep_callback(void *context) {
@@ -1758,27 +1788,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     win_copy_screen_text(&g_app);
                     MessageBoxW(hwnd, L"Screen text saved to screen.txt and clipboard.", L"PlatoLives", MB_OK | MB_ICONINFORMATION);
                     return 0;
-                case IDM_TOOLS_WASD_MODE:
-                    {
-                        plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&g_app.keyboard_state);
-                        plato_arrow_mode_t target = (cur == PLATO_ARROW_MODE_WASD) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASD;
-                        plato_keyboard_set_arrow_mode(&g_app.keyboard_state, target);
-                        win_update_arrow_menu_items(g_app.menu, target);
-                        printf("[Keyboard] Modalita Frecce Windows: %s\n", (target == PLATO_ARROW_MODE_WASD) ? "WASD Mode (Up=W, Down=S, Left=A, Right=D)" : "PLATO Standard");
-                        fflush(stdout);
-                        return 0;
-                    }
-
-                case IDM_TOOLS_WASX_MODE:
-                    {
-                        plato_arrow_mode_t cur = plato_keyboard_get_arrow_mode(&g_app.keyboard_state);
-                        plato_arrow_mode_t target = (cur == PLATO_ARROW_MODE_WASX) ? PLATO_ARROW_MODE_STANDARD : PLATO_ARROW_MODE_WASX;
-                        plato_keyboard_set_arrow_mode(&g_app.keyboard_state, target);
-                        win_update_arrow_menu_items(g_app.menu, target);
-                        printf("[Keyboard] Modalita Frecce Windows: %s\n", (target == PLATO_ARROW_MODE_WASX) ? "WASX / Avatar Mode (Up=W, Down=X, Left=A, Right=D)" : "PLATO Standard");
-                        fflush(stdout);
-                        return 0;
-                    }
+                case IDM_TOOLS_KEYMAP_MANAGE:
+                    win_keymap_show(hwnd, &g_app.keyboard_state, g_app.menu);
+                    return 0;
 
                 case IDM_TOOLS_CYCLE_ARROW_MODE:
                     {
@@ -1841,6 +1853,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 case IDM_HELP_ABOUT:
                     win_about_show(hwnd);
                     return 0;
+                default:
+                    if (LOWORD(wParam) >= IDM_TOOLS_KEYMAP_PROFILE_BASE && LOWORD(wParam) < IDM_TOOLS_KEYMAP_PROFILE_BASE + 32) {
+                        plato_keyboard_set_active_keymap_by_index(&g_app.keyboard_state, LOWORD(wParam) - IDM_TOOLS_KEYMAP_PROFILE_BASE);
+                        plato_keymap_save_all(&g_app.keyboard_state.keymap_mgr);
+                        win_update_arrow_menu_items(g_app.menu, plato_keyboard_get_arrow_mode(&g_app.keyboard_state));
+                        return 0;
+                    }
+                    break;
             }
             break;
         }

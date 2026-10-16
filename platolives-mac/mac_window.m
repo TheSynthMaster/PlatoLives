@@ -3,6 +3,7 @@
 #import "mac_window.h"
 #import "test_runner.h"
 #import "mac_scripts.h"
+#import "mac_keymap_window.h"
 
 static void plato_mac_metadata_callback(void *context, const char *name, const char *group, const char *system, const char *station) {
     (void)name; (void)group; (void)system; (void)station;
@@ -1046,13 +1047,15 @@ static void plato_mac_beep(void *context) {
 
 @end
 
-@interface PLATOAppDelegate () <PLATOScriptsDelegate,PLATOProfilesDelegate>
+@interface PLATOAppDelegate () <PLATOScriptsDelegate,PLATOProfilesDelegate,PLATOKeyboardProfilesDelegate>
 @property (nonatomic, strong) NSMutableArray<PLATOTerminalWindowController *> *terminalControllers;
 @property (nonatomic, strong) PLATOKeymapWindowController *keymapController;
 @property (nonatomic, strong) PLATOScriptRefWindowController *scriptRefController;
 
 @property (nonatomic, strong) PLATOTextBufferWindowController *textBufferController;
 @property (nonatomic, strong) PLATOProfilesWindowController *profilesController;
+@property (nonatomic, strong) PLATOKeyboardProfilesWindowController *keyboardProfilesController;
+@property (nonatomic, strong) NSMenu *keyboardSubmenu;
 @property (nonatomic, strong) NSMenu *connectionSubmenu;
 @property (nonatomic, strong) NSMenu *profileNewWindowSubmenu;
 @property (nonatomic, strong) NSMenu *viewMenu;
@@ -1340,32 +1343,12 @@ static void plato_mac_beep(void *context) {
     [viewMenuItem setSubmenu:viewMenu];
 
     // =============================================================
-    // Keyboard (Posizione tra View ed Edit)
+    // Keyboard (Posizione tra View ed Edit) - Dinamico con Profili
     // =============================================================
-    NSMenuItem *keyboardMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *keyboardMenuItem = [[NSMenuItem alloc] initWithTitle:@"Keyboard" action:nil keyEquivalent:@""];
     NSMenu *keyboardMenu = [[NSMenu alloc] initWithTitle:@"Keyboard"];
-
-    self.wasdMenuItem = [[NSMenuItem alloc] initWithTitle:@"Arrow Keys: WASD Mode" action:@selector(selectArrowModeWASD:) keyEquivalent:@""];
-    [self.wasdMenuItem setTarget:self];
-    [keyboardMenu addItem:self.wasdMenuItem];
-
-    self.wasxMenuItem = [[NSMenuItem alloc] initWithTitle:@"Arrow Keys: WASX / Avatar Mode" action:@selector(selectArrowModeWASX:) keyEquivalent:@""];
-    [self.wasxMenuItem setTarget:self];
-    [keyboardMenu addItem:self.wasxMenuItem];
-
-    NSMenuItem *cycleArrowItem = [[NSMenuItem alloc] initWithTitle:@"Cycle Arrow Mode (WASD / WASX / Standard)" action:@selector(cycleArrowMode:) keyEquivalent:@"G"];
-    [cycleArrowItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
-    [cycleArrowItem setTarget:self];
-    [keyboardMenu addItem:cycleArrowItem];
-
-    [keyboardMenu addItem:[NSMenuItem separatorItem]];
-
-    self.keyboardReferenceMenuItem = [[NSMenuItem alloc] initWithTitle:@"Show Keyboard Reference" action:@selector(toggleKeyboardReference:) keyEquivalent:@"k"];
-    [self.keyboardReferenceMenuItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
-    [self.keyboardReferenceMenuItem setTarget:self];
-    [self.keyboardReferenceMenuItem setState:NSControlStateValueOff];
-    [keyboardMenu addItem:self.keyboardReferenceMenuItem];
-
+    self.keyboardSubmenu = keyboardMenu;
+    [self.keyboardSubmenu setDelegate:self];
     [keyboardMenuItem setSubmenu:keyboardMenu];
 
     // =============================================================
@@ -1489,12 +1472,15 @@ static void plato_mac_beep(void *context) {
 
     [self rebuildConnectionMenu];
     [self rebuildScriptsMenu];
+    [self rebuildKeyboardMenu];
 }
 
 - (void)menuNeedsUpdate:(NSMenu *)menu {
     if (menu == self.connectionSubmenu) {
         [self rebuildConnectionMenu];
     [self rebuildScriptsMenu];
+    } else if (menu == self.keyboardSubmenu) {
+        [self rebuildKeyboardMenu];
     } else if (menu == self.statusMenu) {
         [self rebuildStatusMenu];
     }
@@ -1624,6 +1610,7 @@ static void plato_mac_beep(void *context) {
         defProf = headlessProf;
     }
     [self openNewWindowWithProfile:defProf];
+    [self rebuildKeyboardMenu];
 
     if (isHeadlessTest) {
         if (testIndex + 1 >= [arguments count]) {
@@ -1794,6 +1781,7 @@ static void plato_mac_beep(void *context) {
 - (void)newWindow:(id)sender {
     NSDictionary *defProf = [PLATOProfileManager defaultProfile];
     [self openNewWindowWithProfile:defProf];
+    [self rebuildKeyboardMenu];
 }
 
 - (void)newWindowWithProfileItem:(id)sender {
@@ -2085,10 +2073,7 @@ static void plato_mac_beep(void *context) {
 }
 
 - (void)updateWASDMenuItems {
-    if (!self.view) return;
-    plato_arrow_mode_t m = plato_keyboard_get_arrow_mode(&self.view->keyboardState);
-    if (self.wasdMenuItem) [self.wasdMenuItem setState:(m == PLATO_ARROW_MODE_WASD) ? NSControlStateValueOn : NSControlStateValueOff];
-    if (self.wasxMenuItem) [self.wasxMenuItem setState:(m == PLATO_ARROW_MODE_WASX) ? NSControlStateValueOn : NSControlStateValueOff];
+    [self rebuildKeyboardMenu];
 }
 
 - (void)toggleKeyboardReference:(id)sender {
@@ -2166,11 +2151,13 @@ static void plato_mac_beep(void *context) {
     }
     [self rebuildConnectionMenu];
     [self rebuildScriptsMenu];
+    [self rebuildKeyboardMenu];
 }
 
 - (void)profilesControllerDidUpdateProfiles:(PLATOProfilesWindowController *)controller {
     [self rebuildConnectionMenu];
     [self rebuildScriptsMenu];
+    [self rebuildKeyboardMenu];
 }
 
 - (void)connectDefaultProfile:(id)sender {
@@ -2364,6 +2351,103 @@ static void plato_mac_beep(void *context) {
         plato_scripts_save(self.scriptList, NULL);
         [self rebuildScriptsMenu];
     }
+}
+
+
+- (void)rebuildKeyboardMenu {
+    if (!self.keyboardSubmenu) return;
+    [self.keyboardSubmenu removeAllItems];
+
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    plato_keyboard_state_t *state = tc ? &tc.view->keyboardState : (self.view ? &self.view->keyboardState : NULL);
+
+    plato_keymap_manager_t fallbackMgr;
+    plato_keymap_manager_t *mgr = NULL;
+    int activeIdx = 0;
+
+    if (state) {
+        mgr = &state->keymap_mgr;
+        activeIdx = plato_keymap_get_active_index(mgr);
+    } else {
+        plato_keymap_manager_init(&fallbackMgr);
+        mgr = &fallbackMgr;
+        activeIdx = plato_keymap_get_active_index(mgr);
+    }
+
+    for (int i = 0; i < plato_keymap_get_count(mgr); i++) {
+        const plato_keymap_profile_t *p = plato_keymap_get_profile(mgr, i);
+        if (!p) continue;
+        NSString *title = [NSString stringWithUTF8String:p->name];
+        if (p->is_builtin) title = [title stringByAppendingString:@" (Built-in)"];
+
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:@selector(selectKeymapProfile:) keyEquivalent:@""];
+        [item setTarget:self];
+        [item setTag:i];
+        [item setState:(i == activeIdx) ? NSControlStateValueOn : NSControlStateValueOff];
+        [self.keyboardSubmenu addItem:item];
+    }
+
+    [self.keyboardSubmenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *cycleItem = [[NSMenuItem alloc] initWithTitle:@"Cycle Profile (Next Preset)" action:@selector(cycleKeymapProfile:) keyEquivalent:@"G"];
+    [cycleItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [cycleItem setTarget:self];
+    [self.keyboardSubmenu addItem:cycleItem];
+
+    [self.keyboardSubmenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *manageItem = [[NSMenuItem alloc] initWithTitle:@"Manage Keyboard Profiles..." action:@selector(showKeyboardProfilesWindow:) keyEquivalent:@""];
+    [manageItem setTarget:self];
+    [self.keyboardSubmenu addItem:manageItem];
+
+    [self.keyboardSubmenu addItem:[NSMenuItem separatorItem]];
+
+    self.keyboardReferenceMenuItem = [[NSMenuItem alloc] initWithTitle:@"Show Keyboard Reference" action:@selector(toggleKeyboardReference:) keyEquivalent:@"k"];
+    [self.keyboardReferenceMenuItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
+    [self.keyboardReferenceMenuItem setTarget:self];
+    [self.keyboardReferenceMenuItem setState:self.keyboardReferenceEnabled ? NSControlStateValueOn : NSControlStateValueOff];
+    [self.keyboardSubmenu addItem:self.keyboardReferenceMenuItem];
+}
+
+- (void)selectKeymapProfile:(id)sender {
+    NSInteger idx = [sender tag];
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    plato_keyboard_state_t *state = tc ? &tc.view->keyboardState : (self.view ? &self.view->keyboardState : NULL);
+    if (!state) return;
+    plato_keyboard_set_active_keymap_by_index(state, (int)idx);
+    [self rebuildKeyboardMenu];
+}
+
+- (void)cycleKeymapProfile:(id)sender {
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    plato_keyboard_state_t *state = tc ? &tc.view->keyboardState : (self.view ? &self.view->keyboardState : NULL);
+    if (!state) return;
+    plato_keyboard_cycle_arrow_mode(state);
+    [self rebuildKeyboardMenu];
+}
+
+- (void)showKeyboardProfilesWindow:(id)sender {
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    plato_keyboard_state_t *state = tc ? &tc.view->keyboardState : (self.view ? &self.view->keyboardState : NULL);
+    if (!state) return;
+    if (!self.keyboardProfilesController) {
+        self.keyboardProfilesController = [[PLATOKeyboardProfilesWindowController alloc] initWithKeymapManager:&state->keymap_mgr];
+        self.keyboardProfilesController.delegate = self;
+    } else {
+        self.keyboardProfilesController.keymapManager = &state->keymap_mgr;
+        [self.keyboardProfilesController refreshList];
+    }
+    [self.keyboardProfilesController showWindow:nil];
+    [self.keyboardProfilesController.window makeKeyAndOrderFront:nil];
+}
+
+- (void)keyboardProfilesDidUpdate:(PLATOKeyboardProfilesWindowController *)controller {
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    plato_keyboard_state_t *state = tc ? &tc.view->keyboardState : (self.view ? &self.view->keyboardState : NULL);
+    if (state) {
+        plato_keymap_save_all(&state->keymap_mgr);
+    }
+    [self rebuildKeyboardMenu];
 }
 
 @end

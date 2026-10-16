@@ -47,6 +47,7 @@ set(LIBPLATO_SOURCES
     src/plato_graphics.c
     src/plato_protocol.c
     src/plato_keyboard.c
+    src/plato_keymap.c
     src/plato_profile.c
     src/plato_script.c
     src/plato_optical.c
@@ -83,6 +84,7 @@ if(APPLE)
         platolives-mac/mac_view.m
         platolives-mac/mac_window.m
         platolives-mac/mac_scripts.m
+        platolives-mac/mac_keymap_window.m
         platolives-mac/test_runner.m
         src/console_runner.c
     )
@@ -145,6 +147,7 @@ if(NOT APPLE AND NOT WIN32)
             platolives-linux/linux_profiles.c
             platolives-linux/linux_scriptref.c
             platolives-linux/linux_scripts.c
+            platolives-linux/linux_keymap.c
             platolives-linux/linux_livetext.c
             platolives-linux/linux_about.c
             platolives-linux/linux_hud.c
@@ -165,3 +168,7 @@ if(NOT APPLE AND NOT WIN32)
         )
     endif()
 endif()
+
+add_executable(test_keymap tests/test_keymap.c)
+target_link_libraries(test_keymap plato)
+add_test(NAME test_keymap COMMAND test_keymap)

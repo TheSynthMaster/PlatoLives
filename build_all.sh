@@ -30,7 +30,7 @@ fi
 
 # 1. BUILD NATIVA macOS (GUI + Headless + Console)
 echo ""
-echo "[1/5] Compilazione nativa macOS (Clang / CMake)..."
+echo "[1/6] Compilazione nativa macOS (Clang / CMake)..."
 cmake -B build > /dev/null
 make -C build -j$(sysctl -n hw.ncpu)
 echo ">>> Esecuzione test unitari (ctest)..."
@@ -45,7 +45,7 @@ zig cc -target x86_64-linux-gnu -shared -Wl,-soname,libGL.so.1 platolives-linux/
 
 # 2. CROSS-COMPILAZIONE LINUX GUI ARM64 (ELF)
 echo ""
-echo "[2/5] Cross-compilazione Linux Desktop GUI ARM64 ELF (Zig cc)..."
+echo "[2/6] Cross-compilazione Linux Desktop GUI ARM64 ELF (Zig cc)..."
 zig cc -target aarch64-linux-gnu -std=c11 -O2 -s \
     -Iinclude -Iinclude/plato -I"$SDL2_INC" -I"$SDL2_INC/SDL2" \
     -Lbuild/stubs_arm64 \
@@ -56,6 +56,7 @@ zig cc -target aarch64-linux-gnu -std=c11 -O2 -s \
     platolives-linux/linux_profiles.c \
     platolives-linux/linux_scriptref.c \
     platolives-linux/linux_scripts.c \
+    platolives-linux/linux_keymap.c \
     platolives-linux/linux_livetext.c \
     platolives-linux/linux_about.c \
     platolives-linux/linux_hud.c \
@@ -69,6 +70,7 @@ zig cc -target aarch64-linux-gnu -std=c11 -O2 -s \
     src/plato_framebuffer.c \
     src/plato_ringbuf.c \
     src/plato_keyboard.c \
+    src/plato_keymap.c \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
@@ -79,7 +81,7 @@ zig cc -target aarch64-linux-gnu -std=c11 -O2 -s \
 
 # 3. CROSS-COMPILAZIONE LINUX GUI INTEL x86_64 (ELF)
 echo ""
-echo "[3/5] Cross-compilazione Linux Desktop GUI x86_64 ELF (Zig cc)..."
+echo "[3/6] Cross-compilazione Linux Desktop GUI x86_64 ELF (Zig cc)..."
 zig cc -target x86_64-linux-gnu -std=c11 -O2 -s \
     -Iinclude -Iinclude/plato -I"$SDL2_INC" -I"$SDL2_INC/SDL2" \
     -Lbuild/stubs_x86_64 \
@@ -90,6 +92,7 @@ zig cc -target x86_64-linux-gnu -std=c11 -O2 -s \
     platolives-linux/linux_profiles.c \
     platolives-linux/linux_scriptref.c \
     platolives-linux/linux_scripts.c \
+    platolives-linux/linux_keymap.c \
     platolives-linux/linux_livetext.c \
     platolives-linux/linux_about.c \
     platolives-linux/linux_hud.c \
@@ -103,6 +106,7 @@ zig cc -target x86_64-linux-gnu -std=c11 -O2 -s \
     src/plato_framebuffer.c \
     src/plato_ringbuf.c \
     src/plato_keyboard.c \
+    src/plato_keymap.c \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
@@ -113,12 +117,12 @@ zig cc -target x86_64-linux-gnu -std=c11 -O2 -s \
 
 # 4. CROSS-COMPILAZIONE LINUX CONSOLE STATICA
 echo ""
-echo "[4/5] Cross-compilazione Linux Console statica ARM64 & x86_64..."
+echo "[4/6] Cross-compilazione Linux Console statica ARM64 & x86_64..."
 zig cc -target aarch64-linux-musl -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/console_main.c src/console_runner.c \
     src/plato_protocol.c src/plato_terminal.c src/plato_transport.c \
     src/plato_graphics.c src/plato_font.c src/plato_framebuffer.c \
-    src/plato_ringbuf.c src/plato_keyboard.c src/plato_profile.c \
+    src/plato_ringbuf.c src/plato_keyboard.c src/plato_keymap.c src/plato_profile.c \
     src/plato_script.c src/plato_optical.c src/z80emu.c src/plato_microtutor.c \
     -pthread -static -o build/PlatoLives-console-linux-arm64
 
@@ -126,17 +130,18 @@ zig cc -target x86_64-linux-musl -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/console_main.c src/console_runner.c \
     src/plato_protocol.c src/plato_terminal.c src/plato_transport.c \
     src/plato_graphics.c src/plato_font.c src/plato_framebuffer.c \
-    src/plato_ringbuf.c src/plato_keyboard.c src/plato_profile.c \
+    src/plato_ringbuf.c src/plato_keyboard.c src/plato_keymap.c src/plato_profile.c \
     src/plato_script.c src/plato_optical.c src/z80emu.c src/plato_microtutor.c \
     -pthread -static -o build/PlatoLives-console-linux-x86_64
 
 # 5. CROSS-COMPILAZIONE WINDOWS GUI x86_64 (Direct3D 11 + Win32)
 echo ""
-echo "[5/5] Cross-compilazione Windows GUI x86_64 (Zig cc Win32/D3D11)..."
+echo "[5/6] Cross-compilazione Windows GUI x86_64 (Zig cc Win32/D3D11)..."
 zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     platolives-win/win_main.c \
     platolives-win/win_menu.c \
     platolives-win/win_profiles.c platolives-win/win_scripts.c \
+    platolives-win/win_keymap.c \
     platolives-win/win_text_buffer.c \
     platolives-win/win_keyref.c \
     platolives-win/win_scriptref.c \
@@ -150,6 +155,7 @@ zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/plato_framebuffer.c \
     src/plato_ringbuf.c \
     src/plato_keyboard.c \
+    src/plato_keymap.c \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
@@ -159,6 +165,38 @@ zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     -luser32 -lgdi32 -ld3d11 -ldxgi -lws2_32 -lcomdlg32 \
     -Wl,--subsystem,console \
     -o build/PlatoLives-windows-x86_64.exe
+
+# 6. CROSS-COMPILAZIONE WINDOWS GUI ARM64 (Direct3D 11 + Win32)
+echo ""
+echo "[6/6] Cross-compilazione Windows GUI ARM64 (Zig cc Win32/D3D11)..."
+zig cc -target aarch64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
+    platolives-win/win_main.c \
+    platolives-win/win_menu.c \
+    platolives-win/win_profiles.c platolives-win/win_scripts.c \
+    platolives-win/win_keymap.c \
+    platolives-win/win_text_buffer.c \
+    platolives-win/win_keyref.c \
+    platolives-win/win_scriptref.c \
+    platolives-win/win_about.c \
+    platolives-win/PlatoLives.rc \
+    src/plato_protocol.c \
+    src/plato_terminal.c \
+    src/plato_transport.c \
+    src/plato_graphics.c \
+    src/plato_font.c \
+    src/plato_framebuffer.c \
+    src/plato_ringbuf.c \
+    src/plato_keyboard.c \
+    src/plato_keymap.c \
+    src/plato_profile.c \
+    src/plato_script.c \
+    src/plato_optical.c \
+    src/z80emu.c \
+    src/plato_microtutor.c \
+    src/console_runner.c \
+    -luser32 -lgdi32 -ld3d11 -ldxgi -lws2_32 -lcomdlg32 \
+    -Wl,--subsystem,console \
+    -o build/PlatoLives-windows-arm64.exe
 
 echo ""
 echo "================================================================="
@@ -246,3 +284,5 @@ echo "[*] Creato archivio build/PlatoLives-linux-desktop-install.tar.gz"
 echo ">>> BUILD COMPLETATA CON SUCCESSO PER TUTTI I TARGET!"
 echo "================================================================="
 file build/PlatoLives-linux-gui-arm64
+file build/PlatoLives-windows-x86_64.exe
+file build/PlatoLives-windows-arm64.exe
