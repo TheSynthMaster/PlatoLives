@@ -31,7 +31,9 @@ typedef enum {
 
 static k_state_t g_kstate = KSTATE_NORMAL;
 static plato_key_binding_t g_tmp_bind;
-static char g_rename_buf[64] = {0};
+static char g_rename_name[64] = {0};
+static char g_rename_desc[128] = {0};
+static int  g_rename_field = 0; /* 0 = Name, 1 = Description */
 static char g_char_buf[8] = {0};
 static int g_pick_mode = 0; /* 0 = Character, 1 = PLATO Key */
 static int g_pick_plato_sel = 0;
@@ -238,7 +240,32 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
     } else if (ev->type == SDL_MOUSEBUTTONDOWN && ev->button.windowID == wid) {
         int x = ev->button.x, y = ev->button.y;
 
-        if (g_kstate == KSTATE_PICK_ACTION) {
+        if (g_kstate == KSTATE_RENAME) {
+            int dw = 440, dh = 188;
+            int dx = K_WIN_W/2 - dw/2;
+            int dy = K_WIN_H/2 - dh/2;
+
+            if (k_pt_in(x, y, dx + 20, dy + 48, 400, 28)) {
+                g_rename_field = 0;
+                return;
+            }
+            if (k_pt_in(x, y, dx + 20, dy + 101, 400, 28)) {
+                g_rename_field = 1;
+                return;
+            }
+            if (k_pt_in(x, y, dx + 220, dy + 146, 95, 28)) {
+                if (strlen(g_rename_name) > 0) {
+                    plato_keymap_update_profile_info(g_kmgr, g_sel_prof, g_rename_name, g_rename_desc);
+                }
+                g_kstate = KSTATE_NORMAL;
+                return;
+            }
+            if (k_pt_in(x, y, dx + 325, dy + 146, 95, 28)) {
+                g_kstate = KSTATE_NORMAL;
+                return;
+            }
+            return;
+        } else if (g_kstate == KSTATE_PICK_ACTION) {
             // Modal Tabs: [ Custom Character ] vs [ PLATO Function Key ]
             if (k_pt_in(x, y, K_WIN_W/2 - 200, K_WIN_H/2 - 130, 195, 26)) g_pick_mode = 0;
             if (k_pt_in(x, y, K_WIN_W/2 + 5,   K_WIN_H/2 - 130, 195, 26)) g_pick_mode = 1;
@@ -302,7 +329,9 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
             if (k_pt_in(x, y, 79, 568, 76, 28)) do_dup_prof();
             if (k_pt_in(x, y, 159, 568, 62, 28)) {
                 if (!g_kmgr->profiles[g_sel_prof].is_builtin) {
-                    snprintf(g_rename_buf, sizeof(g_rename_buf), "%s", g_kmgr->profiles[g_sel_prof].name);
+                    snprintf(g_rename_name, sizeof(g_rename_name), "%s", g_kmgr->profiles[g_sel_prof].name);
+                    snprintf(g_rename_desc, sizeof(g_rename_desc), "%s", g_kmgr->profiles[g_sel_prof].description);
+                    g_rename_field = 0;
                     g_kstate = KSTATE_RENAME;
                 }
             }
@@ -341,12 +370,17 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
         }
 
         if (g_kstate == KSTATE_RENAME) {
-            if (ev->key.keysym.sym == SDLK_RETURN) {
-                plato_keymap_rename_profile(g_kmgr, g_sel_prof, g_rename_buf);
+            if (ev->key.keysym.sym == SDLK_TAB) {
+                g_rename_field = 1 - g_rename_field;
+            } else if (ev->key.keysym.sym == SDLK_RETURN) {
+                if (strlen(g_rename_name) > 0) {
+                    plato_keymap_update_profile_info(g_kmgr, g_sel_prof, g_rename_name, g_rename_desc);
+                }
                 g_kstate = KSTATE_NORMAL;
             } else if (ev->key.keysym.sym == SDLK_BACKSPACE) {
-                size_t l = strlen(g_rename_buf);
-                if (l > 0) g_rename_buf[l-1] = '\0';
+                char *buf = (g_rename_field == 0) ? g_rename_name : g_rename_desc;
+                size_t l = strlen(buf);
+                if (l > 0) buf[l-1] = '\0';
             }
         } else if (g_kstate == KSTATE_PICK_ACTION) {
             if (g_pick_mode == 0) {
@@ -412,8 +446,10 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
         }
     } else if (ev->type == SDL_TEXTINPUT && ev->text.windowID == wid) {
         if (g_kstate == KSTATE_RENAME) {
-            if (strlen(g_rename_buf) + strlen(ev->text.text) < sizeof(g_rename_buf)) {
-                strcat(g_rename_buf, ev->text.text);
+            char *buf = (g_rename_field == 0) ? g_rename_name : g_rename_desc;
+            size_t max_len = (g_rename_field == 0) ? sizeof(g_rename_name) : sizeof(g_rename_desc);
+            if (strlen(buf) + strlen(ev->text.text) < max_len) {
+                strcat(buf, ev->text.text);
             }
         } else if (g_kstate == KSTATE_PICK_ACTION && g_pick_mode == 0) {
             snprintf(g_char_buf, sizeof(g_char_buf), "%s", ev->text.text);
@@ -536,10 +572,31 @@ void linux_keymap_render(void) {
     // 5. MODALI OVERLAY (RENAME, RECORDING, UNIVERSAL PICKER)
     // =========================================================
     if (g_kstate == KSTATE_RENAME) {
-        k_draw_rect(K_WIN_W/2 - 150, K_WIN_H/2 - 50, 300, 100, 34, 17, 6, true, 255, 140, 20);
-        k_draw_text(K_WIN_W/2 - 130, K_WIN_H/2 - 20, "Rename Profile:", 255, 110, 0);
-        char disp[128]; snprintf(disp, sizeof(disp), "%s_", g_rename_buf);
-        k_draw_text(K_WIN_W/2 - 130, K_WIN_H/2 + 15, disp, 255, 255, 255);
+        int dw = 440, dh = 188;
+        int dx = K_WIN_W/2 - dw/2;
+        int dy = K_WIN_H/2 - dh/2;
+
+        k_draw_rect(dx, dy, dw, dh, 34, 17, 6, true, 255, 140, 20);
+        k_draw_text(dx + 20, dy + 25, "Edit Profile", 255, 110, 0);
+
+        // Campo 1: Nome
+        k_draw_text(dx + 20, dy + 42, "Profile Name:", 210, 200, 190);
+        bool sel_name = (g_rename_field == 0);
+        k_draw_rect(dx + 20, dy + 48, 400, 28, 18, 12, 8, true, sel_name ? 255 : 80, sel_name ? 140 : 40, sel_name ? 20 : 10);
+        char dname[80]; snprintf(dname, sizeof(dname), "%s%s", g_rename_name, sel_name ? "_" : "");
+        k_draw_text(dx + 26, dy + 68, dname, 255, 255, 255);
+
+        // Campo 2: Descrizione
+        k_draw_text(dx + 20, dy + 95, "Description:", 210, 200, 190);
+        bool sel_desc = (g_rename_field == 1);
+        k_draw_rect(dx + 20, dy + 101, 400, 28, 18, 12, 8, true, sel_desc ? 255 : 80, sel_desc ? 140 : 40, sel_desc ? 20 : 10);
+        char ddesc[150]; snprintf(ddesc, sizeof(ddesc), "%s%s", g_rename_desc, sel_desc ? "_" : "");
+        k_draw_text(dx + 26, dy + 121, ddesc, 255, 255, 255);
+
+        // Pulsanti e scorciatoie
+        k_draw_text(dx + 20, dy + 165, "(Tab: Switch, Enter: Save)", 140, 135, 130);
+        k_draw_btn(dx + 220, dy + 146, 95, 28, "Save", true);
+        k_draw_btn(dx + 325, dy + 146, 95, 28, "Cancel", false);
     } else if (g_kstate == KSTATE_RECORD_KEY) {
         k_draw_rect(K_WIN_W/2 - 250, K_WIN_H/2 - 50, 500, 100, 180, 45, 0, true, 255, 120, 0);
         k_draw_text(K_WIN_W/2 - 215, K_WIN_H/2 - 10, "◉ PRESS ANY KEY OR COMBINATION", 255, 255, 255);

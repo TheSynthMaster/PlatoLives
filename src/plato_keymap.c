@@ -50,7 +50,7 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         plato_keymap_profile_t *p = &mgr->profiles[mgr->profile_count++];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "Standard PLATO");
-        snprintf(p->description, sizeof(p->description), "Layout puro canonico pterm / TUTOR (frecce standard)");
+        snprintf(p->description, sizeof(p->description), "Canonical pterm / TUTOR layout (standard arrow keys)");
         p->is_builtin = true;
         p->binding_count = 0; /* Nessun remapping; fallback canonico */
     }
@@ -60,7 +60,7 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         plato_keymap_profile_t *p = &mgr->profiles[mgr->profile_count++];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "WASD Gaming");
-        snprintf(p->description, sizeof(p->description), "Frecce direzionali rimappate su WASD per gaming PLATO");
+        snprintf(p->description, sizeof(p->description), "Directional arrow keys remapped to WASD for PLATO gaming");
         p->is_builtin = true;
 
         plato_key_binding_t b;
@@ -86,7 +86,7 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         plato_keymap_profile_t *p = &mgr->profiles[mgr->profile_count++];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "WASX / Avatar");
-        snprintf(p->description, sizeof(p->description), "Frecce direzionali rimappate su WASX (Avatar/Oubliette)");
+        snprintf(p->description, sizeof(p->description), "Directional arrow keys remapped to WASX (Avatar/Oubliette)");
         p->is_builtin = true;
 
         plato_key_binding_t b;
@@ -112,7 +112,7 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         plato_keymap_profile_t *p = &mgr->profiles[mgr->profile_count++];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "Numpad Roguelike");
-        snprintf(p->description, sizeof(p->description), "Controllo cardinale & diagonale a 8 direzioni per Avatar/Moria");
+        snprintf(p->description, sizeof(p->description), "8-directional cardinal and diagonal movement matrix for Avatar/Moria");
         p->is_builtin = true;
 
         plato_key_binding_t b;
@@ -264,19 +264,26 @@ bool plato_keymap_delete_profile(plato_keymap_manager_t *mgr, int index) {
     return true;
 }
 
-bool plato_keymap_rename_profile(plato_keymap_manager_t *mgr, int index, const char *new_name) {
-    if (!mgr || index < 0 || index >= mgr->profile_count || !new_name || new_name[0] == '\0') return false;
+bool plato_keymap_update_profile_info(plato_keymap_manager_t *mgr, int index, const char *new_name, const char *new_desc) {
+    if (!mgr || index < 0 || index >= mgr->profile_count) return false;
     if (mgr->profiles[index].is_builtin) return false;
 
-    /* Rimuovi il vecchio file */
-    plato_keymap_delete_profile_file(mgr->profiles[index].name);
-
-    snprintf(mgr->profiles[index].name, sizeof(mgr->profiles[index].name), "%s", new_name);
-    if (mgr->active_profile_index == index) {
-        snprintf(mgr->active_profile_name, sizeof(mgr->active_profile_name), "%s", new_name);
+    if (new_name && new_name[0] != '\0' && strcmp(mgr->profiles[index].name, new_name) != 0) {
+        plato_keymap_delete_profile_file(mgr->profiles[index].name);
+        snprintf(mgr->profiles[index].name, sizeof(mgr->profiles[index].name), "%s", new_name);
+        if (mgr->active_profile_index == index) {
+            snprintf(mgr->active_profile_name, sizeof(mgr->active_profile_name), "%s", new_name);
+        }
+    }
+    if (new_desc) {
+        snprintf(mgr->profiles[index].description, sizeof(mgr->profiles[index].description), "%s", new_desc);
     }
     plato_keymap_save_profile(&mgr->profiles[index]);
     return true;
+}
+
+bool plato_keymap_rename_profile(plato_keymap_manager_t *mgr, int index, const char *new_name) {
+    return plato_keymap_update_profile_info(mgr, index, new_name, NULL);
 }
 
 bool plato_keymap_profile_add_binding(plato_keymap_profile_t *prof, const plato_key_binding_t *binding) {

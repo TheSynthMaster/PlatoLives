@@ -80,6 +80,7 @@ int plato_keymap_add_profile(plato_keymap_manager_t *mgr, const plato_keymap_pro
 bool plato_keymap_duplicate_profile(plato_keymap_manager_t *mgr, int source_index, const char *new_name);
 bool plato_keymap_delete_profile(plato_keymap_manager_t *mgr, int index);
 bool plato_keymap_rename_profile(plato_keymap_manager_t *mgr, int index, const char *new_name);
+bool plato_keymap_update_profile_info(plato_keymap_manager_t *mgr, int index, const char *new_name, const char *new_desc);
 
 /* Gestione binding */
 bool plato_keymap_profile_add_binding(plato_keymap_profile_t *prof, const plato_key_binding_t *binding);

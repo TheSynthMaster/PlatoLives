@@ -28,9 +28,15 @@ if [ ! -d "$SDL2_INC/SDL2" ]; then
     SDL2_INC="/opt/homebrew/opt/sdl2-compat/include"
 fi
 
+# Pulizia preventiva per forzare Full Rebuild ed evidenziare sempre tutti i warning/errori
+if [ -f "build/Makefile" ]; then
+    make -C build clean > /dev/null 2>&1 || true
+fi
+rm -rf build/PlatoLives.app build/PlatoLives-*.exe build/PlatoLives-linux-* build/PlatoLives-console-* build/linux_desktop_install
+
 # 1. BUILD NATIVA macOS (GUI + Headless + Console)
 echo ""
-echo "[1/6] Compilazione nativa macOS (Clang / CMake)..."
+echo "[1/6] Compilazione nativa macOS (Clang / CMake - Full Rebuild)..."
 cmake -B build > /dev/null
 make -C build -j$(sysctl -n hw.ncpu)
 echo ">>> Esecuzione test unitari (ctest)..."

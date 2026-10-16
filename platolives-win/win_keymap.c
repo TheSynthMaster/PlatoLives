@@ -368,11 +368,13 @@ static bool win_action_picker_show(HWND hParent, uint16_t vk, uint32_t cp, uint8
 typedef struct {
     HWND hwnd;
     HWND hEdit;
+    HWND hEditDesc;
     HBRUSH hbrBg, hbrBox;
     HPEN hPenBorder, hPenHighlight;
     HFONT hFontUI;
     bool confirmed;
     char result_name[64];
+    char result_desc[128];
 } ren_dlg_ctx_t;
 
 static ren_dlg_ctx_t g_ren;
@@ -420,8 +422,9 @@ static LRESULT CALLBACK RenameProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         }
         case WM_COMMAND: {
             int wmId = LOWORD(wParam);
-            if (wmId == 1) { // OK
+            if (wmId == 1) { // OK / Save
                 GetWindowTextA(ctx->hEdit, ctx->result_name, sizeof(ctx->result_name) - 1);
+                GetWindowTextA(ctx->hEditDesc, ctx->result_desc, sizeof(ctx->result_desc) - 1);
                 ctx->confirmed = (strlen(ctx->result_name) > 0);
                 DestroyWindow(hwnd);
             } else if (wmId == 2) { // Cancel
@@ -442,7 +445,7 @@ static LRESULT CALLBACK RenameProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
-static bool win_rename_show(HWND hParent, const char *cur_name, char *out_name) {
+static bool win_rename_show(HWND hParent, const char *cur_name, const char *cur_desc, char *out_name, char *out_desc) {
     memset(&g_ren, 0, sizeof(g_ren));
     g_ren.hbrBg = CreateSolidBrush(PLATO_BG_DARK);
     g_ren.hbrBox = CreateSolidBrush(PLATO_BG_BOX);
@@ -460,9 +463,9 @@ static bool win_rename_show(HWND hParent, const char *cur_name, char *out_name) 
 
     HWND hwnd = CreateWindowExW(
         WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
-        wc.lpszClassName, L"Rename Profile - PlatoLives",
+        wc.lpszClassName, L"Edit Profile - PlatoLives",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        CW_USEDEFAULT, CW_USEDEFAULT, 360, 150,
+        CW_USEDEFAULT, CW_USEDEFAULT, 380, 215,
         hParent, NULL, wc.hInstance, NULL
     );
     if (!hwnd) return false;
@@ -470,12 +473,16 @@ static bool win_rename_show(HWND hParent, const char *cur_name, char *out_name) 
 
     g_ren.hFontUI = CreateFontW(15,0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
 
-    CreateWindowW(L"STATIC", L"Enter new profile name:", WS_CHILD | WS_VISIBLE, 20, 15, 300, 20, hwnd, NULL, wc.hInstance, NULL);
-    g_ren.hEdit = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER, 20, 40, 300, 24, hwnd, NULL, wc.hInstance, NULL);
-    SetWindowTextA(g_ren.hEdit, cur_name);
+    CreateWindowW(L"STATIC", L"Profile Name:", WS_CHILD | WS_VISIBLE, 20, 15, 330, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_ren.hEdit = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER, 20, 35, 325, 24, hwnd, NULL, wc.hInstance, NULL);
+    SetWindowTextA(g_ren.hEdit, cur_name ? cur_name : "");
 
-    CreateWindowW(L"BUTTON", L"Rename", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 140, 75, 85, 28, hwnd, (HMENU)1, wc.hInstance, NULL);
-    CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 235, 75, 85, 28, hwnd, (HMENU)2, wc.hInstance, NULL);
+    CreateWindowW(L"STATIC", L"Description:", WS_CHILD | WS_VISIBLE, 20, 68, 330, 18, hwnd, NULL, wc.hInstance, NULL);
+    g_ren.hEditDesc = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER, 20, 88, 325, 24, hwnd, NULL, wc.hInstance, NULL);
+    SetWindowTextA(g_ren.hEditDesc, cur_desc ? cur_desc : "");
+
+    CreateWindowW(L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 150, 130, 85, 28, hwnd, (HMENU)1, wc.hInstance, NULL);
+    CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 250, 130, 85, 28, hwnd, (HMENU)2, wc.hInstance, NULL);
 
     HWND hChild = GetWindow(hwnd, GW_CHILD);
     while (hChild) {
@@ -500,8 +507,14 @@ static bool win_rename_show(HWND hParent, const char *cur_name, char *out_name) 
     SetForegroundWindow(hParent);
 
     if (g_ren.confirmed) {
-        strncpy(out_name, g_ren.result_name, 63);
-        out_name[63] = '\0';
+        if (out_name) {
+            strncpy(out_name, g_ren.result_name, 63);
+            out_name[63] = '\0';
+        }
+        if (out_desc) {
+            strncpy(out_desc, g_ren.result_desc, 127);
+            out_desc[127] = '\0';
+        }
         return true;
     }
     return false;
@@ -754,8 +767,9 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             } else if (wmId == IDC_K_BTN_REN) {
                 if (ctx->cur_prof >= 0 && !ctx->mgr->profiles[ctx->cur_prof].is_builtin) {
                     char nname[64] = {0};
-                    if (win_rename_show(hwnd, ctx->mgr->profiles[ctx->cur_prof].name, nname)) {
-                        plato_keymap_rename_profile(ctx->mgr, ctx->cur_prof, nname);
+                    char ndesc[128] = {0};
+                    if (win_rename_show(hwnd, ctx->mgr->profiles[ctx->cur_prof].name, ctx->mgr->profiles[ctx->cur_prof].description, nname, ndesc)) {
+                        plato_keymap_update_profile_info(ctx->mgr, ctx->cur_prof, nname, ndesc);
                         k_refresh_prof(); k_refresh_bind();
                         if (ctx->hMenu) {
                             win_update_keyboard_menu(ctx->hMenu, ctx->kstate);
@@ -785,7 +799,7 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             } else if (wmId == IDC_K_BTN_REC) {
                 if (ctx->cur_prof >= 0 && !ctx->mgr->profiles[ctx->cur_prof].is_builtin) {
                     ctx->is_recording = true;
-                    SetWindowTextA(ctx->hLblStat, "◉ PRESS ANY KEY OR COMBINATION (Esc to Cancel)...");
+                    SetWindowTextW(ctx->hLblStat, L"\x25C9 PRESS ANY KEY OR COMBINATION (Esc to Cancel)...");
                     SetFocus(hwnd);
                 }
             }

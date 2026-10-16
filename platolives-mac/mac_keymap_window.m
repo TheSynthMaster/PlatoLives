@@ -558,15 +558,45 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     if (p->is_builtin) return;
 
     NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:@"Rename Profile"];
-    NSTextField *input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
-    [input setStringValue:[NSString stringWithUTF8String:p->name]];
-    [alert setAccessoryView:input];
-    [alert addButtonWithTitle:@"Rename"];
+    [alert setMessageText:@"Edit Profile"];
+    [alert setInformativeText:@"Update profile name and description:"];
+
+    NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 96)];
+
+    NSTextField *labelName = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 74, 300, 18)];
+    [labelName setStringValue:@"Profile Name:"];
+    [labelName setBezeled:NO];
+    [labelName setDrawsBackground:NO];
+    [labelName setEditable:NO];
+    [labelName setSelectable:NO];
+    [labelName setFont:[NSFont boldSystemFontOfSize:11]];
+    [container addSubview:labelName];
+
+    NSTextField *inputName = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 50, 300, 22)];
+    [inputName setStringValue:[NSString stringWithUTF8String:p->name]];
+    [container addSubview:inputName];
+
+    NSTextField *labelDesc = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 26, 300, 18)];
+    [labelDesc setStringValue:@"Description:"];
+    [labelDesc setBezeled:NO];
+    [labelDesc setDrawsBackground:NO];
+    [labelDesc setEditable:NO];
+    [labelDesc setSelectable:NO];
+    [labelDesc setFont:[NSFont boldSystemFontOfSize:11]];
+    [container addSubview:labelDesc];
+
+    NSTextField *inputDesc = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 2, 300, 22)];
+    [inputDesc setStringValue:[NSString stringWithUTF8String:p->description]];
+    [container addSubview:inputDesc];
+
+    [alert setAccessoryView:container];
+    [alert addButtonWithTitle:@"Save"];
     [alert addButtonWithTitle:@"Cancel"];
 
-    if ([alert runModal] == NSAlertFirstButtonReturn && [[input stringValue] length] > 0) {
-        plato_keymap_rename_profile(_keymapManager, (int)_selectedProfileIndex, [[input stringValue] UTF8String]);
+    if ([alert runModal] == NSAlertFirstButtonReturn && [[inputName stringValue] length] > 0) {
+        plato_keymap_update_profile_info(_keymapManager, (int)_selectedProfileIndex,
+                                         [[inputName stringValue] UTF8String],
+                                         [[inputDesc stringValue] UTF8String]);
         [self refreshList];
         if ([self.delegate respondsToSelector:@selector(keyboardProfilesDidUpdate:)]) {
             [self.delegate keyboardProfilesDidUpdate:self];
