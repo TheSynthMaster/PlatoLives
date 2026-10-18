@@ -532,8 +532,15 @@ static void* network_worker(void *arg) {
             }
             s_has_saved_bg = YES;
 
-            /* Disegna il pallino arancione */
-            uint32_t col = 0xFFFF6E00u; /* Orange Plasma */
+            /* Disegna il pallino coordinato con lo schema colore attivo */
+            uint32_t col = 0xFFFF6E00u; /* Default Orange Plasma */
+            if (opticalProfile.phosphor_color == 1) {
+                col = 0xFF33FF33u;      /* Green P31 */
+            } else if (opticalProfile.phosphor_color == 2) {
+                col = 0xFFFFB000u;      /* Amber P40 */
+            } else if (opticalProfile.phosphor_color == 3) {
+                col = 0xFFF0F0F0u;      /* White P4 */
+            }
             for (int dy = -r; dy <= r; dy++) {
                 for (int dx = -r; dx <= r; dx++) {
                     if (dx * dx + dy * dy <= r * r) {
@@ -641,6 +648,19 @@ static void* network_worker(void *arg) {
 
 - (NSInteger)plasmaDistortion {
     return opticalProfile.plasma_distortion;
+}
+
+- (void)setPhosphorColor:(NSInteger)color {
+    if (color < 0) color = 0;
+    if (color > 3) color = 3;
+    opticalProfile.phosphor_color = (int)color;
+    if (terminal) plato_terminal_set_palette(terminal, (plato_palette_t)color);
+    if (optical) plato_optical_invalidate(optical);
+    [self refreshDisplay];
+}
+
+- (NSInteger)phosphorColor {
+    return opticalProfile.phosphor_color;
 }
 
 - (void)setDisplayRealPlasma {

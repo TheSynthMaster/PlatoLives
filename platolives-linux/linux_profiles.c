@@ -528,6 +528,7 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             np.plasma_distortion = 2;
             np.crt_persistence_ms = 20;
             np.crt_beam_level = 0;
+            np.phosphor_color = 0;
             np.crt_distortion = 0;
             np.startup_script_enabled = false;
             snprintf(np.startup_script, sizeof(np.startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
@@ -576,6 +577,18 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
         if (pt_in_rect(mx, my, 340, 60, 320, 26)) { g_active_field = FIELD_NAME; return; }
         if (pt_in_rect(mx, my, 340, 96, 320, 26)) { g_active_field = FIELD_HOST; return; }
         if (pt_in_rect(mx, my, 340, 132, 120, 26)) { g_active_field = FIELD_PORT; return; }
+
+        /* Phosphor Color a Y=132 (a fianco di Port) */
+        if (g_edit_profile.display_mode != 3) {
+            int ph_x = 570;
+            for (int i = 0; i < 4; i++) {
+                if (pt_in_rect(mx, my, ph_x, 132, 82, 26)) {
+                    g_edit_profile.phosphor_color = i;
+                    return;
+                }
+                ph_x += 88;
+            }
+        }
 
         /* Display Modes: 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT */
         int mode_x = 340;
@@ -730,6 +743,17 @@ void linux_profiles_render(void) {
     draw_prof_rect(g_prof_ren, 340, 132, 120, 26, 32, 18, 10, true, (g_active_field == FIELD_PORT) ? 255 : 120, (g_active_field == FIELD_PORT) ? 215 : 60, 20);
     char port_buf[16]; snprintf(port_buf, sizeof(port_buf), "%d", g_edit_profile.port);
     draw_prof_text(g_prof_ren, 346.0f, 151.0f, port_buf, 255, 215, 60);
+
+    /* Phosphor Color a fianco di Port (Y=132) */
+    bool ph_disabled = (g_edit_profile.display_mode == 3);
+    draw_prof_text(g_prof_ren, 480.0f, 151.0f, "Phosphor:", ph_disabled ? 120 : 255, ph_disabled ? 60 : 140, 20);
+    const char *ph_labels[] = { "Default", "Green P31", "Amber P40", "White P4" };
+    int ph_x = 570;
+    for (int i = 0; i < 4; i++) {
+        bool is_sel = (!ph_disabled && g_edit_profile.phosphor_color == i);
+        draw_prof_button(g_prof_ren, ph_x, 132, 82, 26, ph_labels[i], is_sel);
+        ph_x += 88;
+    }
 
     /* Display Mode */
     draw_prof_text(g_prof_ren, 260.0f, 188.0f, "Mode:", 255, 140, 20);

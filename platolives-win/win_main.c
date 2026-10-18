@@ -615,7 +615,14 @@ static void win_render_frame(win_app_t *app) {
             }
             s_has_saved_bg = true;
 
-            uint32_t col = 0xFFFF6E00; /* Orange Plasma */
+            uint32_t col = 0xFFFF6E00; /* Default Orange Plasma */
+            if (cur_p->phosphor_color == 1) {
+                col = 0xFF33FF33;      /* Green P31 */
+            } else if (cur_p->phosphor_color == 2) {
+                col = 0xFFFFB428;      /* Amber P40 */
+            } else if (cur_p->phosphor_color == 3) {
+                col = 0xFFE0F0FF;      /* White P4 */
+            }
             for (int dy = -dot_r; dy <= dot_r; dy++) {
                 for (int dx = -dot_r; dx <= dot_r; dx++) {
                     if (dx * dx + dy * dy <= dot_r * dot_r) {
@@ -1003,6 +1010,7 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data) {
     app->display_mode = p->display_mode;
     app->distortion = p->plasma_distortion;
     plato_terminal_set_color_mode(&app->terminal, (p->display_mode == 3 || p->display_mode == 4));
+    plato_terminal_set_palette(&app->terminal, (plato_palette_t)p->phosphor_color);
     plato_optical_invalidate(app->optical);
 
     if (p->full_screen != app->is_fullscreen) {
@@ -1691,6 +1699,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
+            /* Menu Phosphor Color Override */
+            if (cmdId >= IDM_VIEW_COLOR_DEFAULT && cmdId <= IDM_VIEW_COLOR_WHITE) {
+                int new_col = cmdId - IDM_VIEW_COLOR_DEFAULT;
+                cur_p->phosphor_color = new_col;
+                plato_profiles_save(&g_app.profile_list);
+                plato_terminal_set_palette(&g_app.terminal, (plato_palette_t)new_col);
+                plato_optical_invalidate(g_app.optical);
+                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+
                         switch (cmdId) {
                 case IDM_FILE_NEW_WINDOW:
                     win_launch_instance(NULL);
@@ -1758,6 +1779,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     g_app.display_mode = cur_p->display_mode;
                     g_app.distortion = cur_p->plasma_distortion;
                     plato_terminal_set_color_mode(&g_app.terminal, (cur_p->display_mode == 3 || cur_p->display_mode == 4));
+                    plato_terminal_set_palette(&g_app.terminal, (plato_palette_t)cur_p->phosphor_color);
                     plato_optical_invalidate(g_app.optical);
                     DestroyMenu(g_app.menu);
                     g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);

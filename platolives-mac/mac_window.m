@@ -117,6 +117,9 @@ static void plato_mac_beep(void *context) {
     NSInteger dist = p[@"crtDistortion"] ? [p[@"crtDistortion"] integerValue] : 2;
     [self.view setCRTDistortion:dist];
 
+    NSInteger pColor = p[@"phosphorColor"] ? [p[@"phosphorColor"] integerValue] : 0;
+    [self.view setPhosphorColor:pColor];
+
     NSString *host = p[@"host"] ? p[@"host"] : @"cyberserv.org";
     int pVal = [p[@"port"] intValue];
     int port = (pVal > 0 ? pVal : 8005);
@@ -341,6 +344,7 @@ static void plato_mac_beep(void *context) {
             @"crtBeamLevel": @1,
             @"crtPersistenceMs": @20,
             @"crtDistortion": @2,
+            @"phosphorColor": @0,
             @"fullScreen": @YES,
             @"isDefault": @YES
         } mutableCopy];
@@ -405,6 +409,8 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSPopUpButton *crtDecayPopup;
 @property (nonatomic, strong) NSTextField *crtDistortionLbl;
 @property (nonatomic, strong) NSPopUpButton *crtDistortionPopup;
+@property (nonatomic, strong) NSTextField *overrideColorLbl;
+@property (nonatomic, strong) NSPopUpButton *overrideColorPopup;
 
 @property (nonatomic, strong) NSButton *fullscreenCheckbox;
 @property (nonatomic, strong) NSButton *defaultCheckbox;
@@ -493,6 +499,14 @@ static void plato_mac_beep(void *context) {
     [content addSubview:portLbl];
     _portField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx, 816, 100, 22)];
     [content addSubview:_portField];
+
+    _overrideColorLbl = [NSTextField labelWithString:@"Override Color:"];
+    [_overrideColorLbl setFrame:NSMakeRect(fx + 120, 818, 110, 18)];
+    [_overrideColorLbl setTextColor:plasmaOrange];
+    [content addSubview:_overrideColorLbl];
+    _overrideColorPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx + 235, 816, 260, 25) pullsDown:NO];
+    [_overrideColorPopup addItemsWithTitles:@[@"Default (Authentic)", @"Green (P31 Phosphor)", @"Amber (P40 Phosphor)", @"White (P4 Phosphor)"]];
+    [content addSubview:_overrideColorPopup];
 
     NSTextField *modeLbl = [NSTextField labelWithString:@"Display Mode:"];
     [modeLbl setFrame:NSMakeRect(rx, 780, 105, 18)];
@@ -692,6 +706,10 @@ static void plato_mac_beep(void *context) {
     NSInteger dist = p[@"crtDistortion"] ? [p[@"crtDistortion"] integerValue] : 2;
     [self.crtDistortionPopup selectItemAtIndex:dist];
 
+    NSInteger pColor = p[@"phosphorColor"] ? [p[@"phosphorColor"] integerValue] : 0;
+    if (pColor < 0 || pColor > 3) pColor = 0;
+    [self.overrideColorPopup selectItemAtIndex:pColor];
+
     [self updateVisibilityForModeIndex:pIdx];
 
     [self.fullscreenCheckbox setState:[p[@"fullScreen"] boolValue] ? NSControlStateValueOn : NSControlStateValueOff];
@@ -745,6 +763,7 @@ static void plato_mac_beep(void *context) {
     p[@"crtPersistenceMs"] = @(crtMs);
 
     p[@"crtDistortion"] = @([self.crtDistortionPopup indexOfSelectedItem]);
+    p[@"phosphorColor"] = @([self.overrideColorPopup indexOfSelectedItem]);
 
     p[@"fullScreen"] = @([self.fullscreenCheckbox state] == NSControlStateValueOn);
     p[@"startupScriptEnabled"] = @([self.scriptCheckbox state] == NSControlStateValueOn);
@@ -1064,6 +1083,7 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSMenu *crtBeamMenu;
 @property (nonatomic, strong) NSMenu *crtDecayMenu;
 @property (nonatomic, strong) NSMenu *crtDistortionMenu;
+@property (nonatomic, strong) NSMenu *overrideColorMenu;
 @property (nonatomic, strong) NSMenuItem *keyboardReferenceMenuItem;
 @property (nonatomic, strong) NSMenuItem *fpsCounterMenuItem;
 @property (nonatomic, strong) NSMenuItem *wasdMenuItem;
@@ -1149,6 +1169,8 @@ static void plato_mac_beep(void *context) {
     [self updateCRTDistortionMenu:[controller.view crtDistortion]];
     [self updatePlasmaDistortionMenu:[controller.view plasmaDistortion]];
     [self updateCRTDecayMenuForDuration:[controller.view crtDecayDuration]];
+    [self updateOverrideColorMenu:[controller.view phosphorColor]];
+    [self updateOverrideColorMenu:[controller.view phosphorColor]];
 }
 
 - (void)applyKeyboardReferencePresentation {
@@ -1340,6 +1362,25 @@ static void plato_mac_beep(void *context) {
     self.fpsCounterMenuItem = [[NSMenuItem alloc] initWithTitle:@"Show Performance HUD (FPS/CPU)" action:@selector(toggleFPSCounter:) keyEquivalent:[NSString stringWithCharacters:&fpsCounterKey length:1]];
     [self.fpsCounterMenuItem setKeyEquivalentModifierMask:0]; [self.fpsCounterMenuItem setTarget:self]; [self.fpsCounterMenuItem setState:NSControlStateValueOff];
     [viewMenu addItem:self.fpsCounterMenuItem];
+
+    [viewMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *overrideColorItem = [[NSMenuItem alloc] initWithTitle:@"Override Color" action:nil keyEquivalent:@""];
+    self.overrideColorMenu = [[NSMenu alloc] initWithTitle:@"Override Color"];
+    NSArray *overrideColorOpts = @[
+        @{@"title": @"Default (Authentic)", @"tag": @7001},
+        @{@"title": @"Green (P31 Phosphor)", @"tag": @7002},
+        @{@"title": @"Amber (P40 Phosphor)", @"tag": @7003},
+        @{@"title": @"White (P4 Phosphor)", @"tag": @7004}
+    ];
+    for (NSDictionary *opt in overrideColorOpts) {
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:opt[@"title"] action:@selector(selectOverrideColor:) keyEquivalent:@""];
+        [item setTarget:self];
+        [item setTag:[opt[@"tag"] integerValue]];
+        if ([opt[@"tag"] integerValue] == 7001) [item setState:NSControlStateValueOn];
+        [self.overrideColorMenu addItem:item];
+    }
+    [overrideColorItem setSubmenu:self.overrideColorMenu];
+    [viewMenu addItem:overrideColorItem];
     [viewMenuItem setSubmenu:viewMenu];
 
     // =============================================================
@@ -2014,6 +2055,35 @@ static void plato_mac_beep(void *context) {
         }
     }
 }
+
+- (void)selectOverrideColor:(id)sender {
+    NSMenuItem *item = (NSMenuItem *)sender;
+    NSInteger tag = [item tag];
+    NSInteger colorIdx = (tag == 7002) ? 1 : ((tag == 7003) ? 2 : ((tag == 7004) ? 3 : 0));
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setPhosphorColor:colorIdx];
+        if (active.currentProfile) {
+            NSMutableDictionary *mut = [active.currentProfile mutableCopy];
+            mut[@"phosphorColor"] = @(colorIdx);
+            active.currentProfile = mut;
+        }
+    }
+    [self updateOverrideColorMenu:colorIdx];
+    [[NSUserDefaults standardUserDefaults] setInteger:colorIdx forKey:@"phosphorColor"];
+    [[NSUserDefaults standardUserDefaults] setInteger:tag forKey:@"phosphorColorTag"];
+}
+
+- (void)updateOverrideColorMenu:(NSInteger)colorIdx {
+    NSInteger targetTag = (colorIdx == 1) ? 7002 : ((colorIdx == 2) ? 7003 : ((colorIdx == 3) ? 7004 : 7001));
+    if (self.overrideColorMenu) {
+        for (NSMenuItem *item in [self.overrideColorMenu itemArray]) {
+            [item setState:([item tag] == targetTag ? NSControlStateValueOn : NSControlStateValueOff)];
+        }
+    }
+}
+
+
 
 
 - (void)selectPlasmaDecay:(id)sender {

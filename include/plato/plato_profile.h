@@ -19,6 +19,7 @@ typedef struct {
     int crt_beam_level;      /* 0: Standard, 1: High, 2: Ultra */
     int crt_persistence_ms;  /* 20, 200, 500, 1000, 2000, 5000 */
     int crt_distortion;      /* 0: None, 1: Barrel, 2: Cylindrical */
+    int phosphor_color;      /* 0: Default (Orange/White), 1: Green P31, 2: Amber P40 */
     bool full_screen;
     bool is_default;
     bool startup_script_enabled;

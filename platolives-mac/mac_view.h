@@ -73,6 +73,8 @@ FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
 - (NSInteger)crtDistortion;
 - (void)setPlasmaDistortion:(NSInteger)distortion;
 - (NSInteger)plasmaDistortion;
+- (void)setPhosphorColor:(NSInteger)color;
+- (NSInteger)phosphorColor;
 - (void)setKeyboardReferenceVisible:(BOOL)visible;
 - (void)setDiagnosticLogEnabled:(BOOL)enabled;
 - (void)setMicroTutorLogEnabled:(BOOL)enabled;

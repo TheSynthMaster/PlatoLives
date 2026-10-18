@@ -680,6 +680,7 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     if (!_keymapManager || _selectedProfileIndex < 0) return;
     plato_keymap_set_active_by_index(_keymapManager, (int)_selectedProfileIndex);
     plato_keymap_save_all(_keymapManager);
+    [_profilesTable reloadData];
     [self updateSelectedProfileView];
     if ([self.delegate respondsToSelector:@selector(keyboardProfilesDidUpdate:)]) {
         [self.delegate keyboardProfilesDidUpdate:self];

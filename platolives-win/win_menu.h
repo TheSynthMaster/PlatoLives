@@ -64,6 +64,10 @@
 #define IDM_VIEW_CRT_DIST_NONE          1360
 #define IDM_VIEW_CRT_DIST_BARREL        1361
 #define IDM_VIEW_CRT_DIST_CYL           1362
+#define IDM_VIEW_COLOR_DEFAULT           1370
+#define IDM_VIEW_COLOR_GREEN             1371
+#define IDM_VIEW_COLOR_AMBER             1372
+#define IDM_VIEW_COLOR_WHITE             1373
 
 #define IDM_VIEW_KEYBOARD_REF           1380
 #define IDM_VIEW_FULLSCREEN             1391

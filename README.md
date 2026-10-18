@@ -1,6 +1,9 @@
-# PlatoLives (v4.7)
+# PlatoLives (v4.8)
 
-## Latest Changes (v4.7)
+## Latest Changes (v4.8)
+- **Universal Phosphor Display Profiles**: Real-time optical overrides for Default Orange, Green P31, Amber P40, and White P4 across macOS, Windows, and Linux.
+- **Adaptive Automation State**: Script execution indicator dot dynamically reflects the active phosphor palette.
+- **Multi-Platform Native UI**: Integrated Override Color submenus and Profile Editor controls on all desktop platforms.
 - **Universal Keyboard Profiles & Custom Keymapping Engine**:
   - High-performance, pure C11 profile and keymapping engine (`plato_keymap_manager`) with JSON persistence and instant $O(1)$ action dispatch.
   - Native "Manage Keyboard Profiles" management modal across macOS (Cocoa), Windows (Win32), and Linux (SDL2/OpenGL).
@@ -37,7 +40,11 @@ In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to 
 
 ---
 
-# What's new in v4.7
+# What's new in v4.8
+
+- **Universal Phosphor Profiles**: Seamlessly override the display phosphor chemistry between Default Orange, Green P31, Amber P40, and White P4 across Real Plasma, Crisp Monochrome, and Split Monochrome modes.
+- **Adaptive Automation State**: The running script status dot dynamically matches the active phosphor hue.
+- **Cross-Platform Native UI**: Native modal controls and dedicated View submenus across macOS (Cocoa), Windows (Win32), and Linux (SDL2/OpenGL).
 
 - **Universal Keyboard Profiles**: A completely modular keymapping subsystem allows creating, duplicating, remapping, and saving custom keyboard profiles in pure C11. Users can switch instantly between layouts via the top-level **Keyboard** menu or cycle them on the fly (`Cmd+Shift+G` / `Ctrl+Shift+G`).
 - **Numpad Roguelike Matrix**: Built-in support for 8-way directional navigation and 13 dedicated game actions specifically calibrated for Cyber1/PLATO multi-user dungeon crawlers (*Avatar*, *Oubliette*, *dnd*, *Moria*).

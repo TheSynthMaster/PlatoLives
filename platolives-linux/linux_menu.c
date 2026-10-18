@@ -189,7 +189,8 @@ enum {
     SUB_VIEW_PLASMA_DIST,
     SUB_VIEW_CRT_BEAM,
     SUB_VIEW_CRT_DECAY,
-    SUB_VIEW_CRT_DIST
+    SUB_VIEW_CRT_DIST,
+    SUB_VIEW_OVERRIDE_COLOR
 };
 
 void linux_menu_init(linux_menu_context_t *ctx) {
@@ -311,6 +312,8 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"Full Screen", "F11", ACT_VIEW_FULLSCREEN, TYPE_ITEM, 0, false, ctx->fullscreen, false};
         it[n++] = (gui_menu_item_t){"Show Performance HUD (FPS/CPU)", "F12", ACT_VIEW_FPS_HUD, TYPE_ITEM, 0, false, linux_hud_is_open(), false};
         it[n++] = (gui_menu_item_t){"Hide Menu Bar", "Ctrl+Shift+M", ACT_VIEW_HIDE_MENU_BAR, TYPE_ITEM, 0, true, ctx->hide_menu_bar, false};
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Override Color", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_OVERRIDE_COLOR, false, false, (p->display_mode == 3)};
         top[2].item_count = n;
     }
 
@@ -451,6 +454,12 @@ static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, in
             items[n++] = (gui_menu_item_t){"None (Flat)", NULL, ACT_VIEW_CRT_DIST_NONE, TYPE_ITEM, 0, true, p->crt_distortion == 0, false};
             items[n++] = (gui_menu_item_t){"Barrel (Curved Glass)", NULL, ACT_VIEW_CRT_DIST_BARREL, TYPE_ITEM, 0, true, p->crt_distortion == 1, false};
             items[n++] = (gui_menu_item_t){"Cylindrical", NULL, ACT_VIEW_CRT_DIST_CYL, TYPE_ITEM, 0, true, p->crt_distortion == 2, false};
+            break;
+        case SUB_VIEW_OVERRIDE_COLOR:
+            items[n++] = (gui_menu_item_t){"Default", NULL, ACT_VIEW_COLOR_DEFAULT, TYPE_ITEM, 0, true, p->phosphor_color == 0, false};
+            items[n++] = (gui_menu_item_t){"Green (P31)", NULL, ACT_VIEW_COLOR_GREEN, TYPE_ITEM, 0, true, p->phosphor_color == 1, false};
+            items[n++] = (gui_menu_item_t){"Amber (P40)", NULL, ACT_VIEW_COLOR_AMBER, TYPE_ITEM, 0, true, p->phosphor_color == 2, false};
+            items[n++] = (gui_menu_item_t){"White (P4)", NULL, ACT_VIEW_COLOR_WHITE, TYPE_ITEM, 0, true, p->phosphor_color == 3, false};
             break;
         default:
             break;

@@ -357,7 +357,14 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
             }
             s_has_saved_bg = true;
 
-            uint32_t col = 0xFFFF6E00; /* BGRA Orange Plasma */
+            uint32_t col = 0xFFFF6E00; /* Default Orange Plasma */
+            if (app->profile.phosphor_color == 1) {
+                col = 0xFF33FF33;      /* Green P31 */
+            } else if (app->profile.phosphor_color == 2) {
+                col = 0xFFFFB428;      /* Amber P40 */
+            } else if (app->profile.phosphor_color == 3) {
+                col = 0xFFE0F0FF;      /* White P4 */
+            }
             for (int dy = -dot_r; dy <= dot_r; dy++) {
                 for (int dx = -dot_r; dx <= dot_r; dx++) {
                     if (dx * dx + dy * dy <= dot_r * dot_r) {
@@ -850,6 +857,7 @@ static void linux_connect_profile(linux_client_t *app, const plato_profile_t *p)
 
     bool is_color = (app->profile.display_mode == 3 || app->profile.display_mode == 4);
     plato_terminal_set_color_mode(&app->terminal, is_color);
+    plato_terminal_set_palette(&app->terminal, (plato_palette_t)app->profile.phosphor_color);
     plato_optical_invalidate(app->optical);
 
     if (app->profile.full_screen != app->menu_ctx.fullscreen) {
@@ -1027,6 +1035,14 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_CRT_DIST_BARREL: app->profile.crt_distortion = 1; goto sync_optical_view;
         case ACT_VIEW_CRT_DIST_CYL: app->profile.crt_distortion = 2; goto sync_optical_view;
 
+        /* Phosphor Color Override */
+        case ACT_VIEW_COLOR_DEFAULT: app->profile.phosphor_color = 0; goto sync_optical_palette;
+        case ACT_VIEW_COLOR_GREEN:   app->profile.phosphor_color = 1; goto sync_optical_palette;
+        case ACT_VIEW_COLOR_AMBER:   app->profile.phosphor_color = 2; goto sync_optical_palette;
+        case ACT_VIEW_COLOR_WHITE:   app->profile.phosphor_color = 3; goto sync_optical_palette;
+
+sync_optical_palette:
+        plato_terminal_set_palette(&app->terminal, (plato_palette_t)app->profile.phosphor_color);
 sync_optical_view:
             plato_optical_invalidate(app->optical);
             app->terminal.fb.dirty = true;

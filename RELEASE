@@ -1,0 +1,24 @@
+# PlatoLives v4.8.0 Release Notes
+
+### Universal Phosphor Display Profiles & Real-time Optical Overrides
+- **Multi-Phosphor Optical Engine (`plato_optical.c`)**:
+  - Full physical recalibration of the gas-plasma sub-pixel decay model and monochrome CRT electron beam characteristics across 4 distinct phosphor chemistries:
+    - **Default (Orange/Native)**: Canonical warm orange gas-plasma discharge (Ne-Ar glow) and standard CRT phosphors.
+    - **Green P31**: Pure, vibrant emerald green vector phosphor with high persistence and luminous saturation.
+    - **Amber P40**: Rich golden amber phosphor, delivering vintage terminal warmth and extended decay curves.
+    - **White P4**: High-contrast, clean monochrome CRT phosphor with authentic cool white response.
+  - Zero-overhead, pure C11 mathematical color transformation preserving sharp text clarity, vector strokes, and optical curvature.
+
+### Unified Cross-Platform UI & Desktop Integration
+- **macOS (Cocoa / Metal)**: Dedicated "Override Color" submenu in View menu with radio-check items; native ComboBox integration in Profile Management modal.
+- **Windows (Win32 / Direct3D 11)**: Custom owner-draw dark amber styled "Override Color" submenu; dual-column profile editor modal with mode-aware control enabling across both x86_64 and native ARM64 pipelines.
+- **Linux Desktop (SDL2 / OpenGL Core 3.3)**: Procedural GUI View menu integration; dedicated 4-button Phosphor selector matrix seamlessly integrated into the Linux profile editor modal.
+
+### Adaptive Automation Indicator
+- Visual script-execution status dot dynamically updates its chromatic palette to match the active phosphor profile (Green P31, Amber P40, White P4, or Default Orange).
+
+### Full Multi-Target Distribution
+- macOS DMG package (Universal Apple Silicon / Intel)
+- Windows x86_64 and ARM64 Direct3D 11 executables
+- Linux Desktop GUI binaries (ARM64 and x86_64) & Self-Installing Tarball
+- Linux Console CLI static musl executables (ARM64 and x86_64)

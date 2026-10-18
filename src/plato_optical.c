@@ -44,6 +44,7 @@ struct PLATOPlasmaState {
     int crtBeamLevel;
     int crtDistortion;
     int plasmaDistortion;
+    int phosphorColor;
 };
 
 struct plato_optical {
@@ -298,7 +299,7 @@ static void plasmaComposeTile(plato_optical_t *opt, uint32_t *output, int tileX,
             float core = p->source[src_i], localGlow = p->local[src_i], wideGlow = p->wide[src_i];
 
             if ((core + localGlow + wideGlow) < 0.001f) {
-                output[i] = PLASMA_BG_PIXEL;
+                output[i] = (p->phosphorColor == 1) ? 0xFF010E02u : ((p->phosphorColor == 2) ? 0xFF0E0700u : ((p->phosphorColor == 3) ? 0xFF0A0A0Au : PLASMA_BG_PIXEL));
                 continue;
             }
 
@@ -308,9 +309,29 @@ static void plasmaComposeTile(plato_optical_t *opt, uint32_t *output, int tileX,
             if (core > 0.05f) fusedCore += 0.82f * neighborhood * (1.0f - core);
             float density = plasmaClamp(fusedCore + 0.62f * localGlow + 0.22f * wideGlow, 0.0f, 1.5f);
             float hot = plasmaClamp((density - 0.92f) * 2.0f, 0.0f, 1.0f);
-            float red = 0.055f + 0.95f * fusedCore + 0.58f * localGlow + 0.30f * wideGlow;
-            float green = 0.016f + 0.31f * fusedCore + 0.060f * localGlow + 0.020f * wideGlow + 0.08f * hot;
-            float blue = 0.004f + 0.018f * fusedCore + 0.003f * localGlow + 0.010f * hot;
+            float red, green, blue;
+
+            if (p->phosphorColor == 1) {
+                /* Calibrated Green P31 Gas Discharge (Phosphor simulation) */
+                red   = 0.005f + 0.15f * fusedCore + 0.020f * localGlow + 0.010f * wideGlow + 0.35f * hot;
+                green = 0.035f + 0.96f * fusedCore + 0.65f * localGlow + 0.32f * wideGlow + 0.15f * hot;
+                blue  = 0.005f + 0.08f * fusedCore + 0.015f * localGlow + 0.008f * wideGlow + 0.30f * hot;
+            } else if (p->phosphorColor == 2) {
+                /* Calibrated Amber P40 Gas Discharge: carica, densa e calda ad alta emissione */
+                red   = 0.050f + 1.12f * fusedCore + 0.72f * localGlow + 0.38f * wideGlow + 0.18f * hot;
+                green = 0.024f + 0.82f * fusedCore + 0.48f * localGlow + 0.24f * wideGlow + 0.28f * hot;
+                blue  = 0.002f + 0.04f * fusedCore + 0.010f * localGlow + 0.005f * wideGlow + 0.08f * hot;
+            } else if (p->phosphorColor == 3) {
+                /* Calibrated White P4 Gas Discharge: brillante, densa, incandescente ed energica */
+                red   = 0.025f + 1.10f * fusedCore + 0.68f * localGlow + 0.34f * wideGlow + 0.30f * hot;
+                green = 0.025f + 1.12f * fusedCore + 0.70f * localGlow + 0.35f * wideGlow + 0.30f * hot;
+                blue  = 0.028f + 1.16f * fusedCore + 0.74f * localGlow + 0.37f * wideGlow + 0.30f * hot;
+            } else {
+                /* Authentic Neon Orange Gas Discharge */
+                red   = 0.055f + 0.95f * fusedCore + 0.58f * localGlow + 0.30f * wideGlow;
+                green = 0.016f + 0.31f * fusedCore + 0.060f * localGlow + 0.020f * wideGlow + 0.08f * hot;
+                blue  = 0.004f + 0.018f * fusedCore + 0.003f * localGlow + 0.010f * hot;
+            }
             output[i] = plasmaRGBA(red, green, blue);
         }
     }
@@ -636,18 +657,64 @@ static void crtComposeTile(plato_optical_t *opt, uint32_t *output, int tileX, in
             float b_avg = (b_p + b_c + b_n) * 0.3333f;
             float sum_avg = r_avg + g_avg + b_avg;
 
-            float chroma_r = (sum_avg > 0.001f) ? (r_avg / sum_avg) : 0.0f;
-            float chroma_g = (sum_avg > 0.001f) ? (g_avg / sum_avg) : 0.0f;
-            float chroma_b = (sum_avg > 0.001f) ? (b_avg / sum_avg) : 0.0f;
-
             float m_r = mask_tbl[sx][0];
             float m_g = mask_tbl[sx][1];
             float m_b = mask_tbl[sx][2];
 
+            float r_b = r_beam, g_b = g_beam, b_b = b_beam;
+            float mask_r = m_r, mask_g = m_g, mask_b = m_b;
+            float chroma_r = 0.0f, chroma_g = 0.0f, chroma_b = 0.0f;
+
+            if (p->phosphorColor != 0) {
+                /* Modalita' Monocromatica Pura CRT: fascio intenso ad altissima saturazione */
+                float mono_p = e_pp * wx_p + e_pc * wx_c + e_pn * wx_n;
+                float mono_c = e_cp * wx_p + e_cc * wx_c + e_cn * wx_n;
+                float mono_n = e_np * wx_p + e_nc * wx_c + e_nn * wx_n;
+                float mono_beam = mono_p * wy_p + mono_c * wy_c + mono_n * wy_n;
+                float mono_sum_avg = (mono_p + mono_c + mono_n) * 0.3333f;
+
+                /* Fosforo uniforme e puro senza la griglia a fori RGB della shadow mask */
+                float m_mono = 0.96f + 0.04f * ((m_r + m_g + m_b) * 0.3333f);
+                mask_r = m_mono; mask_g = m_mono; mask_b = m_mono;
+
+                float bloom_energy = (mono_sum_avg > 0.001f) ? plasmaClamp(mono_sum_avg * 1.5f, 0.0f, 1.20f) : 0.0f;
+
+                if (p->phosphorColor == 1) {
+                    /* Green P31: Verde smeraldo puro, intenso ed elettrico (zero desaturazione) */
+                    r_b = mono_beam * 0.04f;
+                    g_b = mono_beam * 1.45f;
+                    b_b = mono_beam * 0.06f;
+                    chroma_r = 0.02f * bloom_energy;
+                    chroma_g = 1.00f * bloom_energy;
+                    chroma_b = 0.04f * bloom_energy;
+                } else if (p->phosphorColor == 2) {
+                    /* Amber P40: Ambra dorata radiosa, calda, viva e penetrante */
+                    r_b = mono_beam * 1.65f;
+                    g_b = mono_beam * 0.95f;
+                    b_b = mono_beam * 0.02f;
+                    chroma_r = 1.15f * bloom_energy;
+                    chroma_g = 0.65f * bloom_energy;
+                    chroma_b = 0.01f * bloom_energy;
+                } else {
+                    /* White P4: Bianco "paper-white" brillante, cristallino ed incisivo */
+                    r_b = mono_beam * 1.55f;
+                    g_b = mono_beam * 1.58f;
+                    b_b = mono_beam * 1.62f;
+                    chroma_r = 0.85f * bloom_energy;
+                    chroma_g = 0.88f * bloom_energy;
+                    chroma_b = 0.92f * bloom_energy;
+                }
+            } else {
+                /* Authentic Color CRT Shadow Mask Triad */
+                chroma_r = (sum_avg > 0.001f) ? (r_avg / sum_avg) : 0.0f;
+                chroma_g = (sum_avg > 0.001f) ? (g_avg / sum_avg) : 0.0f;
+                chroma_b = (sum_avg > 0.001f) ? (b_avg / sum_avg) : 0.0f;
+            }
+
             float bloom_val = glow * prof->bloom_amt * 1.5f;
-            float r_final = (r_beam * m_r * v_beam) + (chroma_r * bloom_val);
-            float g_final = (g_beam * m_g * v_beam) + (chroma_g * bloom_val);
-            float b_final = (b_beam * m_b * v_beam) + (chroma_b * bloom_val);
+            float r_final = (r_b * mask_r * v_beam) + (chroma_r * bloom_val);
+            float g_final = (g_b * mask_g * v_beam) + (chroma_g * bloom_val);
+            float b_final = (b_b * mask_b * v_beam) + (chroma_b * bloom_val);
 
             r_final *= prof->gain;
             g_final *= prof->gain;
@@ -656,9 +723,19 @@ static void crtComposeTile(plato_optical_t *opt, uint32_t *output, int tileX, in
             float max_c = fmaxf(r_final, fmaxf(g_final, b_final));
             if (max_c > 1.0f) {
                 float boost = (max_c - 1.0f) * 0.20f;
-                r_final += boost;
-                g_final += boost;
-                b_final += boost;
+                if (p->phosphorColor == 1) {
+                    /* Il boost P31 amplifica solo il verde puro (INALTERATO) */
+                    g_final += boost;
+                } else if (p->phosphorColor == 2) {
+                    /* Il boost P40 amplifica lo spettro ambra radioso */
+                    r_final += boost * 1.15f;
+                    g_final += boost * 0.65f;
+                } else {
+                    /* Bianco o Color CRT: boost radioso a spettro completo */
+                    r_final += boost * 1.10f;
+                    g_final += boost * 1.10f;
+                    b_final += boost * 1.10f;
+                }
             }
 
             output[i] = plasmaRGBA(plasmaClamp(r_final, 0.0f, 1.0f),
@@ -772,15 +849,20 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
     double new_decay_dur = (double)prof->persistence_ms / 1000.0;
     double new_crt_decay_dur = (double)prof->crt_persistence_ms / 1000.0;
 
+    /* Sincronizza sempre la palette nel terminale logico */
+    term->palette = (plato_palette_t)prof->phosphor_color;
+
     /* Rileva se l'utente ha cambiato modalità o parametri dal menu -> Forza re-init totale istantaneo */
     if (opt->state->displayMode != prof->display_mode ||
         opt->state->plasmaDistortion != prof->plasma_distortion ||
         opt->state->crtDistortion != prof->crt_distortion ||
         opt->state->crtBeamLevel != prof->crt_beam_level ||
+        opt->state->phosphorColor != prof->phosphor_color ||
         opt->state->decayDuration != new_decay_dur ||
         opt->state->crtDecayDuration != new_crt_decay_dur) {
 
         opt->state->displayMode = prof->display_mode;
+        opt->state->phosphorColor = prof->phosphor_color;
         opt->state->decayDuration = new_decay_dur;
         opt->state->decayTau = (float)(new_decay_dur / 10.0);
         opt->state->plasmaDistortion = prof->plasma_distortion;

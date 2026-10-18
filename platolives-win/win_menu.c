@@ -128,6 +128,14 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FULLSCREEN, L"Full Screen\tF11");
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FPS_HUD, L"Show Performance HUD (FPS/CPU)\tF12");
+
+    AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
+    HMENU hOverrideColor = CreatePopupMenu();
+    AppendMenuW(hOverrideColor, MF_STRING, IDM_VIEW_COLOR_DEFAULT, L"Default");
+    AppendMenuW(hOverrideColor, MF_STRING, IDM_VIEW_COLOR_GREEN, L"Green (P31)");
+    AppendMenuW(hOverrideColor, MF_STRING, IDM_VIEW_COLOR_AMBER, L"Amber (P40)");
+    AppendMenuW(hOverrideColor, MF_STRING, IDM_VIEW_COLOR_WHITE, L"White (P4)");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hOverrideColor, L"Override Color");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hView, L"&View");
 
     /* ============================================================= */
@@ -215,6 +223,9 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
         EnableMenuItem(hView, 9, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
         /* Posizione 10: CRT Distortion */
         EnableMenuItem(hView, 10, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 15: Override Color (disabilitato solo in Crisp Color) */
+        bool canOverrideColor = (p->display_mode != 3);
+        EnableMenuItem(hView, 15, MF_BYPOSITION | (canOverrideColor ? MF_ENABLED : MF_GRAYED));
     }
 
     /* Plasma Decay */
@@ -246,6 +257,10 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     /* CRT Distortion */
     CheckMenuRadioItem(menu, IDM_VIEW_CRT_DIST_NONE, IDM_VIEW_CRT_DIST_CYL,
                        IDM_VIEW_CRT_DIST_NONE + p->crt_distortion, MF_BYCOMMAND);
+
+    /* Phosphor Color Override */
+    CheckMenuRadioItem(menu, IDM_VIEW_COLOR_DEFAULT, IDM_VIEW_COLOR_WHITE,
+                       IDM_VIEW_COLOR_DEFAULT + p->phosphor_color, MF_BYCOMMAND);
 
     /* Profiles Submenu */
     if (profiles && profiles->count > 0 && current_profile_idx >= 0) {

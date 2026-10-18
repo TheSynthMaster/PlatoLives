@@ -42,11 +42,15 @@
 #define IDC_BTN_DEFAULT         224
 #define IDC_BTN_CLOSE           225
 
+#define IDC_LBL_PHOSPHOR_COLOR   226
+#define IDC_COMBO_PHOSPHOR_COLOR 227
+
 typedef struct {
     HWND hwnd;
     HWND hList;
     HWND hEditName, hEditHost, hEditPort;
     HWND hComboMode;
+    HWND hLblPhosphor, hComboPhosphor;
     HWND hLblPlasmaDecay, hComboPlasmaDecay;
     HWND hLblPlasmaDist, hComboPlasmaDist;
     HWND hLblCrtBeam, hComboCrtBeam;
@@ -96,6 +100,10 @@ static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
     ShowWindow(ctx->hComboCrtDecay, isCRT ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hLblCrtDist, isCRT ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hComboCrtDist, isCRT ? SW_SHOW : SW_HIDE);
+
+    /* Phosphor Color disabilitato solo in Crisp Color (modalità 3) */
+    EnableWindow(ctx->hLblPhosphor, mode != 3);
+    EnableWindow(ctx->hComboPhosphor, mode != 3);
 }
 
 static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
@@ -110,6 +118,7 @@ static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
     SetWindowTextA(ctx->hEditPort, port_str);
 
     SendMessage(ctx->hComboMode, CB_SETCURSEL, (WPARAM)p->display_mode, 0);
+    SendMessage(ctx->hComboPhosphor, CB_SETCURSEL, (WPARAM)p->phosphor_color, 0);
 
     /* Plasma */
     int d_idx = index_for_ms(g_decay_ms_values, 6, p->persistence_ms);
@@ -175,6 +184,8 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
     if (p->port <= 0) p->port = 8005;
 
     p->display_mode = (int)SendMessage(ctx->hComboMode, CB_GETCURSEL, 0, 0);
+    int ph_idx = (int)SendMessage(ctx->hComboPhosphor, CB_GETCURSEL, 0, 0);
+    p->phosphor_color = (ph_idx >= 0 && ph_idx <= 3) ? ph_idx : 0;
 
     int d_idx = (int)SendMessage(ctx->hComboPlasmaDecay, CB_GETCURSEL, 0, 0);
     p->persistence_ms = (d_idx >= 0 && d_idx < 6) ? g_decay_ms_values[d_idx] : 100;
@@ -336,6 +347,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     np.crt_beam_level = 1;
                     np.crt_persistence_ms = 20;
                     np.crt_distortion = 2;
+                    np.phosphor_color = 0;
                     snprintf(np.startup_script, sizeof(np.startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
                     plato_profiles_add(ctx->list, &np);
                     ctx->current_index = (int)(ctx->list->count - 1);
@@ -496,12 +508,19 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     g_dlg.hEditPort = CreateWindowW(L"EDIT", L"8005", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, rx + 705, 78, 115, 22, hwnd, (HMENU)IDC_EDIT_PORT, wc.hInstance, NULL);
 
     CreateWindowW(L"STATIC", L"Display Mode:", WS_CHILD | WS_VISIBLE, rx, 108, 120, 18, hwnd, NULL, wc.hInstance, NULL);
-    g_dlg.hComboMode = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 126, 820, 150, hwnd, (HMENU)IDC_COMBO_MODE, wc.hInstance, NULL);
+    g_dlg.hComboMode = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx, 126, 400, 150, hwnd, (HMENU)IDC_COMBO_MODE, wc.hInstance, NULL);
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Plasma");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Crisp Monochrome");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Split Monochrome");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Crisp Color");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Color CRT");
+
+    g_dlg.hLblPhosphor = CreateWindowW(L"STATIC", L"Phosphor Color:", WS_CHILD | WS_VISIBLE, rx + 420, 108, 160, 18, hwnd, (HMENU)IDC_LBL_PHOSPHOR_COLOR, wc.hInstance, NULL);
+    g_dlg.hComboPhosphor = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 420, 126, 400, 150, hwnd, (HMENU)IDC_COMBO_PHOSPHOR_COLOR, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboPhosphor, CB_ADDSTRING, 0, (LPARAM)L"Default");
+    SendMessageW(g_dlg.hComboPhosphor, CB_ADDSTRING, 0, (LPARAM)L"Green (P31)");
+    SendMessageW(g_dlg.hComboPhosphor, CB_ADDSTRING, 0, (LPARAM)L"Amber (P40)");
+    SendMessageW(g_dlg.hComboPhosphor, CB_ADDSTRING, 0, (LPARAM)L"White (P4)");
 
     /* Controlli Real Plasma */
     g_dlg.hLblPlasmaDecay = CreateWindowW(L"STATIC", L"Real Plasma Persistence:", WS_CHILD | WS_VISIBLE, rx, 156, 400, 18, hwnd, NULL, wc.hInstance, NULL);
