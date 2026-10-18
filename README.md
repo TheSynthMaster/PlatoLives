@@ -1,23 +1,12 @@
 # PlatoLives (v4.8)
 
 ## Latest Changes (v4.8)
-- **Universal Phosphor Display Profiles**: Real-time optical overrides for Default Orange, Green P31, Amber P40, and White P4 across macOS, Windows, and Linux.
-- **Adaptive Automation State**: Script execution indicator dot dynamically reflects the active phosphor palette.
-- **Multi-Platform Native UI**: Integrated Override Color submenus and Profile Editor controls on all desktop platforms.
-- **Universal Keyboard Profiles & Custom Keymapping Engine**:
-  - High-performance, pure C11 profile and keymapping engine (`plato_keymap_manager`) with JSON persistence and instant $O(1)$ action dispatch.
-  - Native "Manage Keyboard Profiles" management modal across macOS (Cocoa), Windows (Win32), and Linux (SDL2/OpenGL).
-  - Interactive "Press Key to Bind" interface with live hardware keycode detection (VKeys) and Universal Action Picker.
-  - 4 Built-in profiles curated for authentic PLATO interaction:
-    - **Standard PLATO**: The canonical terminal layout and function keys.
-    - **WASD Gaming**: Modern 4-way navigation with accessible action shortcuts.
-    - **WASX Avatar**: Authentic cardinal and diagonal directional layout for PLATO classics.
-    - **Numpad Roguelike**: True 8-way directional movement matrix (keys 1-9) and 13 action keybindings designed for legendary PLATO dungeon crawlers (*Avatar*, *Oubliette*, *dnd*).
-- **Native Windows ARM64 Support**:
-  - Official 64-bit ARM executable (`PlatoLives-windows-arm64.exe`) compiled directly for Windows on ARM.
-  - Native Direct3D 11 hardware rendering with optimal battery life and zero emulation overhead on Snapdragon X Elite laptops and Parallels Desktop on Apple Silicon.
-- **Unified Multi-Target Distribution**:
-  - Synchronized build pipeline producing native bundles for macOS (DMG), Windows (x86_64 and ARM64 executables), Linux (Desktop graphical installer), and Linux Console (headless static musl binaries).
+
+- **Customizable Keyboard Profiles**: Create, duplicate, edit, and save keyboard layouts. Four built-in profiles cover standard PLATO input, WASD navigation, the WASX layout used by Avatar-style games, and numpad-based 8-way movement for dungeon crawlers.
+- **Cross-Platform Key Remapping**: Native profile-management dialogs and a “Press Key to Bind” workflow on macOS, Windows, and Linux. Profiles are stored in JSON and can be switched from the Keyboard menu or with `Cmd+Shift+G` / `Ctrl+Shift+G`.
+- **Native Windows ARM64 Build**: A dedicated ARM64 executable with native Direct3D 11 rendering for Windows on ARM.
+- **Unified Multi-Platform Builds**: The build pipeline now produces packages for macOS, Windows x86_64/ARM64, Linux desktop, and headless Linux console systems.
+- **Display Phosphor Profiles**: Choose Default Orange, Green P31, Amber P40, or White P4 across supported monochrome and plasma display modes, with native controls on each desktop platform.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Windows%20(x86__64%20%26%20ARM64)%20%7C%20Linux%20(ARM64%20%26%20x86__64)-orange.svg)](#)
 [![Language](https://img.shields.io/badge/language-C11%20%7C%20Direct3D%2011%20%7C%20Cocoa%2FMetal%20%7C%20OpenGL%203.3-blue.svg)](#)
@@ -42,14 +31,20 @@ In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to 
 
 # What's new in v4.8
 
-- **Universal Phosphor Profiles**: Seamlessly override the display phosphor chemistry between Default Orange, Green P31, Amber P40, and White P4 across Real Plasma, Crisp Monochrome, and Split Monochrome modes.
-- **Adaptive Automation State**: The running script status dot dynamically matches the active phosphor hue.
-- **Cross-Platform Native UI**: Native modal controls and dedicated View submenus across macOS (Cocoa), Windows (Win32), and Linux (SDL2/OpenGL).
+Version 4.8 focuses on input customization, broader native platform support, and distribution improvements.
 
-- **Universal Keyboard Profiles**: A completely modular keymapping subsystem allows creating, duplicating, remapping, and saving custom keyboard profiles in pure C11. Users can switch instantly between layouts via the top-level **Keyboard** menu or cycle them on the fly (`Cmd+Shift+G` / `Ctrl+Shift+G`).
-- **Numpad Roguelike Matrix**: Built-in support for 8-way directional navigation and 13 dedicated game actions specifically calibrated for Cyber1/PLATO multi-user dungeon crawlers (*Avatar*, *Oubliette*, *dnd*, *Moria*).
-- **Interactive Remapping Modals**: Platform-native modal dialogs on macOS (Cocoa), Windows (Win32), and Linux (SDL2/OpenGL) provide an effortless "Press Key to Bind" workflow.
-- **Native Windows ARM64**: Full native Direct3D 11 support for Qualcomm Snapdragon X Elite systems and Windows 11 ARM64 virtual machines, eliminating Prism translation overhead.
+- **Keyboard profile system**: Create, clone, remap, and save custom keyboard profiles. Switch profiles from the **Keyboard** menu or cycle them with `Cmd+Shift+G` / `Ctrl+Shift+G`.
+- **Four built-in layouts**:
+  - **Standard PLATO** — the conventional PLATO keyboard mapping.
+  - **WASD Gaming** — four-way navigation with action shortcuts.
+  - **WASX Avatar** — directional controls suited to Avatar-style play.
+  - **Numpad Roguelike** — eight-way movement using keys 1–9, plus 13 configurable game actions for titles such as *Avatar*, *Oubliette*, *dnd*, and *Moria*.
+- **Native remapping dialogs**: macOS, Windows, and Linux provide a “Press Key to Bind” interface with hardware-key detection and an action picker.
+- **Windows ARM64**: A dedicated native ARM64 executable using Direct3D 11, including support for Windows on ARM systems and ARM virtual machines.
+- **Multi-platform packaging**: A unified build pipeline produces macOS, Windows x86_64/ARM64, Linux desktop, and static Linux console builds.
+- **Display phosphor choices**: Select Default Orange, Green P31, Amber P40, or White P4 in supported display modes. Native controls are available on macOS, Windows, and Linux.
+
+The script-running indicator also follows the selected phosphor color. This is a small interface refinement, rather than a headline feature.
 
 ---
 
