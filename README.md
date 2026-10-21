@@ -1,5 +1,3 @@
-
-```
 # PlatoLives (v5.0)
 
 ## Latest Changes (v5.0)
