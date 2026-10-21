@@ -35,6 +35,12 @@ static void test_builtins_and_cycle(void) {
     assert(strcmp(p3->name, "Numpad Roguelike") == 0);
     assert(p3->binding_count == 13);
 
+    const plato_keymap_profile_t *p4 = plato_keymap_get_profile(&mgr, 4);
+    assert(p4 != NULL);
+    assert(strcmp(p4->name, "WADX") == 0);
+    assert(p4->is_builtin == true);
+    assert(p4->binding_count == 4);
+
     /* Test cycling */
     int idx0 = plato_keymap_get_active_index(&mgr);
     assert(idx0 == 0);

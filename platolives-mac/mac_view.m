@@ -1,3 +1,4 @@
+#import "mac_conn.h"
 #import "mac_view.h"
 #import "mac_window.h"
 #import <QuartzCore/QuartzCore.h>
@@ -76,6 +77,10 @@ typedef NS_ENUM(NSInteger, PLATODisplayMode) {
 #define PLASMA_PIXELS ((size_t)PLASMA_WIDTH * PLASMA_HEIGHT)
 #define PLASMA_BYTES (PLASMA_PIXELS * sizeof(uint32_t))
 #define PLASMA_TILE_LOGICAL 32
+
+#ifndef MAX_VECTOR_EVENTS
+#define MAX_VECTOR_EVENTS 8192
+#endif
 #define PLASMA_TILE_SIZE (PLASMA_TILE_LOGICAL * PLASMA_SCALE)
 #define PLASMA_TILE_COLS (PLASMA_WIDTH / PLASMA_TILE_SIZE)
 #define PLASMA_TILE_ROWS (PLASMA_HEIGHT / PLASMA_TILE_SIZE)
@@ -359,24 +364,25 @@ static void* network_worker(void *arg) {
 
 - (void)connectToHost:(NSString *)host port:(int)port {
     [self resetTerminal];
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        bool ok = plato_transport_connect(self->transport, [host UTF8String], port);
-        if (ok) {
+    NSString *pName = @"PLATO";
+    [[PLATOConnectingWindowController sharedController] showForParentWindow:self.window
+                                                                profileName:pName
+                                                                       host:host
+                                                                       port:port
+                                                                  transport:self->transport
+                                                                 completion:^(BOOL success) {
+        if (success) {
             NSLog(@"[PLATO] Connesso con successo a %@:%d", host, port);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (self.onConnectedHandler) {
-                    self.onConnectedHandler();
-                }
-            });
+            if (self.onConnectedHandler) {
+                self.onConnectedHandler();
+            }
         } else {
             const char *err = (self->transport && self->transport->last_error[0]) ? self->transport->last_error : "Connection refused";
             NSString *errStr = [NSString stringWithUTF8String:err];
-            NSLog(@"[PLATO] Errore di connessione a %@:%d (%@)", host, port, errStr);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self displayConnectionFailedMessage:errStr host:host port:port];
-            });
+            NSLog(@"[PLATO] Connessione a %@:%d non riuscita o annullata (%@)", host, port, errStr);
+            [self displayConnectionFailedMessage:errStr host:host port:port];
         }
-    });
+    }];
 }
 
 - (void)processIncomingData {
@@ -384,6 +390,22 @@ static void* network_worker(void *arg) {
 
     CFTimeInterval now = CACurrentMediaTime();
     if (now < self->paceUntil) return;
+
+    static double sTekPacerLastTime = 0.0;
+    static double sTekPacerCreditBits = 0.0;
+    int tekBaud = opticalProfile.display_mode == 5 ? opticalProfile.tek_baud_rate : 0;
+    if (tekBaud > 0) {
+        double elapsed = sTekPacerLastTime > 0.0 ? now - sTekPacerLastTime : 0.0;
+        if (elapsed < 0.0) elapsed = 0.0;
+        if (elapsed > 0.250) elapsed = 0.250;
+        sTekPacerLastTime = now;
+        sTekPacerCreditBits += elapsed * (double)tekBaud;
+        double maxCredit = (double)tekBaud * 0.250;
+        if (sTekPacerCreditBits > maxCredit) sTekPacerCreditBits = maxCredit;
+    } else {
+        sTekPacerLastTime = now;
+        sTekPacerCreditBits = 0.0;
+    }
 
     while (running) {
         if (feedBufferPos >= feedBufferLen) {
@@ -396,8 +418,19 @@ static void* network_worker(void *arg) {
 
         terminal->delay_requested = false;
         size_t remaining = feedBufferLen - feedBufferPos;
-        size_t consumed = plato_terminal_feed(terminal, &feedBuffer[feedBufferPos], remaining);
+        size_t allowed = remaining;
+        if (tekBaud > 0) {
+            size_t budget = (size_t)(sTekPacerCreditBits / 10.0);
+            if (budget == 0) { if (terminal->fb.dirty) [self refreshDisplay]; break; }
+            if (budget < 16) budget = 16; /* Quantum minimo anti-gap Othello */
+            if (allowed > budget) allowed = budget;
+        }
+        size_t consumed = plato_terminal_feed(terminal, &feedBuffer[feedBufferPos], allowed);
         feedBufferPos += consumed;
+        if (tekBaud > 0) {
+            sTekPacerCreditBits -= (double)consumed * 10.0;
+            if (sTekPacerCreditBits < 0.0) sTekPacerCreditBits = 0.0;
+        }
 
         if (terminal->delay_requested) {
             terminal->delay_requested = false;
@@ -534,7 +567,9 @@ static void* network_worker(void *arg) {
 
             /* Disegna il pallino coordinato con lo schema colore attivo */
             uint32_t col = 0xFFFF6E00u; /* Default Orange Plasma */
-            if (opticalProfile.phosphor_color == 1) {
+            if (opticalProfile.display_mode == 5) {
+                col = 0xFF33FF33u;      /* Real Tektronix: Sempre Verde P31 */
+            } else if (opticalProfile.phosphor_color == 1) {
                 col = 0xFF33FF33u;      /* Green P31 */
             } else if (opticalProfile.phosphor_color == 2) {
                 col = 0xFFFFB000u;      /* Amber P40 */
@@ -604,6 +639,22 @@ static void* network_worker(void *arg) {
     if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
+}
+
+- (void)setDisplayRealTektronix {
+    opticalProfile.display_mode = 5; /* Real Tektronix 4014 (DVBST) */
+    if (terminal) plato_terminal_set_color_mode(terminal, false);
+    if (optical) plato_optical_invalidate(optical);
+    [self updateLayerFilters];
+    [self refreshDisplay];
+}
+
+- (void)setTekBaudRate:(NSInteger)baud {
+    opticalProfile.tek_baud_rate = (int)baud;
+}
+
+- (NSInteger)tekBaudRate {
+    return opticalProfile.tek_baud_rate;
 }
 
 - (void)setDisplayRealColorCRT {
@@ -928,7 +979,6 @@ static void* network_worker(void *arg) {
 
     CGRect destRect = platoDisplayRect(self.bounds);
     if (fpsCounterVisible) {
-        BOOL isCrisp = (opticalProfile.display_mode == 1 || opticalProfile.display_mode == 3);
         NSString *userInfo = @"";
         if (terminal && terminal->user_name[0] && terminal->user_group[0]) {
             userInfo = [NSString stringWithFormat:@"USER    %s/%s (%s)\n", terminal->user_name, terminal->user_group, terminal->user_station];
@@ -936,19 +986,72 @@ static void* network_worker(void *arg) {
             userInfo = [NSString stringWithFormat:@"SLOT    %s\n", terminal->user_station];
         }
 
-        NSString *fpsText = isCrisp
-            ? [NSString stringWithFormat:@"%@FPS     %5.1f\nCPU     %5.1f%%", userInfo, fpsTotal, cpuUsagePercent]
-            : [NSString stringWithFormat:@"%@FPS     %5.1f\nPARTIAL %5.1f\nFULL    %5.1f\nCPU     %5.1f%%", userInfo, fpsTotal, fpsPartial, fpsFull, cpuUsagePercent];
+        NSString *fpsText = nil;
+        if (opticalProfile.display_mode == 5) {
+            /* Modalita' Tektronix 4014 (DVBST): telemetria vettoriale seriale */
+            NSString *baudStr = (opticalProfile.tek_baud_rate > 0)
+                ? [NSString stringWithFormat:@"%d BAUD", opticalProfile.tek_baud_rate]
+                : @"INSTANT";
+            uint32_t q_count = 0;
+            if (terminal) {
+                q_count = (terminal->vector_queue.head - terminal->vector_queue.tail + MAX_VECTOR_EVENTS) % MAX_VECTOR_EVENTS;
+            }
+            double q_pct = ((double)q_count / (double)MAX_VECTOR_EVENTS) * 100.0;
+            fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nSPEED   %@\nQUEUE   %d%% (%u/%d)\nCPU     %5.1f%%",
+                       userInfo, fpsTotal, baudStr, (int)(q_pct + 0.5), (unsigned int)q_count, (int)MAX_VECTOR_EVENTS, cpuUsagePercent];
+        } else if (opticalProfile.display_mode == 1 || opticalProfile.display_mode == 3) {
+            /* Modalita' Crisp Mono / Crisp Color */
+            fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nCPU     %5.1f%%",
+                       userInfo, fpsTotal, cpuUsagePercent];
+        } else {
+            /* Modalita' Plasma Tradizionale e Real CRT: telemetria raster dirty-rect */
+            fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nPARTIAL %5.1f\nFULL    %5.1f\nCPU     %5.1f%%",
+                       userInfo, fpsTotal, fpsPartial, fpsFull, cpuUsagePercent];
+        }
+
+        /* Dynamic Color Matching coordinato con palette display e phosphor override */
+        NSInteger displayMode = opticalProfile.display_mode;
+        NSInteger phosphor = opticalProfile.phosphor_color;
+        NSColor *textColor = nil;
+        NSColor *borderColor = nil;
+        NSColor *bgColor = nil;
+
+        if (displayMode == 5 || phosphor == 1) {
+            /* Tektronix 4014 (Mode 5) o Verde Smeraldo P31 */
+            textColor   = [NSColor colorWithCalibratedRed:51.0/255.0  green:255.0/255.0 blue:51.0/255.0  alpha:0.98];
+            borderColor = [NSColor colorWithCalibratedRed:10.0/255.0  green:64.0/255.0  blue:10.0/255.0  alpha:1.00];
+            bgColor     = [NSColor colorWithCalibratedRed:2.0/255.0   green:8.0/255.0   blue:2.0/255.0   alpha:200.0/255.0];
+        } else if (phosphor == 2) {
+            /* P40 Amber Override */
+            textColor   = [NSColor colorWithCalibratedRed:255.0/255.0 green:180.0/255.0 blue:40.0/255.0  alpha:0.98];
+            borderColor = [NSColor colorWithCalibratedRed:80.0/255.0  green:40.0/255.0  blue:10.0/255.0  alpha:1.00];
+            bgColor     = [NSColor colorWithCalibratedRed:6.0/255.0   green:3.0/255.0   blue:1.0/255.0   alpha:200.0/255.0];
+        } else if (phosphor == 3 || displayMode == 3 || displayMode == 4) {
+            /* P4 White Override o Crisp Color (3) o Real Color CRT (4) */
+            textColor   = [NSColor colorWithCalibratedRed:235.0/255.0 green:235.0/255.0 blue:235.0/255.0 alpha:0.98];
+            borderColor = [NSColor colorWithCalibratedRed:60.0/255.0  green:60.0/255.0  blue:60.0/255.0  alpha:1.00];
+            bgColor     = [NSColor colorWithCalibratedRed:8.0/255.0   green:8.0/255.0   blue:8.0/255.0   alpha:200.0/255.0];
+        } else {
+            /* Authentic Plasma (Mode 0, 2) e Crisp Mono (Mode 1) default */
+            textColor   = [NSColor colorWithCalibratedRed:255.0/255.0 green:180.0/255.0 blue:40.0/255.0  alpha:0.98];
+            borderColor = [NSColor colorWithCalibratedRed:80.0/255.0  green:40.0/255.0  blue:10.0/255.0  alpha:1.00];
+            bgColor     = [NSColor colorWithCalibratedRed:6.0/255.0   green:3.0/255.0   blue:1.0/255.0   alpha:200.0/255.0];
+        }
+
         NSDictionary *fpsAttributes = @{
             NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13.0 weight:NSFontWeightSemibold],
-            NSForegroundColorAttributeName: [NSColor colorWithCalibratedRed:1.0 green:0.62 blue:0.20 alpha:0.98]
+            NSForegroundColorAttributeName: textColor
         };
         NSSize textSize = [fpsText sizeWithAttributes:fpsAttributes];
         NSRect fpsPanel = NSMakeRect(self.bounds.size.width - textSize.width - 24.0,
                                      self.bounds.size.height - textSize.height - 20.0,
                                      textSize.width + 12.0, textSize.height + 8.0);
-        [[NSColor colorWithCalibratedWhite:0.0 alpha:0.68] setFill];
-        [[NSBezierPath bezierPathWithRoundedRect:fpsPanel xRadius:5.0 yRadius:5.0] fill];
+        NSBezierPath *panelPath = [NSBezierPath bezierPathWithRoundedRect:fpsPanel xRadius:5.0 yRadius:5.0];
+        [bgColor setFill];
+        [panelPath fill];
+        [borderColor setStroke];
+        [panelPath setLineWidth:1.0];
+        [panelPath stroke];
         [fpsText drawAtPoint:NSMakePoint(fpsPanel.origin.x + 6.0, fpsPanel.origin.y + 4.0) withAttributes:fpsAttributes];
     }
     CGFloat freeRight = self.bounds.size.width - CGRectGetMaxX(destRect);

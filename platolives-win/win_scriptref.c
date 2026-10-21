@@ -1,3 +1,4 @@
+#include "win_theme.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_scriptref.h"
 #include "plato/plato_script.h"
@@ -76,7 +77,7 @@ static void sr_draw_button(scriptref_ctx_t *ctx, DRAWITEMSTRUCT *dis, const wcha
     SelectObject(hdc, hOldPen);
 
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, RGB(255, 110, 0));
+    SetTextColor(hdc, PLATO_PLASMA_COLOR);
     HFONT hOldFont = (HFONT)SelectObject(hdc, ctx->hFontUi);
     DrawTextW(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, hOldFont);
@@ -91,8 +92,8 @@ static LRESULT CALLBACK ScriptRefWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
             HDC hdc = (HDC)wParam;
             HWND hCtrl = (HWND)lParam;
             if (hCtrl == ctx->hEdit) {
-                SetTextColor(hdc, RGB(255, 110, 0)); /* Plasma Orange */
-                SetBkColor(hdc, RGB(9, 3, 1));       /* Dark background */
+                SetTextColor(hdc, PLATO_PLASMA_COLOR); /* Plasma Orange */
+                SetBkColor(hdc, PLATO_BG_DARK);       /* Dark background */
                 return (LRESULT)ctx->hBrushEditBg;
             }
             break;
@@ -183,10 +184,12 @@ void win_scriptref_show(HWND hwndParent) {
     wc.lpszClassName = L"PlatoScriptRefClass";
     RegisterClassExW(&wc);
 
-    ctx->hBrushEditBg    = CreateSolidBrush(RGB(9, 3, 1));
-    ctx->hBrushBarBg     = CreateSolidBrush(RGB(10, 4, 1));
-    ctx->hBrushBtnBg     = CreateSolidBrush(RGB(46, 20, 8));
-    ctx->hBrushBtnPushed = CreateSolidBrush(RGB(75, 32, 12));
+
+
+    ctx->hBrushEditBg    = CreateSolidBrush(PLATO_BG_DARK);
+    ctx->hBrushBarBg     = CreateSolidBrush(PLATO_BG_DARK);
+    ctx->hBrushBtnBg     = CreateSolidBrush(PLATO_BG_BOX);
+    ctx->hBrushBtnPushed = CreateSolidBrush(PLATO_BG_HOVER);
     ctx->hPenBtnBorder   = CreatePen(PS_SOLID, 1, RGB(80, 35, 12));
 
     ctx->hFontMono = CreateFontW(
@@ -225,6 +228,22 @@ void win_scriptref_show(HWND hwndParent) {
     );
 
     if (!ctx->hwnd) return;
+
+    /* DWM Immersive Dark Titlebar con colore ottico dinamico */
+    HMODULE hDwm = LoadLibraryW(L"dwmapi.dll");
+    if (hDwm) {
+        typedef HRESULT (WINAPI *fnDwmSetWindowAttribute)(HWND, DWORD, LPCVOID, DWORD);
+        fnDwmSetWindowAttribute pDwm = (fnDwmSetWindowAttribute)GetProcAddress(hDwm, "DwmSetWindowAttribute");
+        if (pDwm) {
+            BOOL dark = TRUE;
+            COLORREF cap = PLATO_BG_DARK;
+            COLORREF txt = PLATO_PLASMA_COLOR;
+            pDwm(ctx->hwnd, 20, &dark, sizeof(dark));
+            pDwm(ctx->hwnd, 35, &cap, sizeof(cap));
+            pDwm(ctx->hwnd, 36, &txt, sizeof(txt));
+        }
+        FreeLibrary(hDwm);
+    }
 
     wchar_t *wmanual = sr_convert_manual_text();
 

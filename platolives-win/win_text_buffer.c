@@ -1,3 +1,4 @@
+#include "win_theme.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_text_buffer.h"
 #include <stdio.h>
@@ -158,7 +159,7 @@ static void tb_draw_custom_button(tb_ctx_t *ctx, DRAWITEMSTRUCT *dis, const wcha
     SelectObject(hdc, oldPen);
 
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, RGB(255, 110, 0));
+    SetTextColor(hdc, PLATO_PLASMA_COLOR);
     SelectObject(hdc, ctx->hFontUi);
 
     DrawTextW(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -182,8 +183,8 @@ static LRESULT CALLBACK TextBufferWndProc(HWND hwnd, UINT msg, WPARAM wParam, LP
 
         case WM_CTLCOLOREDIT: {
             HDC hdc = (HDC)wParam;
-            SetTextColor(hdc, RGB(255, 110, 0)); /* Orange Plasma Identico */
-            SetBkColor(hdc, RGB(9, 3, 1));        /* Sfondo Scuro Mac */
+            SetTextColor(hdc, PLATO_PLASMA_COLOR); /* Orange Plasma Identico */
+            SetBkColor(hdc, PLATO_BG_DARK);        /* Sfondo Scuro Mac */
             return (LRESULT)ctx->hBrushEditBg;
         }
 
@@ -193,14 +194,14 @@ static LRESULT CALLBACK TextBufferWndProc(HWND hwnd, UINT msg, WPARAM wParam, LP
             if (hCtrl == ctx->hLblStatus) {
                 SetBkMode(hdc, TRANSPARENT);
                 if (ctx->is_frozen) {
-                    SetTextColor(hdc, RGB(255, 110, 0));
+                    SetTextColor(hdc, PLATO_PLASMA_COLOR);
                 } else {
                     SetTextColor(hdc, RGB(51, 230, 77));
                 }
                 return (LRESULT)ctx->hBrushBarBg;
             }
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(255, 110, 0));
+            SetTextColor(hdc, PLATO_PLASMA_COLOR);
             return (LRESULT)ctx->hBrushBarBg;
         }
 
@@ -298,10 +299,10 @@ void win_text_buffer_show(HWND hParent, plato_terminal_t *terminal) {
     g_tb.is_compact = false;
     g_tb.is_frozen = false;
 
-    g_tb.hBrushEditBg = CreateSolidBrush(RGB(9, 3, 1));
-    g_tb.hBrushBarBg = CreateSolidBrush(RGB(10, 4, 1));
-    g_tb.hBrushBtnBg = CreateSolidBrush(RGB(46, 20, 8));
-    g_tb.hBrushBtnPushed = CreateSolidBrush(RGB(75, 32, 12));
+    g_tb.hBrushEditBg = CreateSolidBrush(PLATO_BG_DARK);
+    g_tb.hBrushBarBg = CreateSolidBrush(PLATO_BG_DARK);
+    g_tb.hBrushBtnBg = CreateSolidBrush(PLATO_BG_BOX);
+    g_tb.hBrushBtnPushed = CreateSolidBrush(PLATO_BG_HOVER);
     g_tb.hPenBtnBorder = CreatePen(PS_SOLID, 1, RGB(80, 35, 12));
 
     WNDCLASSEXW wc = {0};
@@ -336,7 +337,7 @@ void win_text_buffer_show(HWND hParent, plato_terminal_t *terminal) {
         if (pDwm) {
             BOOL dark = TRUE;
             COLORREF cap = RGB(16, 12, 10);
-            COLORREF txt = RGB(255, 110, 0);
+            COLORREF txt = PLATO_PLASMA_COLOR;
             pDwm(hwnd, 20, &dark, sizeof(dark));
             pDwm(hwnd, 35, &cap, sizeof(cap));
             pDwm(hwnd, 36, &txt, sizeof(txt));

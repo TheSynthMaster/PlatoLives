@@ -126,6 +126,22 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hCrtDist, L"CRT Distortion");
 
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_MODE_REAL_TEKTRONIX, L"Real Tektronix 4014 (DVBST)");
+
+    HMENU hTekSpeed = CreatePopupMenu();
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_INSTANT, L"Instant (Uncapped)");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_110,     L"110 Baud");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_150,     L"150 Baud");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_300,     L"300 Baud");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_600,     L"600 Baud");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_1200,    L"1200 Baud");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_2400,    L"2400 Baud");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_4800,    L"4800 Baud");
+    AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_9600,    L"9600 Baud");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hTekSpeed, L"Tektronix Connection Speed");
+
+    AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
+
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FULLSCREEN, L"Full Screen\tF11");
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FPS_HUD, L"Show Performance HUD (FPS/CPU)\tF12");
 
@@ -203,8 +219,9 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     else if (p->display_mode == 2) mode_id = IDM_VIEW_MODE_SPLIT_MONO;
     else if (p->display_mode == 3) mode_id = IDM_VIEW_MODE_CRISP_COLOR;
     else if (p->display_mode == 4) mode_id = IDM_VIEW_MODE_REAL_CRT;
+    else if (p->display_mode == 5) mode_id = IDM_VIEW_MODE_REAL_TEKTRONIX;
 
-    CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_CRT, mode_id, MF_BYCOMMAND);
+    CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_TEKTRONIX, mode_id, MF_BYCOMMAND);
 
     /* Sottomenu Ottici in View (Indice 2 nella menubar) */
     HMENU hView = GetSubMenu(menu, 2);
@@ -221,11 +238,24 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
         EnableMenuItem(hView, 8, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
         /* Posizione 9: CRT Persistence */
         EnableMenuItem(hView, 9, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
+        bool isTek        = (p->display_mode == 5);
+
         /* Posizione 10: CRT Distortion */
         EnableMenuItem(hView, 10, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
-        /* Posizione 15: Override Color (disabilitato solo in Crisp Color) */
-        bool canOverrideColor = (p->display_mode != 3);
-        EnableMenuItem(hView, 15, MF_BYPOSITION | (canOverrideColor ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 13: Tektronix Connection Speed */
+        EnableMenuItem(hView, 13, MF_BYPOSITION | (isTek ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 18: Override Color (disabilitato in Crisp Color e Tektronix P31) */
+        bool canOverrideColor = (p->display_mode != 3 && p->display_mode != 5);
+        EnableMenuItem(hView, 18, MF_BYPOSITION | (canOverrideColor ? MF_ENABLED : MF_GRAYED));
+    }
+
+    /* 5. Micro Tutor (Indice 5 nella menubar): non disponibile su Tektronix 4014 (DVBST) */
+    bool isTekMode = (p->display_mode == 5);
+    EnableMenuItem(menu, 5, MF_BYPOSITION | (isTekMode ? MF_GRAYED : MF_ENABLED));
+    HMENU hMicroTutorMenu = GetSubMenu(menu, 5);
+    if (hMicroTutorMenu) {
+        EnableMenuItem(hMicroTutorMenu, IDM_TOOLS_BOOT_MTE, MF_BYCOMMAND | (isTekMode ? MF_GRAYED : MF_ENABLED));
+        EnableMenuItem(hMicroTutorMenu, IDM_TOOLS_MT_LOG, MF_BYCOMMAND | (isTekMode ? MF_GRAYED : MF_ENABLED));
     }
 
     /* Plasma Decay */
@@ -257,6 +287,30 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     /* CRT Distortion */
     CheckMenuRadioItem(menu, IDM_VIEW_CRT_DIST_NONE, IDM_VIEW_CRT_DIST_CYL,
                        IDM_VIEW_CRT_DIST_NONE + p->crt_distortion, MF_BYCOMMAND);
+
+    /* Tektronix Connection Speed Checkmark */
+    UINT tek_speed_id = IDM_VIEW_TEK_SPEED_2400;
+    if (p->tek_baud_rate == 0) tek_speed_id = IDM_VIEW_TEK_SPEED_INSTANT;
+    else if (p->tek_baud_rate == 110) tek_speed_id = IDM_VIEW_TEK_SPEED_110;
+    else if (p->tek_baud_rate == 150) tek_speed_id = IDM_VIEW_TEK_SPEED_150;
+    else if (p->tek_baud_rate == 300) tek_speed_id = IDM_VIEW_TEK_SPEED_300;
+    else if (p->tek_baud_rate == 600) tek_speed_id = IDM_VIEW_TEK_SPEED_600;
+    else if (p->tek_baud_rate == 1200) tek_speed_id = IDM_VIEW_TEK_SPEED_1200;
+    else if (p->tek_baud_rate == 2400) tek_speed_id = IDM_VIEW_TEK_SPEED_2400;
+    else if (p->tek_baud_rate == 4800) tek_speed_id = IDM_VIEW_TEK_SPEED_4800;
+    else if (p->tek_baud_rate == 9600) tek_speed_id = IDM_VIEW_TEK_SPEED_9600;
+
+    HMENU hTekSpeedSub = hView ? GetSubMenu(hView, 13) : NULL;
+    if (hTekSpeedSub) {
+        CheckMenuRadioItem(hTekSpeedSub, IDM_VIEW_TEK_SPEED_INSTANT, IDM_VIEW_TEK_SPEED_9600, tek_speed_id, MF_BYCOMMAND);
+    }
+    CheckMenuRadioItem(menu, IDM_VIEW_TEK_SPEED_INSTANT, IDM_VIEW_TEK_SPEED_9600, tek_speed_id, MF_BYCOMMAND);
+    for (UINT sId = IDM_VIEW_TEK_SPEED_INSTANT; sId <= IDM_VIEW_TEK_SPEED_9600; sId++) {
+        CheckMenuItem(menu, sId, MF_BYCOMMAND | (sId == tek_speed_id ? MF_CHECKED : MF_UNCHECKED));
+        if (hTekSpeedSub) {
+            CheckMenuItem(hTekSpeedSub, sId, MF_BYCOMMAND | (sId == tek_speed_id ? MF_CHECKED : MF_UNCHECKED));
+        }
+    }
 
     /* Phosphor Color Override */
     CheckMenuRadioItem(menu, IDM_VIEW_COLOR_DEFAULT, IDM_VIEW_COLOR_WHITE,

@@ -26,6 +26,13 @@ static void plato_mac_beep(void *context) {
 }
 @end
 
+@interface PLATOProfileManager : NSObject
++ (NSMutableArray<NSMutableDictionary *> *)loadProfiles;
++ (void)saveProfiles:(NSArray<NSDictionary *> *)profiles;
++ (NSMutableDictionary *)defaultProfile;
++ (void)setDefaultProfileId:(NSString *)profileId;
+@end
+
 @implementation PLATOTerminalWindowController
 
 - (instancetype)initWithProfile:(NSDictionary *)profile {
@@ -101,7 +108,11 @@ static void plato_mac_beep(void *context) {
     else if (mode == 2) [self.view setDisplaySplit];
     else if (mode == 3) [self.view setDisplayCrispColor];
     else if (mode == 4) [self.view setDisplayRealColorCRT];
+    else if (mode == 5) [self.view setDisplayRealTektronix];
     else [self.view setDisplayRealPlasma];
+
+    NSInteger tekBaud = p[@"tekBaudRate"] ? [p[@"tekBaudRate"] integerValue] : 2400;
+    [self.view setTekBaudRate:tekBaud];
 
     NSInteger ms = [p[@"persistenceMs"] integerValue];
     if (ms <= 0) ms = 100;
@@ -209,8 +220,77 @@ static void plato_mac_beep(void *context) {
 
 @interface PLATOKeymapWindowController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, copy) void (^closeHandler)(void);
+- (void)applyCurrentThemeColors;
 @end
 
+
+
+@implementation PLATOThemeColors
++ (PLATOThemeColors *)colorsForMode:(NSInteger)mode phosphor:(NSInteger)phosphor {
+    PLATOThemeColors *c = [[PLATOThemeColors alloc] init];
+    if (mode == 5 || phosphor == 1) { /* Tektronix o Green P31 */
+        c.normal    = [NSColor colorWithCalibratedRed:51.0/255.0 green:255.0/255.0 blue:51.0/255.0 alpha:1.0];
+        c.bright    = [NSColor colorWithCalibratedRed:120.0/255.0 green:255.0/255.0 blue:120.0/255.0 alpha:1.0];
+        c.disabled  = [NSColor colorWithCalibratedRed:25.0/255.0 green:110.0/255.0 blue:25.0/255.0 alpha:1.0];
+        c.muted     = [NSColor colorWithCalibratedRed:30.0/255.0 green:150.0/255.0 blue:30.0/255.0 alpha:1.0];
+        c.dim       = [NSColor colorWithCalibratedRed:20.0/255.0 green:90.0/255.0 blue:20.0/255.0 alpha:1.0];
+        c.bgDark    = [NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0];
+        c.bgBox     = [NSColor colorWithCalibratedRed:24.0/255.0 green:18.0/255.0 blue:14.0/255.0 alpha:1.0];
+        c.hoverBg   = [NSColor colorWithCalibratedRed:10.0/255.0 green:45.0/255.0 blue:10.0/255.0 alpha:1.0];
+        c.border    = [NSColor colorWithCalibratedRed:15.0/255.0 green:60.0/255.0 blue:15.0/255.0 alpha:1.0];
+    } else if (phosphor == 2) { /* Amber P40 */
+        c.normal    = [NSColor colorWithCalibratedRed:255.0/255.0 green:176.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.bright    = [NSColor colorWithCalibratedRed:255.0/255.0 green:210.0/255.0 blue:80.0/255.0 alpha:1.0];
+        c.disabled  = [NSColor colorWithCalibratedRed:120.0/255.0 green:80.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.muted     = [NSColor colorWithCalibratedRed:190.0/255.0 green:130.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.dim       = [NSColor colorWithCalibratedRed:140.0/255.0 green:90.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.bgDark    = [NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0];
+        c.bgBox     = [NSColor colorWithCalibratedRed:24.0/255.0 green:18.0/255.0 blue:14.0/255.0 alpha:1.0];
+        c.hoverBg   = [NSColor colorWithCalibratedRed:45.0/255.0 green:30.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.border    = [NSColor colorWithCalibratedRed:60.0/255.0 green:40.0/255.0 blue:10.0/255.0 alpha:1.0];
+    } else if (phosphor == 3 || mode == 3 || mode == 4) { /* White P4 o Crisp Color o Real Color CRT */
+        c.normal    = [NSColor colorWithCalibratedRed:235.0/255.0 green:235.0/255.0 blue:235.0/255.0 alpha:1.0];
+        c.bright    = [NSColor colorWithCalibratedRed:255.0/255.0 green:255.0/255.0 blue:255.0/255.0 alpha:1.0];
+        c.disabled  = [NSColor colorWithCalibratedRed:110.0/255.0 green:110.0/255.0 blue:110.0/255.0 alpha:1.0];
+        c.muted     = [NSColor colorWithCalibratedRed:180.0/255.0 green:180.0/255.0 blue:180.0/255.0 alpha:1.0];
+        c.dim       = [NSColor colorWithCalibratedRed:130.0/255.0 green:130.0/255.0 blue:130.0/255.0 alpha:1.0];
+        c.bgDark    = [NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0];
+        c.bgBox     = [NSColor colorWithCalibratedRed:24.0/255.0 green:18.0/255.0 blue:14.0/255.0 alpha:1.0];
+        c.hoverBg   = [NSColor colorWithCalibratedRed:40.0/255.0 green:40.0/255.0 blue:40.0/255.0 alpha:1.0];
+        c.border    = [NSColor colorWithCalibratedRed:60.0/255.0 green:60.0/255.0 blue:60.0/255.0 alpha:1.0];
+    } else { /* Authentic Plasma */
+        c.normal    = [NSColor colorWithCalibratedRed:255.0/255.0 green:110.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.bright    = [NSColor colorWithCalibratedRed:255.0/255.0 green:160.0/255.0 blue:40.0/255.0 alpha:1.0];
+        c.disabled  = [NSColor colorWithCalibratedRed:120.0/255.0 green:55.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.muted     = [NSColor colorWithCalibratedRed:190.0/255.0 green:85.0/255.0 blue:10.0/255.0 alpha:1.0];
+        c.dim       = [NSColor colorWithCalibratedRed:140.0/255.0 green:70.0/255.0 blue:20.0/255.0 alpha:1.0];
+        c.bgDark    = [NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0];
+        c.bgBox     = [NSColor colorWithCalibratedRed:24.0/255.0 green:18.0/255.0 blue:14.0/255.0 alpha:1.0];
+        c.hoverBg   = [NSColor colorWithCalibratedRed:45.0/255.0 green:20.0/255.0 blue:0.0/255.0 alpha:1.0];
+        c.border    = [NSColor colorWithCalibratedRed:60.0/255.0 green:40.0/255.0 blue:10.0/255.0 alpha:1.0];
+    }
+    return c;
+}
+
++ (PLATOThemeColors *)currentThemeColors {
+    PLATOAppDelegate *appDelegate = (PLATOAppDelegate *)[NSApp delegate];
+    PLATOTerminalWindowController *active = [appDelegate respondsToSelector:@selector(activeTerminalController)] ? [appDelegate activeTerminalController] : nil;
+    NSInteger mode = 1;
+    NSInteger phosphor = 0;
+    if (active && active.view) {
+        mode = [active.view currentDisplayMode];
+        phosphor = [active.view phosphorColor];
+    } else if (active && active.currentProfile) {
+        mode = [active.currentProfile[@"displayMode"] integerValue];
+        phosphor = [active.currentProfile[@"phosphorColor"] integerValue];
+    } else {
+        NSDictionary *p = [PLATOProfileManager defaultProfile];
+        mode = [p[@"displayMode"] integerValue];
+        phosphor = [p[@"phosphorColor"] integerValue];
+    }
+    return [self colorsForMode:mode phosphor:phosphor];
+}
+@end
 
 @interface PLATOScriptRefWindow : NSWindow
 @end
@@ -221,6 +301,7 @@ static void plato_mac_beep(void *context) {
 @end
 
 @interface PLATOScriptRefWindowController : NSWindowController <NSWindowDelegate>
+- (void)applyCurrentThemeColors;
 @end
 
 @implementation PLATOScriptRefWindowController
@@ -254,21 +335,33 @@ static void plato_mac_beep(void *context) {
         [textView setBackgroundColor:[NSColor colorWithCalibratedRed:16.0/255.0 green:12.0/255.0 blue:10.0/255.0 alpha:1.0]];
         [textView setTextContainerInset:NSMakeSize(20.0, 20.0)];
 
-        const char *manual_c = plato_script_get_manual_text();
-        NSString *manualText = [NSString stringWithUTF8String:manual_c ? manual_c : ""];
-        NSFont *font = [NSFont fontWithName:@"Menlo" size:12.5];
-        if (!font) {
-            font = [NSFont monospacedSystemFontOfSize:12.5 weight:NSFontWeightRegular];
-        }
-        NSDictionary *attrs = @{
-            NSFontAttributeName: font,
-            NSForegroundColorAttributeName: [NSColor colorWithCalibratedRed:255.0/255.0 green:110.0/255.0 blue:0.0/255.0 alpha:1.0]
-        };
-        [[textView textStorage] setAttributedString:[[NSAttributedString alloc] initWithString:manualText attributes:attrs]];
         [scroll setDocumentView:textView];
         [[window contentView] addSubview:scroll];
+        [self applyCurrentThemeColors];
     }
     return self;
+}
+
+- (void)applyCurrentThemeColors {
+    PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
+    [self.window setBackgroundColor:tc.bgDark];
+    NSScrollView *scroll = (NSScrollView *)[[self.window contentView] subviews].firstObject;
+    if (scroll && [scroll isKindOfClass:[NSScrollView class]]) {
+        [scroll setBackgroundColor:tc.bgDark];
+        NSTextView *tv = (NSTextView *)[scroll documentView];
+        if (tv && [tv isKindOfClass:[NSTextView class]]) {
+            [tv setBackgroundColor:tc.bgDark];
+            const char *manual_c = plato_script_get_manual_text();
+            NSString *manualText = [NSString stringWithUTF8String:manual_c ? manual_c : ""];
+            NSFont *font = [NSFont fontWithName:@"Menlo" size:12.5];
+            if (!font) font = [NSFont monospacedSystemFontOfSize:12.5 weight:NSFontWeightRegular];
+            NSDictionary *attrs = @{
+                NSFontAttributeName: font,
+                NSForegroundColorAttributeName: tc.normal
+            };
+            [[tv textStorage] setAttributedString:[[NSAttributedString alloc] initWithString:manualText attributes:attrs]];
+        }
+    }
 }
 @end
 
@@ -307,27 +400,37 @@ static void plato_mac_beep(void *context) {
         [textView setAutomaticSpellingCorrectionEnabled:NO];
         [textView setAutomaticTextReplacementEnabled:NO];
         [textView setAutomaticQuoteSubstitutionEnabled:NO];
-        [[textView textStorage] setAttributedString:[[NSAttributedString alloc] initWithString:PLATOKeyboardReferenceText()
-                                                                                   attributes:@{
-            NSFontAttributeName: [NSFont monospacedSystemFontOfSize:14.0 weight:NSFontWeightRegular],
-            NSForegroundColorAttributeName: [NSColor colorWithCalibratedRed:255.0/255.0 green:110.0/255.0 blue:0.0/255.0 alpha:1.0]
-        }]];
         [scroll setDocumentView:textView];
         [window setContentView:scroll];
+        [self applyCurrentThemeColors];
     }
     return self;
+}
+
+- (void)applyCurrentThemeColors {
+    PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
+    [self.window setBackgroundColor:tc.bgDark];
+    NSScrollView *scroll = (NSScrollView *)[self.window contentView];
+    if (scroll && [scroll isKindOfClass:[NSScrollView class]]) {
+        [scroll setBackgroundColor:tc.bgDark];
+        NSTextView *tv = (NSTextView *)[scroll documentView];
+        if (tv && [tv isKindOfClass:[NSTextView class]]) {
+            [tv setBackgroundColor:tc.bgDark];
+            [tv setTextColor:tc.normal];
+            [[tv textStorage] setAttributedString:[[NSAttributedString alloc] initWithString:PLATOKeyboardReferenceText()
+                                                                                       attributes:@{
+                NSFontAttributeName: [NSFont monospacedSystemFontOfSize:14.0 weight:NSFontWeightRegular],
+                NSForegroundColorAttributeName: tc.normal
+            }]];
+        }
+    }
 }
 - (void)windowWillClose:(NSNotification *)notification { if (self.closeHandler) self.closeHandler(); }
 @end
 
 #define PLATO_PROFILES_KEY @"PlatoLivesProfiles"
 
-@interface PLATOProfileManager : NSObject
-+ (NSMutableArray<NSMutableDictionary *> *)loadProfiles;
-+ (void)saveProfiles:(NSArray<NSDictionary *> *)profiles;
-+ (NSMutableDictionary *)defaultProfile;
-+ (void)setDefaultProfileId:(NSString *)profileId;
-@end
+
 
 @implementation PLATOProfileManager
 + (NSMutableArray<NSMutableDictionary *> *)loadProfiles {
@@ -388,9 +491,12 @@ static void plato_mac_beep(void *context) {
 @end
 
 @interface PLATOProfilesWindowController : NSWindowController <NSTableViewDataSource, NSTableViewDelegate>
+- (void)applyCurrentThemeColors;
 @property (nonatomic, weak) id<PLATOProfilesDelegate> delegate;
 @property (nonatomic, strong) NSMutableArray<NSMutableDictionary *> *profiles;
 @property (nonatomic, strong) NSTableView *tableView;
+@property (nonatomic, strong) NSScrollView *tableScroll;
+@property (nonatomic, strong) NSMutableArray<NSTextField *> *themeLabels;
 @property (nonatomic, strong) NSTextField *nameField;
 @property (nonatomic, strong) NSTextField *hostField;
 @property (nonatomic, strong) NSTextField *portField;
@@ -412,6 +518,10 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSTextField *overrideColorLbl;
 @property (nonatomic, strong) NSPopUpButton *overrideColorPopup;
 
+// Controlli Real Tektronix 4014
+@property (nonatomic, strong) NSTextField *tekBaudLbl;
+@property (nonatomic, strong) NSPopUpButton *tekBaudPopup;
+
 @property (nonatomic, strong) NSButton *fullscreenCheckbox;
 @property (nonatomic, strong) NSButton *defaultCheckbox;
 @property (nonatomic, strong) NSButton *scriptCheckbox;
@@ -420,6 +530,21 @@ static void plato_mac_beep(void *context) {
 @end
 
 @implementation PLATOProfilesWindowController
+- (void)applyCurrentThemeColors {
+    PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
+    [self.window setBackgroundColor:tc.bgDark];
+    if (self.tableScroll) [self.tableScroll setBackgroundColor:tc.bgBox];
+    if (self.tableView) [self.tableView setBackgroundColor:tc.bgBox];
+    for (NSTextField *lbl in self.themeLabels) {
+        [lbl setTextColor:tc.normal];
+    }
+    if (self.scriptTextView) {
+        [self.scriptTextView setBackgroundColor:tc.bgBox];
+        [self.scriptTextView setTextColor:tc.bright];
+        [self.scriptTextView setInsertionPointColor:tc.normal];
+    }
+    [self.tableView reloadData];
+}
 
 - (instancetype)init {
     NSRect frame = NSMakeRect(0, 0, 1080, 960);
@@ -445,7 +570,9 @@ static void plato_mac_beep(void *context) {
     NSColor *plasmaOrange = [NSColor colorWithCalibratedRed:255.0/255.0 green:110.0/255.0 blue:0.0/255.0 alpha:1.0];
     NSColor *boxBg = [NSColor colorWithCalibratedRed:24.0/255.0 green:18.0/255.0 blue:14.0/255.0 alpha:1.0];
 
+    _themeLabels = [NSMutableArray array];
     NSScrollView *tableScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 55, 200, 880)];
+    _tableScroll = tableScroll;
     [tableScroll setHasVerticalScroller:YES];
     [tableScroll setBorderType:NSBezelBorder];
     [tableScroll setDrawsBackground:YES];
@@ -478,11 +605,13 @@ static void plato_mac_beep(void *context) {
     [titleLbl setTextColor:plasmaOrange];
     [titleLbl setFrame:NSMakeRect(rx, 915, rw, 22)];
     [content addSubview:titleLbl];
+    [_themeLabels addObject:titleLbl];
 
     NSTextField *nameLbl = [NSTextField labelWithString:@"Profile Name:"];
     [nameLbl setFrame:NSMakeRect(rx, 884, 105, 18)];
     [nameLbl setTextColor:plasmaOrange];
     [content addSubview:nameLbl];
+    [_themeLabels addObject:nameLbl];
     _nameField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx, 882, fw, 22)];
     [content addSubview:_nameField];
 
@@ -490,6 +619,7 @@ static void plato_mac_beep(void *context) {
     [hostLbl setFrame:NSMakeRect(rx, 851, 105, 18)];
     [hostLbl setTextColor:plasmaOrange];
     [content addSubview:hostLbl];
+    [_themeLabels addObject:hostLbl];
     _hostField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx, 849, fw, 22)];
     [content addSubview:_hostField];
 
@@ -497,6 +627,7 @@ static void plato_mac_beep(void *context) {
     [portLbl setFrame:NSMakeRect(rx, 818, 105, 18)];
     [portLbl setTextColor:plasmaOrange];
     [content addSubview:portLbl];
+    [_themeLabels addObject:portLbl];
     _portField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx, 816, 100, 22)];
     [content addSubview:_portField];
 
@@ -504,6 +635,7 @@ static void plato_mac_beep(void *context) {
     [_overrideColorLbl setFrame:NSMakeRect(fx + 120, 818, 110, 18)];
     [_overrideColorLbl setTextColor:plasmaOrange];
     [content addSubview:_overrideColorLbl];
+    [_themeLabels addObject:_overrideColorLbl];
     _overrideColorPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx + 235, 816, 260, 25) pullsDown:NO];
     [_overrideColorPopup addItemsWithTitles:@[@"Default (Authentic)", @"Green (P31 Phosphor)", @"Amber (P40 Phosphor)", @"White (P4 Phosphor)"]];
     [content addSubview:_overrideColorPopup];
@@ -512,8 +644,9 @@ static void plato_mac_beep(void *context) {
     [modeLbl setFrame:NSMakeRect(rx, 780, 105, 18)];
     [modeLbl setTextColor:plasmaOrange];
     [content addSubview:modeLbl];
+    [_themeLabels addObject:modeLbl];
     _modePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 777, fw, 25) pullsDown:NO];
-    [_modePopup addItemsWithTitles:@[@"Real Plasma", @"Crisp Monochrome", @"Split Monochrome", @"Crisp Color", @"Real Color CRT"]];
+    [_modePopup addItemsWithTitles:@[@"Real Plasma", @"Crisp Monochrome", @"Split Monochrome", @"Crisp Color", @"Real Color CRT", @"Real Tektronix 4014 (DVBST)"]];
     [_modePopup setTarget:self];
     [_modePopup setAction:@selector(onModeChanged:)];
     [content addSubview:_modePopup];
@@ -523,6 +656,7 @@ static void plato_mac_beep(void *context) {
     [_decayLbl setFrame:NSMakeRect(rx, 742, 105, 18)];
     [_decayLbl setTextColor:plasmaOrange];
     [content addSubview:_decayLbl];
+    [_themeLabels addObject:_decayLbl];
     _decayPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 739, fw, 25) pullsDown:NO];
     [_decayPopup addItemsWithTitles:@[@"100 ms (Authentic Plasma)", @"200 ms (Warm Glow)", @"500 ms (Medium)", @"1000 ms (Long/Radar)", @"2000 ms (Ultra Persistence)", @"5000 ms (5s Extreme)"]];
     [content addSubview:_decayPopup];
@@ -531,6 +665,7 @@ static void plato_mac_beep(void *context) {
     [_plasmaDistortionLbl setFrame:NSMakeRect(rx, 704, 105, 18)];
     [_plasmaDistortionLbl setTextColor:plasmaOrange];
     [content addSubview:_plasmaDistortionLbl];
+    [_themeLabels addObject:_plasmaDistortionLbl];
     _plasmaDistortionPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 701, fw, 25) pullsDown:NO];
     [_plasmaDistortionPopup addItemsWithTitles:@[@"None (Flat)", @"Barrel (Curved Glass)", @"Cylindrical"]];
     [content addSubview:_plasmaDistortionPopup];
@@ -540,6 +675,7 @@ static void plato_mac_beep(void *context) {
     [_crtBeamLbl setFrame:NSMakeRect(rx, 742, 105, 18)];
     [_crtBeamLbl setTextColor:plasmaOrange];
     [content addSubview:_crtBeamLbl];
+    [_themeLabels addObject:_crtBeamLbl];
     _crtBeamPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 739, fw, 25) pullsDown:NO];
     [_crtBeamPopup addItemsWithTitles:@[@"Standard (Authentic 13\")", @"High (Soft Glow)", @"Ultra (Vintage Arcade)"]];
     [content addSubview:_crtBeamPopup];
@@ -548,6 +684,7 @@ static void plato_mac_beep(void *context) {
     [_crtDecayLbl setFrame:NSMakeRect(rx, 704, 105, 18)];
     [_crtDecayLbl setTextColor:plasmaOrange];
     [content addSubview:_crtDecayLbl];
+    [_themeLabels addObject:_crtDecayLbl];
     _crtDecayPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 701, fw, 25) pullsDown:NO];
     [_crtDecayPopup addItemsWithTitles:@[@"20 ms (Default CRT)", @"200 ms (Warm Glow)", @"500 ms (Medium)", @"1000 ms (Long/Radar)", @"2000 ms (Ultra Persistence)", @"5000 ms (5s Extreme)"]];
     [content addSubview:_crtDecayPopup];
@@ -556,9 +693,20 @@ static void plato_mac_beep(void *context) {
     [_crtDistortionLbl setFrame:NSMakeRect(rx, 666, 105, 18)];
     [_crtDistortionLbl setTextColor:plasmaOrange];
     [content addSubview:_crtDistortionLbl];
+    [_themeLabels addObject:_crtDistortionLbl];
     _crtDistortionPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 663, fw, 25) pullsDown:NO];
     [_crtDistortionPopup addItemsWithTitles:@[@"None (Flat)", @"Barrel (Curved Glass)", @"Cylindrical"]];
     [content addSubview:_crtDistortionPopup];
+
+    // --- Controlli Real Tektronix 4014 ---
+    _tekBaudLbl = [NSTextField labelWithString:@"Baud Rate:"];
+    [_tekBaudLbl setFrame:NSMakeRect(rx, 742, 105, 18)];
+    [_tekBaudLbl setTextColor:plasmaOrange];
+    [content addSubview:_tekBaudLbl];
+    [_themeLabels addObject:_tekBaudLbl];
+    _tekBaudPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 739, fw, 25) pullsDown:NO];
+    [_tekBaudPopup addItemsWithTitles:@[@"Instant (Uncapped)", @"110 Baud", @"150 Baud", @"300 Baud", @"600 Baud", @"1200 Baud", @"2400 Baud", @"4800 Baud", @"9600 Baud"]];
+    [content addSubview:_tekBaudPopup];
 
     _fullscreenCheckbox = [NSButton checkboxWithTitle:@"Launch in Full Screen" target:nil action:nil];
     [_fullscreenCheckbox setFrame:NSMakeRect(fx, 632, 240, 18)];
@@ -632,10 +780,22 @@ static void plato_mac_beep(void *context) {
     [_crtDecayPopup setHidden:!isCRT];
     [_crtDistortionLbl setHidden:!isCRT];
     [_crtDistortionPopup setHidden:!isCRT];
+
+    BOOL isTek = (mIdx == 5);
+    [_tekBaudLbl setHidden:!isTek];
+    [_tekBaudPopup setHidden:!isTek];
 }
 
 - (void)onModeChanged:(id)sender {
-    [self updateVisibilityForModeIndex:[_modePopup indexOfSelectedItem]];
+    NSInteger mIdx = [_modePopup indexOfSelectedItem];
+    [self updateVisibilityForModeIndex:mIdx];
+    
+    // Se switchiamo su Tektronix (5) e il baud è attualmente Instant (0), suggeriamo 2400 (Index 6)
+    if (mIdx == 5) {
+        if ([_tekBaudPopup indexOfSelectedItem] == 0) {
+            [_tekBaudPopup selectItemAtIndex:6];
+        }
+    }
 }
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
@@ -645,7 +805,7 @@ static void plato_mac_beep(void *context) {
 - (NSView *)tableView:(NSTableView *)tableView viewForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
     NSTextField *label = [NSTextField labelWithString:@""];
     [label setFont:[NSFont systemFontOfSize:12]];
-    [label setTextColor:[NSColor colorWithCalibratedRed:255.0/255.0 green:160.0/255.0 blue:40.0/255.0 alpha:1.0]];
+    [label setTextColor:[PLATOThemeColors currentThemeColors].bright];
     NSDictionary *p = self.profiles[row];
     NSString *title = p[@"name"] ? p[@"name"] : @"Untitled";
     if ([p[@"isDefault"] boolValue]) {
@@ -674,6 +834,7 @@ static void plato_mac_beep(void *context) {
     else if (mode == 2) pIdx = 2; // Split Mono
     else if (mode == 3) pIdx = 3; // Crisp Color
     else if (mode == 4) pIdx = 4; // Real Color CRT
+    else if (mode == 5) pIdx = 5; // Real Tektronix 4014
     else pIdx = 0;                // Real Plasma
     [self.modePopup selectItemAtIndex:pIdx];
 
@@ -686,6 +847,20 @@ static void plato_mac_beep(void *context) {
     else if (ms == 2000) decayIdx = 4;
     else if (ms == 5000) decayIdx = 5;
     [self.decayPopup selectItemAtIndex:decayIdx];
+
+    // Tektronix baud rate
+    NSInteger tekBaud = p[@"tekBaudRate"] ? [p[@"tekBaudRate"] integerValue] : 2400;
+    NSInteger tekBaudIdx = 6;
+    if (tekBaud == 0 && p[@"tekBaudRate"]) tekBaudIdx = 0;
+    else if (tekBaud == 110) tekBaudIdx = 1;
+    else if (tekBaud == 150) tekBaudIdx = 2;
+    else if (tekBaud == 300) tekBaudIdx = 3;
+    else if (tekBaud == 600) tekBaudIdx = 4;
+    else if (tekBaud == 1200) tekBaudIdx = 5;
+    else if (tekBaud == 2400) tekBaudIdx = 6;
+    else if (tekBaud == 4800) tekBaudIdx = 7;
+    else if (tekBaud == 9600) tekBaudIdx = 8;
+    [self.tekBaudPopup selectItemAtIndex:tekBaudIdx];
 
     NSInteger pDist = p[@"plasmaDistortion"] ? [p[@"plasmaDistortion"] integerValue] : 2; // Default Cylindrical
     [self.plasmaDistortionPopup selectItemAtIndex:pDist];
@@ -737,6 +912,7 @@ static void plato_mac_beep(void *context) {
     else if (mIdx == 2) modeVal = 2; // Split Mono
     else if (mIdx == 3) modeVal = 3; // Crisp Color
     else if (mIdx == 4) modeVal = 4; // Real Color CRT
+    else if (mIdx == 5) modeVal = 5; // Real Tektronix 4014
     else modeVal = 1;                // Real Plasma
     p[@"displayMode"] = @(modeVal);
 
@@ -748,6 +924,18 @@ static void plato_mac_beep(void *context) {
     else if (dIdx == 4) ms = 2000;
     else if (dIdx == 5) ms = 5000;
     p[@"persistenceMs"] = @(ms);
+
+    NSInteger tbIdx = [self.tekBaudPopup indexOfSelectedItem];
+    NSInteger tbVal = 0;
+    if (tbIdx == 1) tbVal = 110;
+    else if (tbIdx == 2) tbVal = 150;
+    else if (tbIdx == 3) tbVal = 300;
+    else if (tbIdx == 4) tbVal = 600;
+    else if (tbIdx == 5) tbVal = 1200;
+    else if (tbIdx == 6) tbVal = 2400;
+    else if (tbIdx == 7) tbVal = 4800;
+    else if (tbIdx == 8) tbVal = 9600;
+    p[@"tekBaudRate"] = @(tbVal);
 
     p[@"plasmaDistortion"] = @([self.plasmaDistortionPopup indexOfSelectedItem]);
 
@@ -845,6 +1033,10 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, weak) PLATOAppDelegate *appDelegate;
 @property (nonatomic, strong) NSTextView *textView;
 @property (nonatomic, strong) NSButton *compactCheckbox;
+@property (nonatomic, strong) NSView *bottomBar;
+@property (nonatomic, strong) NSButton *selAllBtn;
+@property (nonatomic, strong) NSButton *selNoneBtn;
+@property (nonatomic, strong) NSButton *clipboardBtn;
 @property (nonatomic, strong) NSTextField *statusLabel;
 @property (nonatomic, strong) NSTimer *refreshTimer;
 @property (nonatomic) BOOL isFrozen;
@@ -853,6 +1045,7 @@ static void plato_mac_beep(void *context) {
 - (void)updateContentFromTerminal;
 - (void)onCopy:(id)sender;
 - (void)showAndFocus;
+- (void)applyCurrentThemeColors;
 @end
 
 @implementation PLATOTextBufferWindowController
@@ -878,6 +1071,7 @@ static void plato_mac_beep(void *context) {
 
         NSRect barRect = NSMakeRect(0, 0, contentBounds.size.width, 44);
         NSView *bottomBar = [[NSView alloc] initWithFrame:barRect];
+        _bottomBar = bottomBar;
         [bottomBar setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
         [bottomBar setWantsLayer:YES];
         bottomBar.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.04 green:0.015 blue:0.005 alpha:1.0].CGColor;
@@ -894,6 +1088,7 @@ static void plato_mac_beep(void *context) {
         };
 
         NSButton *selAllBtn = [[NSButton alloc] initWithFrame:NSMakeRect(10, 10, 80, 24)];
+        _selAllBtn = selAllBtn;
         [selAllBtn setBezelStyle:NSBezelStyleRounded];
         [selAllBtn setBezelColor:[NSColor colorWithCalibratedRed:0.18 green:0.08 blue:0.03 alpha:1.0]];
         [selAllBtn setAttributedTitle:makeBtnTitle(@"Select All")];
@@ -902,6 +1097,7 @@ static void plato_mac_beep(void *context) {
         [bottomBar addSubview:selAllBtn];
 
         NSButton *selNoneBtn = [[NSButton alloc] initWithFrame:NSMakeRect(96, 10, 114, 24)];
+        _selNoneBtn = selNoneBtn;
         [selNoneBtn setBezelStyle:NSBezelStyleRounded];
         [selNoneBtn setBezelColor:[NSColor colorWithCalibratedRed:0.18 green:0.08 blue:0.03 alpha:1.0]];
         [selNoneBtn setAttributedTitle:makeBtnTitle(@"Deselect / Live")];
@@ -915,6 +1111,7 @@ static void plato_mac_beep(void *context) {
         [bottomBar addSubview:_compactCheckbox];
 
         NSButton *copyBtn = [[NSButton alloc] initWithFrame:NSMakeRect(302, 10, 140, 24)];
+        _clipboardBtn = copyBtn;
         [copyBtn setBezelStyle:NSBezelStyleRounded];
         [copyBtn setBezelColor:[NSColor colorWithCalibratedRed:0.32 green:0.14 blue:0.04 alpha:1.0]];
         [copyBtn setAttributedTitle:makeBtnTitle(@"Copy to Clipboard")];
@@ -949,6 +1146,7 @@ static void plato_mac_beep(void *context) {
         [_textView setTextColor:[NSColor colorWithCalibratedRed:1.0 green:0.55 blue:0.12 alpha:0.96]];
         [_textView setFont:[NSFont monospacedSystemFontOfSize:12.5 weight:NSFontWeightRegular]];
         [_textView setTextContainerInset:NSMakeSize(10.0, 10.0)];
+        [self applyCurrentThemeColors];
         [_textView setDelegate:self];
         [_textView setContinuousSpellCheckingEnabled:NO];
         [_textView setGrammarCheckingEnabled:NO];
@@ -1045,10 +1243,55 @@ static void plato_mac_beep(void *context) {
     if (![text isEqualToString:self.lastText]) {
         self.lastText = text;
         [self.textView setString:text];
+        PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
+        [self.textView setTextColor:tc.bright];
     }
 }
 
+- (void)applyCurrentThemeColors {
+    PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
+    [self.window setBackgroundColor:tc.bgDark];
+    if (_textView) {
+        [_textView setBackgroundColor:tc.bgDark];
+        [_textView setTextColor:tc.bright];
+        [_textView setInsertionPointColor:tc.normal];
+        NSUInteger len = [[_textView string] length];
+        if (len > 0) {
+            [_textView setTextColor:tc.bright range:NSMakeRange(0, len)];
+        }
+    }
+    if (_bottomBar) {
+        _bottomBar.layer.backgroundColor = tc.bgDark.CGColor;
+        _bottomBar.layer.borderColor = tc.border.CGColor;
+    }
+    NSDictionary *btnTextAttrs = @{
+        NSForegroundColorAttributeName: tc.bright,
+        NSFontAttributeName: [NSFont systemFontOfSize:12.0 weight:NSFontWeightMedium]
+    };
+    if (_selAllBtn) {
+        [_selAllBtn setAttributedTitle:[[NSAttributedString alloc] initWithString:@"Select All" attributes:btnTextAttrs]];
+        [_selAllBtn setBezelColor:tc.hoverBg];
+    }
+    if (_selNoneBtn) {
+        [_selNoneBtn setAttributedTitle:[[NSAttributedString alloc] initWithString:@"Deselect / Live" attributes:btnTextAttrs]];
+        [_selNoneBtn setBezelColor:tc.hoverBg];
+    }
+    if (_compactCheckbox) {
+        [_compactCheckbox setAttributedTitle:[[NSAttributedString alloc] initWithString:@"Compact" attributes:btnTextAttrs]];
+    }
+    if (_clipboardBtn) {
+        [_clipboardBtn setAttributedTitle:[[NSAttributedString alloc] initWithString:@"Copy to Clipboard" attributes:btnTextAttrs]];
+        [_clipboardBtn setBezelColor:tc.hoverBg];
+    }
+    if (_statusLabel) {
+        [_statusLabel setTextColor:self.isFrozen ? tc.muted : tc.bright];
+    }
+    self.lastText = @"";
+    [self updateContentFromTerminal];
+}
+
 - (void)showAndFocus {
+    [self applyCurrentThemeColors];
     [self updateContentFromTerminal];
     [self showWindow:nil];
     [self.window makeKeyAndOrderFront:nil];
@@ -1084,6 +1327,9 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSMenu *crtDecayMenu;
 @property (nonatomic, strong) NSMenu *crtDistortionMenu;
 @property (nonatomic, strong) NSMenu *overrideColorMenu;
+@property (nonatomic, strong) NSMenu *tekBaudMenu;
+- (void)updateTekBaudMenu:(NSInteger)baud;
+- (void)selectTekBaudRateFromMenu:(id)sender;
 @property (nonatomic, strong) NSMenuItem *keyboardReferenceMenuItem;
 @property (nonatomic, strong) NSMenuItem *fpsCounterMenuItem;
 @property (nonatomic, strong) NSMenuItem *wasdMenuItem;
@@ -1092,6 +1338,7 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic) BOOL fpsCounterEnabled;
 @property (nonatomic, strong) NSStatusItem *statusItem;
 @property (nonatomic, strong) NSMenu *statusMenu;
+@property (nonatomic, strong) NSMenuItem *microTutorMenuItem;
 @end
 
 @implementation PLATOAppDelegate
@@ -1141,6 +1388,7 @@ static void plato_mac_beep(void *context) {
         ? [[NSUserDefaults standardUserDefaults] integerForKey:@"crtPersistenceMs"] : 20;
     [tc.view setCRTDecayDuration:(NSTimeInterval)savedCRTDecay / 1000.0];
     [self updateCRTDecayMenuForDuration:(NSTimeInterval)savedCRTDecay / 1000.0];
+    [self updateTekBaudMenu:[tc.view tekBaudRate]];
     return tc;
 }
 
@@ -1151,6 +1399,7 @@ static void plato_mac_beep(void *context) {
     tc.appDelegate = self;
     [self.terminalControllers addObject:tc];
     [tc.window makeKeyAndOrderFront:nil];
+    [self updateTekBaudMenu:[tc.view tekBaudRate]];
     return tc;
 }
 
@@ -1170,7 +1419,7 @@ static void plato_mac_beep(void *context) {
     [self updatePlasmaDistortionMenu:[controller.view plasmaDistortion]];
     [self updateCRTDecayMenuForDuration:[controller.view crtDecayDuration]];
     [self updateOverrideColorMenu:[controller.view phosphorColor]];
-    [self updateOverrideColorMenu:[controller.view phosphorColor]];
+    [self updateTekBaudMenu:[controller.view tekBaudRate]];
 }
 
 - (void)applyKeyboardReferencePresentation {
@@ -1182,6 +1431,7 @@ static void plato_mac_beep(void *context) {
         [self.view setKeyboardReferenceVisible:YES];
     } else {
         [self.view setKeyboardReferenceVisible:NO];
+        [self.keymapController applyCurrentThemeColors];
         [self.keymapController showWindow:nil];
         [self.keymapController.window makeKeyAndOrderFront:nil];
     }
@@ -1355,6 +1605,52 @@ static void plato_mac_beep(void *context) {
 
     [viewMenu addItem:[NSMenuItem separatorItem]];
 
+    // --- TEKTRONIX 4014 DVBST (STAND-ALONE ENGINE) ---
+    NSMenuItem *tekItem = [[NSMenuItem alloc] initWithTitle:@"Real Tektronix 4014 (DVBST)" action:@selector(setDisplayRealTektronix:) keyEquivalent:@""];
+    [tekItem setTarget:self]; [tekItem setTag:1006];
+    [viewMenu addItem:tekItem];
+
+        NSMenuItem *tekBaudItem =
+        [[NSMenuItem alloc] initWithTitle:@"Tektronix Connection Speed"
+                                   action:nil
+                            keyEquivalent:@""];
+
+    self.tekBaudMenu =
+        [[NSMenu alloc] initWithTitle:@"Tektronix Connection Speed"];
+
+    NSArray *tekBaudOptions = @[
+        @{@"title": @"Instant (Uncapped)", @"tag": @2500},
+        @{@"title": @"110 Baud",           @"tag": @2501},
+        @{@"title": @"150 Baud",           @"tag": @2502},
+        @{@"title": @"300 Baud",           @"tag": @2503},
+        @{@"title": @"600 Baud",           @"tag": @2504},
+        @{@"title": @"1200 Baud",          @"tag": @2505},
+        @{@"title": @"2400 Baud",          @"tag": @2506},
+        @{@"title": @"4800 Baud",          @"tag": @2507},
+        @{@"title": @"9600 Baud",          @"tag": @2508}
+    ];
+
+    for (NSDictionary *opt in tekBaudOptions) {
+        NSMenuItem *item =
+            [[NSMenuItem alloc] initWithTitle:opt[@"title"]
+                                       action:@selector(selectTekBaudRateFromMenu:)
+                                keyEquivalent:@""];
+
+        [item setTarget:self];
+        [item setTag:[opt[@"tag"] integerValue]];
+
+        if ([opt[@"tag"] integerValue] == 2500) {
+            [item setState:NSControlStateValueOn];
+        }
+
+        [self.tekBaudMenu addItem:item];
+    }
+
+    [tekBaudItem setSubmenu:self.tekBaudMenu];
+    [viewMenu addItem:tekBaudItem];
+
+    [viewMenu addItem:[NSMenuItem separatorItem]];
+
     unichar fullScreenKey = NSF11FunctionKey, fpsCounterKey = NSF12FunctionKey;
     NSMenuItem *fullScreenItem = [[NSMenuItem alloc] initWithTitle:@"Toggle Full Screen" action:@selector(toggleMainFullScreen:) keyEquivalent:[NSString stringWithCharacters:&fullScreenKey length:1]];
     [fullScreenItem setKeyEquivalentModifierMask:0]; [fullScreenItem setTarget:self]; [viewMenu addItem:fullScreenItem];
@@ -1431,6 +1727,7 @@ static void plato_mac_beep(void *context) {
     // 5. Micro Tutor
     // =============================================================
     NSMenuItem *microTutorMenuItem = [[NSMenuItem alloc] init];
+    self.microTutorMenuItem = microTutorMenuItem;
     NSMenu *microTutorMenu = [[NSMenu alloc] initWithTitle:@"Micro Tutor"];
     NSMenuItem *bootMteItem = [[NSMenuItem alloc] initWithTitle:@"Load and Boot from MTE..." action:@selector(bootFromMte:) keyEquivalent:@""];
     [bootMteItem setTarget:self]; [microTutorMenu addItem:bootMteItem];
@@ -1840,22 +2137,47 @@ static void plato_mac_beep(void *context) {
     else if (mode == 2) targetTag = 1003;
     else if (mode == 3) targetTag = 1004;
     else if (mode == 4) targetTag = 1005;
+    else if (mode == 5) targetTag = 1006;
 
     NSMenu *targetMenu = self.viewMenu;
     if (!targetMenu) {
         targetMenu = [[[NSApp mainMenu] itemWithTitle:@"View"] submenu];
     }
     if (targetMenu) {
-        for (NSInteger tag = 1001; tag <= 1005; tag++) {
+        for (NSInteger tag = 1001; tag <= 1006; tag++) {
             [[targetMenu itemWithTag:tag] setState:(tag == targetTag ? NSControlStateValueOn : NSControlStateValueOff)];
         }
+    }
+
+    PLATOTerminalWindowController *active =
+        [self activeTerminalController];
+
+    // Micro Tutor disabilitato sul terminale Tektronix 4014 (DVBST)
+    BOOL isTek = (mode == 5);
+    NSMenuItem *mtItem = self.microTutorMenuItem;
+    if (!mtItem) {
+        mtItem = [[NSApp mainMenu] itemWithTitle:@"Micro Tutor"];
+    }
+    if (mtItem) {
+        [mtItem setEnabled:!isTek];
+        NSMenu *mtSub = [mtItem submenu];
+        if (mtSub) {
+            for (NSMenuItem *subItem in [mtSub itemArray]) {
+                [subItem setEnabled:!isTek];
+            }
+        }
+    }
+
+    if (active && active.view &&
+        [active.view respondsToSelector:@selector(tekBaudRate)]) {
+        [self updateTekBaudMenu:[active.view tekBaudRate]];
     }
 }
 
 - (void)selectDisplayMenuItem:(NSMenuItem *)selectedItem {
     if (!selectedItem) return;
     NSInteger tag = [selectedItem tag];
-    NSInteger m = (tag == 1001 ? 0 : (tag == 1003 ? 2 : (tag == 1004 ? 3 : (tag == 1005 ? 4 : 1))));
+    NSInteger m = (tag == 1001 ? 0 : (tag == 1003 ? 2 : (tag == 1004 ? 3 : (tag == 1005 ? 4 : (tag == 1006 ? 5 : 1)))));
     [self updateDisplayModeMenu:m];
 }
 
@@ -1873,6 +2195,27 @@ static void plato_mac_beep(void *context) {
         for (NSMenuItem *item in [self.decayMenu itemArray]) {
             [item setState:([item tag] == targetTag ? NSControlStateValueOn : NSControlStateValueOff)];
         }
+    }
+}
+
+- (void)refreshAllModalWindowThemes {
+    if (self.profilesController && [self.profilesController.window isVisible]) {
+        [self.profilesController applyCurrentThemeColors];
+    }
+    if (self.scriptsController && [self.scriptsController.window isVisible]) {
+        [self.scriptsController applyCurrentThemeColors];
+    }
+    if (self.keyboardProfilesController && [self.keyboardProfilesController.window isVisible]) {
+        [self.keyboardProfilesController applyCurrentThemeColors];
+    }
+    if (self.textBufferController && [self.textBufferController.window isVisible]) {
+        [self.textBufferController applyCurrentThemeColors];
+    }
+    if (self.keymapController && [self.keymapController.window isVisible]) {
+        [self.keymapController applyCurrentThemeColors];
+    }
+    if (self.scriptRefController && [self.scriptRefController.window isVisible]) {
+        [self.scriptRefController applyCurrentThemeColors];
     }
 }
 
@@ -1901,12 +2244,18 @@ static void plato_mac_beep(void *context) {
             return;
         }
 
+        if (active.currentProfile) {
+            NSMutableDictionary *mut = [active.currentProfile mutableCopy];
+            mut[@"displayMode"] = @(newMode);
+            active.currentProfile = mut;
+        }
         // Applica modalita sulla vista attiva
         if (newMode == 0) [active.view setDisplayCrisp];
         else if (newMode == 1) [active.view setDisplayRealPlasma];
         else if (newMode == 2) [active.view setDisplaySplit];
         else if (newMode == 3) [active.view setDisplayCrispColor];
         else if (newMode == 4) [active.view setDisplayRealColorCRT];
+        else if (newMode == 5) [active.view setDisplayRealTektronix];
 
         [self updateDisplayModeMenu:newMode];
 
@@ -1919,17 +2268,25 @@ static void plato_mac_beep(void *context) {
             NSDictionary *def = [PLATOProfileManager defaultProfile];
             [active applyProfile:def];
         }
+        [self refreshAllModalWindowThemes];
         return;
     }
 
     // Cambio istantaneo tra modalita dello stesso tipo (es. Real Plasma <-> Crisp)
+    if (active.currentProfile) {
+        NSMutableDictionary *mut = [active.currentProfile mutableCopy];
+        mut[@"displayMode"] = @(newMode);
+        active.currentProfile = mut;
+    }
     if (newMode == 0) [active.view setDisplayCrisp];
     else if (newMode == 1) [active.view setDisplayRealPlasma];
     else if (newMode == 2) [active.view setDisplaySplit];
     else if (newMode == 3) [active.view setDisplayCrispColor];
         else if (newMode == 4) [active.view setDisplayRealColorCRT];
+    else if (newMode == 5) [active.view setDisplayRealTektronix];
 
     [self updateDisplayModeMenu:newMode];
+    [self refreshAllModalWindowThemes];
 }
 
 - (void)setDisplayCrisp:(id)sender {
@@ -1949,6 +2306,81 @@ static void plato_mac_beep(void *context) {
 }
 - (void)setDisplayRealColorCRT:(id)sender {
     [self requestDisplayMode:4 sender:sender];
+}
+
+- (void)setDisplayRealTektronix:(id)sender {
+    [self requestDisplayMode:5 sender:sender];
+}
+
+- (void)selectTekBaudRateFromMenu:(id)sender {
+    NSInteger tag = [sender tag];
+    NSInteger baud = 0;
+
+    if (tag == 2501) baud = 110;
+    else if (tag == 2502) baud = 150;
+    else if (tag == 2503) baud = 300;
+    else if (tag == 2504) baud = 600;
+    else if (tag == 2505) baud = 1200;
+    else if (tag == 2506) baud = 2400;
+    else if (tag == 2507) baud = 4800;
+    else if (tag == 2508) baud = 9600;
+
+    PLATOTerminalWindowController *active =
+        [self activeTerminalController];
+
+    if (active && active.view) {
+        [active.view setTekBaudRate:baud];
+
+        if (active.currentProfile) {
+            // NSDictionary è immutabile: leggiamo l'ID,
+            // senza modificare direttamente currentProfile.
+            NSString *profileID = active.currentProfile[@"id"];
+
+            if (profileID) {
+                NSMutableArray *profiles =
+                    [PLATOProfileManager loadProfiles];
+
+                BOOL profileFound = NO;
+
+                for (NSMutableDictionary *p in profiles) {
+                    if ([p[@"id"] isEqualToString:profileID]) {
+                        p[@"tekBaudRate"] = @(baud);
+                        profileFound = YES;
+                        break;
+                    }
+                }
+
+                if (profileFound) {
+                    [PLATOProfileManager saveProfiles:profiles];
+                }
+            }
+        }
+    }
+
+    [self updateTekBaudMenu:baud];
+}
+
+- (void)updateTekBaudMenu:(NSInteger)baud {
+    NSInteger targetTag = 2500;
+
+    if (baud == 110) targetTag = 2501;
+    else if (baud == 150) targetTag = 2502;
+    else if (baud == 300) targetTag = 2503;
+    else if (baud == 600) targetTag = 2504;
+    else if (baud == 1200) targetTag = 2505;
+    else if (baud == 2400) targetTag = 2506;
+    else if (baud == 4800) targetTag = 2507;
+    else if (baud == 9600) targetTag = 2508;
+
+    if (self.tekBaudMenu) {
+        for (NSMenuItem *item in [self.tekBaudMenu itemArray]) {
+            [item setState:(
+                [item tag] == targetTag
+                    ? NSControlStateValueOn
+                    : NSControlStateValueOff
+            )];
+        }
+    }
 }
 
 - (void)setCRTBeamMedium:(id)sender { [self selectCRTBeamLevel:0]; }
@@ -2072,6 +2504,7 @@ static void plato_mac_beep(void *context) {
     [self updateOverrideColorMenu:colorIdx];
     [[NSUserDefaults standardUserDefaults] setInteger:colorIdx forKey:@"phosphorColor"];
     [[NSUserDefaults standardUserDefaults] setInteger:tag forKey:@"phosphorColorTag"];
+    [self refreshAllModalWindowThemes];
 }
 
 - (void)updateOverrideColorMenu:(NSInteger)colorIdx {
@@ -2188,6 +2621,7 @@ static void plato_mac_beep(void *context) {
         self.textBufferController = [[PLATOTextBufferWindowController alloc] init];
         self.textBufferController.appDelegate = self;
     }
+    [self.textBufferController applyCurrentThemeColors];
     [self.textBufferController showAndFocus];
 }
 
@@ -2208,7 +2642,8 @@ static void plato_mac_beep(void *context) {
         self.profilesController = [[PLATOProfilesWindowController alloc] init];
         self.profilesController.delegate = self;
     }
-    [self.profilesController showWindow:nil];
+    [self.profilesController applyCurrentThemeColors];
+        [self.profilesController showWindow:nil];
     [self.profilesController.window makeKeyAndOrderFront:nil];
 }
 
@@ -2283,7 +2718,20 @@ static void plato_mac_beep(void *context) {
     plato_microtutor_dump_ram(&self.view->terminal->mt, "z80ram.dmp");
 }
 
+
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+    if (item.action == @selector(bootFromMte:) || item.action == @selector(toggleZ80Log:)) {
+        PLATOTerminalWindowController *active = [self activeTerminalController];
+        if (!active || !active.view || [active.view currentDisplayMode] == 5) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
 - (void)bootFromMte:(id)sender {
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view && [active.view currentDisplayMode] == 5) return;
     if (!self.view || !self.view->terminal) return;
     NSOpenPanel *panel = [NSOpenPanel openPanel];
     [panel setCanChooseFiles:YES];
@@ -2362,7 +2810,8 @@ static void plato_mac_beep(void *context) {
     if (!self.scriptRefController) {
         self.scriptRefController = [[PLATOScriptRefWindowController alloc] init];
     }
-    [self.scriptRefController showWindow:nil];
+    [self.scriptRefController applyCurrentThemeColors];
+        [self.scriptRefController showWindow:nil];
     [self.scriptRefController.window makeKeyAndOrderFront:nil];
 }
 
@@ -2371,6 +2820,7 @@ static void plato_mac_beep(void *context) {
         self.scriptsController = [[PLATOScriptsWindowController alloc] initWithScriptList:self.scriptList];
         self.scriptsController.delegate = self;
     }
+    [self.scriptsController applyCurrentThemeColors];
     [self.scriptsController refreshList];
     [self.scriptsController showWindow:nil];
     [self.scriptsController.window makeKeyAndOrderFront:nil];
@@ -2507,7 +2957,8 @@ static void plato_mac_beep(void *context) {
         self.keyboardProfilesController.keymapManager = &state->keymap_mgr;
         [self.keyboardProfilesController refreshList];
     }
-    [self.keyboardProfilesController showWindow:nil];
+    [self.keyboardProfilesController applyCurrentThemeColors];
+        [self.keyboardProfilesController showWindow:nil];
     [self.keyboardProfilesController.window makeKeyAndOrderFront:nil];
 }
 

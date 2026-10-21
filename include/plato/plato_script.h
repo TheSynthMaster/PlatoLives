@@ -61,18 +61,10 @@
 "# SELF-HEALING RESET RECOVERY\n" \
 "# ==============================================================================\n" \
 "@reset:\n" \
-"let r_banner = -1\n" \
-"let r_user = -1\n\n" \
-"for reset_step = 1 to 10\n" \
-"    key SHIFT-STOP\n" \
-"    wait 400ms\n\n" \
-"    # Check if we reached username prompt\n" \
-"    find_text regex \"Type +your +CYBIS +name\" into r_user, dummy_y\n" \
-"    if r_user >= 0 goto do_user\n\n" \
-"    # Check if we reached initial banner\n" \
-"    find_text regex \"Press +NEXT +to begin\" into r_banner, dummy_y\n" \
-"    if r_banner >= 0 goto do_next\n" \
-"next reset_step\n\n" \
+"echo \"[Script] Screen prompt desynchronized. Triggering clean reconnect & restart...\"\n" \
+"reconnect\n" \
+"wait 2s\n" \
+"goto start\n\n" \
 "exit"
 
 #define PLATO_SCRIPT_MAX_NAME     64

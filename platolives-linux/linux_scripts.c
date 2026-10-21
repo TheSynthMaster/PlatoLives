@@ -5,6 +5,7 @@
  */
 
 #include "linux_scripts.h"
+#include "linux_theme.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -147,13 +148,14 @@ static void draw_scr_rect(SDL_Renderer *ren, int x, int y, int w, int h, uint8_t
 }
 
 static void draw_scr_button(SDL_Renderer *ren, int x, int y, int w, int h, const char *label, bool selected, bool flashing) {
-    uint8_t bg_r = flashing ? 255 : (selected ? 96 : 36);
-    uint8_t bg_g = flashing ? 220 : (selected ? 42 : 18);
-    uint8_t bg_b = flashing ? 0   : (selected ? 10 : 8);
+    linux_theme_colors_t th = linux_theme_current();
+    uint8_t bg_r = flashing ? th.bright.r : (selected ? th.hover_bg.r : th.bg_box.r);
+    uint8_t bg_g = flashing ? th.bright.g : (selected ? th.hover_bg.g : th.bg_box.g);
+    uint8_t bg_b = flashing ? th.bright.b : (selected ? th.hover_bg.b : th.bg_box.b);
 
-    uint8_t bd_r = flashing ? 255 : (selected ? 255 : 120);
-    uint8_t bd_g = flashing ? 245 : (selected ? 140 : 60);
-    uint8_t bd_b = flashing ? 120 : (selected ? 20  : 20);
+    uint8_t bd_r = flashing ? 255 : (selected ? th.bright.r : th.border.r);
+    uint8_t bd_g = flashing ? 255 : (selected ? th.bright.g : th.border.g);
+    uint8_t bd_b = flashing ? 255 : (selected ? th.bright.b : th.border.b);
 
     draw_scr_rect(ren, x, y, w, h, bg_r, bg_g, bg_b, true, bd_r, bd_g, bd_b);
 
@@ -161,9 +163,9 @@ static void draw_scr_button(SDL_Renderer *ren, int x, int y, int w, int h, const
     float tx = (float)x + ((float)w - tw) / 2.0f;
     float ty = (float)y + ((float)h) / 2.0f + 5.0f;
 
-    uint8_t fg_r = flashing ? 20  : (selected ? 255 : 210);
-    uint8_t fg_g = flashing ? 12  : (selected ? 215 : 130);
-    uint8_t fg_b = flashing ? 4   : (selected ? 60  : 20);
+    uint8_t fg_r = flashing ? 0 : (selected ? th.bright.r : th.normal.r);
+    uint8_t fg_g = flashing ? 0 : (selected ? th.bright.g : th.normal.g);
+    uint8_t fg_b = flashing ? 0 : (selected ? th.bright.b : th.normal.b);
 
     draw_scr_text(ren, tx, ty, label, fg_r, fg_g, fg_b);
 }
@@ -732,19 +734,20 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
 }
 
 void linux_scripts_render(void) {
+    linux_theme_colors_t th = linux_theme_current();
     if (!g_scr_win || !g_scr_ren) return;
 
     /* Sfondo finestra Dark Amber Plasma */
-    SDL_SetRenderDrawColor(g_scr_ren, 14, 9, 5, 255);
+    SDL_SetRenderDrawColor(g_scr_ren, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, 255);
     SDL_RenderClear(g_scr_ren);
 
     /* Testata Top Bar Plasma 1:1 con Connection Profiles */
-    draw_scr_rect(g_scr_ren, 0, 0, SCR_WIN_W, 44, 34, 17, 6, true, 190, 85, 12);
-    draw_scr_text(g_scr_ren, 20.0f, 27.0f, "MANAGE SCRIPTS", 255, 215, 60);
-    draw_scr_text(g_scr_ren, 260.0f, 27.0f, "PLATO AUTOMATION & SCRIPT ENGINE", 204, 102, 0);
+    draw_scr_rect(g_scr_ren, 0, 0, SCR_WIN_W, 44, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
+    draw_scr_text(g_scr_ren, 20.0f, 27.0f, "MANAGE SCRIPTS", th.bright.r, th.bright.g, th.bright.b);
+    draw_scr_text(g_scr_ren, 260.0f, 27.0f, "PLATO AUTOMATION & SCRIPT ENGINE", th.dim.r, th.dim.g, th.dim.b);
 
     /* Sfondo Riquadro Lista Sinistra */
-    draw_scr_rect(g_scr_ren, 20, 60, 220, 480, 22, 12, 6, true, 80, 40, 15);
+    draw_scr_rect(g_scr_ren, 20, 60, 220, 480, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
 
     /* Render Elementi Lista Script */
     if (g_script_list) {
@@ -753,22 +756,22 @@ void linux_scripts_render(void) {
             bool is_sel = ((int)i == g_current_idx);
 
             if (is_sel) {
-                draw_scr_rect(g_scr_ren, 22, y + 2, 216, 24, 75, 35, 10, true, 255, 150, 30);
+                draw_scr_rect(g_scr_ren, 22, y + 2, 216, 24, th.hover_bg.r, th.hover_bg.g, th.hover_bg.b, true, th.bright.r, th.bright.g, th.bright.b);
             }
 
             const plato_script_t *s = &g_script_list->scripts[i];
             char item_lbl[80];
             snprintf(item_lbl, sizeof(item_lbl), "%s %s", s->enabled ? "[✓]" : "[  ]", s->name);
 
-            uint8_t fg_r = is_sel ? 255 : (s->enabled ? 240 : 160);
-            uint8_t fg_g = is_sel ? 220 : (s->enabled ? 160 : 100);
-            uint8_t fg_b = is_sel ? 80  : (s->enabled ? 40  : 30);
+            uint8_t fg_r = is_sel ? th.bright.r : (s->enabled ? th.normal.r : th.dim.r);
+            uint8_t fg_g = is_sel ? th.bright.g : (s->enabled ? th.normal.g : th.dim.g);
+            uint8_t fg_b = is_sel ? th.bright.b : (s->enabled ? th.normal.b : th.dim.b);
 
             draw_scr_text(g_scr_ren, 28.0f, (float)(y + 19), item_lbl, fg_r, fg_g, fg_b);
 
             if (s->hotkey_display[0]) {
                 float kw = get_string_width_f(s->hotkey_display, (int)strlen(s->hotkey_display));
-                draw_scr_text(g_scr_ren, 228.0f - kw, (float)(y + 19), s->hotkey_display, 180, 110, 30);
+                draw_scr_text(g_scr_ren, 228.0f - kw, (float)(y + 19), s->hotkey_display, th.dim.r, th.dim.g, th.dim.b);
             }
         }
     }
@@ -781,65 +784,68 @@ void linux_scripts_render(void) {
     /* DETTAGLI DELLO SCRIPT SELEZIONATO (COLONNA DESTRA) */
     if (g_current_idx >= 0 && g_script_list && (size_t)g_current_idx < g_script_list->count) {
         /* Riga 1: Name & Enabled */
-        draw_scr_text(g_scr_ren, 260.0f, 78.0f, "Name:", 240, 160, 40);
+        draw_scr_text(g_scr_ren, 260.0f, 78.0f, "Name:", th.dim.r, th.dim.g, th.dim.b);
         bool act_name = (g_active_field == SCR_FIELD_NAME);
-        draw_scr_rect(g_scr_ren, 340, 60, 320, 26, 26, 14, 8, true, act_name ? 255 : 120, act_name ? 160 : 60, act_name ? 40 : 20);
-        draw_scr_text(g_scr_ren, 348.0f, 78.0f, g_edit_script.name, 255, 220, 120);
+        draw_scr_rect(g_scr_ren, 340, 60, 320, 26, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, act_name ? th.bright.r : th.border.r, act_name ? th.bright.g : th.border.g, act_name ? th.bright.b : th.border.b);
+        draw_scr_text(g_scr_ren, 348.0f, 78.0f, g_edit_script.name, th.bright.r, th.bright.g, th.bright.b);
 
         /* Checkbox Enabled */
         bool en = g_edit_script.enabled;
-        draw_scr_rect(g_scr_ren, 680, 64, 18, 18, 26, 14, 8, true, 180, 90, 20);
+        draw_scr_rect(g_scr_ren, 680, 64, 18, 18, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
         if (en) {
-            draw_scr_rect(g_scr_ren, 684, 68, 10, 10, 255, 170, 30, false, 0, 0, 0);
+            draw_scr_rect(g_scr_ren, 684, 68, 10, 10, th.bright.r, th.bright.g, th.bright.b, false, 0, 0, 0);
         }
-        draw_scr_text(g_scr_ren, 706.0f, 78.0f, "Enabled in Menu", 240, 180, 50);
+        draw_scr_text(g_scr_ren, 706.0f, 78.0f, "Enabled in Menu", th.normal.r, th.normal.g, th.normal.b);
 
         /* Riga 2: Delays */
-        draw_scr_text(g_scr_ren, 260.0f, 116.0f, "Delays:", 240, 160, 40);
+        draw_scr_text(g_scr_ren, 260.0f, 116.0f, "Delays:", th.dim.r, th.dim.g, th.dim.b);
 
         char num_buf[16];
         /* Char Delay */
-        draw_scr_text(g_scr_ren, 340.0f, 116.0f, "Char:", 200, 130, 30);
+        draw_scr_text(g_scr_ren, 340.0f, 116.0f, "Char:", th.dim.r, th.dim.g, th.dim.b);
         snprintf(num_buf, sizeof(num_buf), "%d", g_edit_script.char_delay_ms);
         bool act_c = (g_active_field == SCR_FIELD_CHAR_DEL);
-        draw_scr_rect(g_scr_ren, 382, 98, 70, 26, 26, 14, 8, true, act_c ? 255 : 120, act_c ? 160 : 60, act_c ? 40 : 20);
-        draw_scr_text(g_scr_ren, 390.0f, 116.0f, num_buf, 255, 220, 120);
+        draw_scr_rect(g_scr_ren, 382, 98, 70, 26, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, act_c ? th.bright.r : th.border.r, act_c ? th.bright.g : th.border.g, act_c ? th.bright.b : th.border.b);
+        draw_scr_text(g_scr_ren, 390.0f, 116.0f, num_buf, th.bright.r, th.bright.g, th.bright.b);
 
         /* Next Delay */
-        draw_scr_text(g_scr_ren, 470.0f, 116.0f, "Next:", 200, 130, 30);
+        draw_scr_text(g_scr_ren, 470.0f, 116.0f, "Next:", th.dim.r, th.dim.g, th.dim.b);
         snprintf(num_buf, sizeof(num_buf), "%d", g_edit_script.next_delay_ms);
         bool act_n = (g_active_field == SCR_FIELD_NEXT_DEL);
-        draw_scr_rect(g_scr_ren, 510, 98, 70, 26, 26, 14, 8, true, act_n ? 255 : 120, act_n ? 160 : 60, act_n ? 40 : 20);
-        draw_scr_text(g_scr_ren, 518.0f, 116.0f, num_buf, 255, 220, 120);
+        draw_scr_rect(g_scr_ren, 510, 98, 70, 26, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, act_n ? th.bright.r : th.border.r, act_n ? th.bright.g : th.border.g, act_n ? th.bright.b : th.border.b);
+        draw_scr_text(g_scr_ren, 518.0f, 116.0f, num_buf, th.bright.r, th.bright.g, th.bright.b);
 
         /* Command Delay */
-        draw_scr_text(g_scr_ren, 600.0f, 116.0f, "Cmd:", 200, 130, 30);
+        draw_scr_text(g_scr_ren, 600.0f, 116.0f, "Cmd:", th.dim.r, th.dim.g, th.dim.b);
         snprintf(num_buf, sizeof(num_buf), "%d", g_edit_script.command_delay_ms);
         bool act_m = (g_active_field == SCR_FIELD_CMD_DEL);
-        draw_scr_rect(g_scr_ren, 638, 98, 70, 26, 26, 14, 8, true, act_m ? 255 : 120, act_m ? 160 : 60, act_m ? 40 : 20);
-        draw_scr_text(g_scr_ren, 646.0f, 116.0f, num_buf, 255, 220, 120);
+        draw_scr_rect(g_scr_ren, 638, 98, 70, 26, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, act_m ? th.bright.r : th.border.r, act_m ? th.bright.g : th.border.g, act_m ? th.bright.b : th.border.b);
+        draw_scr_text(g_scr_ren, 646.0f, 116.0f, num_buf, th.bright.r, th.bright.g, th.bright.b);
 
         /* Riga 3: Hotkey */
-        draw_scr_text(g_scr_ren, 260.0f, 154.0f, "Hotkey:", 240, 160, 40);
+        draw_scr_text(g_scr_ren, 260.0f, 154.0f, "Hotkey:", th.dim.r, th.dim.g, th.dim.b);
         const char *hk_lbl = g_recording_hotkey ? ">> Press any key... <<" :
                              (g_edit_script.hotkey_display[0] ? g_edit_script.hotkey_display : "None");
-        uint8_t hk_r = g_recording_hotkey ? 255 : 240;
-        uint8_t hk_g = g_recording_hotkey ? 220 : 180;
-        uint8_t hk_b = g_recording_hotkey ? 60  : 60;
-        draw_scr_rect(g_scr_ren, 340, 136, 210, 26, 26, 14, 8, true, g_recording_hotkey ? 255 : 120, g_recording_hotkey ? 200 : 60, 20);
+        uint8_t hk_r = g_recording_hotkey ? th.bright.r : (g_edit_script.hotkey_display[0] ? th.bright.r : th.dim.r);
+        uint8_t hk_g = g_recording_hotkey ? th.bright.g : (g_edit_script.hotkey_display[0] ? th.bright.g : th.dim.g);
+        uint8_t hk_b = g_recording_hotkey ? th.bright.b : (g_edit_script.hotkey_display[0] ? th.bright.b : th.dim.b);
+        draw_scr_rect(g_scr_ren, 340, 136, 210, 26, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, g_recording_hotkey ? th.bright.r : th.border.r, g_recording_hotkey ? th.bright.g : th.border.g, g_recording_hotkey ? th.bright.b : th.border.b);
         draw_scr_text(g_scr_ren, 348.0f, 154.0f, hk_lbl, hk_r, hk_g, hk_b);
 
         draw_scr_button(g_scr_ren, 570, 136, 90, 26, g_recording_hotkey ? "Cancel" : "Record", g_recording_hotkey, is_btn_flashing(SCR_BTN_RECORD));
         draw_scr_button(g_scr_ren, 670, 136, 80, 26, "Clear", false, is_btn_flashing(SCR_BTN_CLEAR));
 
         /* Riga 4: Script Body Label */
-        draw_scr_text(g_scr_ren, 260.0f, 192.0f, "Script Body:", 255, 200, 50);
-        draw_scr_text(g_scr_ren, 360.0f, 192.0f, "Commands: wait_text, send, key, let, find_text, if..goto", 170, 110, 30);
+        draw_scr_text(g_scr_ren, 260.0f, 192.0f, "Script Body:", th.bright.r, th.bright.g, th.bright.b);
+        draw_scr_text(g_scr_ren, 360.0f, 192.0f, "Commands: wait_text, send, key, let, find_text, if..goto", th.dim.r, th.dim.g, th.dim.b);
 
         /* EDITOR MULTI-LINEA */
         bool act_script = (g_active_field == SCR_FIELD_BODY);
         draw_scr_rect(g_scr_ren, SCRIPT_BOX_X, SCRIPT_BOX_Y, SCRIPT_BOX_W, SCRIPT_BOX_H,
-                      18, 10, 5, true, act_script ? 255 : 100, act_script ? 150 : 50, act_script ? 30 : 15);
+                      th.bg_box.r, th.bg_box.g, th.bg_box.b, true,
+                      act_script ? th.bright.r : th.border.r,
+                      act_script ? th.bright.g : th.border.g,
+                      act_script ? th.bright.b : th.border.b);
 
         /* Render Linee di Testo */
         const char *text = g_edit_script.body;
@@ -868,13 +874,13 @@ void linux_scripts_render(void) {
                 if (buf[0] == '#') { cr = 140; cg = 100; cb = 30; }
                 else if (buf[0] == '@') { cr = 255; cg = 220; cb = 60; }
 
-                draw_scr_text(g_scr_ren, (float)(SCRIPT_BOX_X + 10), ly, buf, cr, cg, cb);
+                draw_scr_text(g_scr_ren, (float)(SCRIPT_BOX_X + 10), ly, buf, th.normal.r, th.normal.g, th.normal.b);
 
                 /* Cursore lampeggiante / visibile */
                 if (act_script && line_idx == cur_line) {
                     float cx = (float)(SCRIPT_BOX_X + 10) + get_string_width_f(line_start, cur_col);
                     SDL_Rect cr_rc = { (int)cx, (int)(ly - 14), 2, 17 };
-                    SDL_SetRenderDrawColor(g_scr_ren, 255, 230, 80, 255);
+                    SDL_SetRenderDrawColor(g_scr_ren, th.bright.r, th.bright.g, th.bright.b, 255);
                     SDL_RenderFillRect(g_scr_ren, &cr_rc);
                 }
                 visible_row++;
@@ -889,7 +895,7 @@ void linux_scripts_render(void) {
         if (act_script && cur_line >= line_idx && visible_row < SCRIPT_VISIBLE_LINES) {
             float ly = (float)(SCRIPT_BOX_Y + 18 + visible_row * SCRIPT_LINE_HEIGHT);
             SDL_Rect cr_rc = { SCRIPT_BOX_X + 10, (int)(ly - 14), 2, 17 };
-            SDL_SetRenderDrawColor(g_scr_ren, 255, 230, 80, 255);
+            SDL_SetRenderDrawColor(g_scr_ren, th.bright.r, th.bright.g, th.bright.b, 255);
             SDL_RenderFillRect(g_scr_ren, &cr_rc);
         }
 
@@ -900,7 +906,7 @@ void linux_scripts_render(void) {
             int sb_y = SCRIPT_BOX_Y + 2;
             int sb_h = SCRIPT_BOX_H - 4;
 
-            draw_scr_rect(g_scr_ren, sb_x, sb_y, 12, sb_h, 30, 16, 8, true, 80, 40, 15);
+            draw_scr_rect(g_scr_ren, sb_x, sb_y, 12, sb_h, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, true, th.border.r, th.border.g, th.border.b);
 
             int thumb_h = (sb_h * SCRIPT_VISIBLE_LINES) / total_lines;
             if (thumb_h < 18) thumb_h = 18;
@@ -908,7 +914,7 @@ void linux_scripts_render(void) {
             int max_scroll = total_lines - SCRIPT_VISIBLE_LINES;
             int thumb_y = sb_y + (g_script_scroll_line * (sb_h - thumb_h)) / max_scroll;
 
-            draw_scr_rect(g_scr_ren, sb_x + 1, thumb_y, 10, thumb_h, 190, 95, 15, true, 255, 140, 25);
+            draw_scr_rect(g_scr_ren, sb_x + 1, thumb_y, 10, thumb_h, th.dim.r, th.dim.g, th.dim.b, true, th.bright.r, th.bright.g, th.bright.b);
         }
 
         

@@ -1,4 +1,5 @@
 #include "linux_keymap.h"
+#include "linux_theme.h"
 #include "plato/plato_keyboard.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,11 +93,20 @@ static void k_draw_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_
 }
 
 static void k_draw_btn(int x, int y, int w, int h, const char *lbl, bool sel) {
-    uint8_t bg_r = sel ? 96 : 32, bg_g = sel ? 42 : 20, bg_b = sel ? 10 : 12;
-    uint8_t bd_r = sel ? 255 : 90, bd_g = sel ? 140 : 50, bd_b = sel ? 20 : 25;
+    linux_theme_colors_t th = linux_theme_current();
+    uint8_t bg_r = sel ? th.hover_bg.r : th.bg_box.r;
+    uint8_t bg_g = sel ? th.hover_bg.g : th.bg_box.g;
+    uint8_t bg_b = sel ? th.hover_bg.b : th.bg_box.b;
+
+    uint8_t bd_r = sel ? th.bright.r : th.border.r;
+    uint8_t bd_g = sel ? th.bright.g : th.border.g;
+    uint8_t bd_b = sel ? th.bright.b : th.border.b;
+
     k_draw_rect(x, y, w, h, bg_r, bg_g, bg_b, true, bd_r, bd_g, bd_b);
     float tw = k_get_str_w(lbl);
-    uint8_t fg_r = sel ? 255 : 210, fg_g = sel ? 215 : 190, fg_b = sel ? 60 : 170;
+    uint8_t fg_r = sel ? th.bright.r : th.normal.r;
+    uint8_t fg_g = sel ? th.bright.g : th.normal.g;
+    uint8_t fg_b = sel ? th.bright.b : th.normal.b;
     k_draw_text(x + (w - tw)/2.0f, y + 18.0f, lbl, fg_r, fg_g, fg_b);
 }
 
@@ -581,25 +591,26 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
 }
 
 void linux_keymap_render(void) {
+    linux_theme_colors_t th = linux_theme_current();
     if (!g_kwin || !g_kren) return;
-    SDL_SetRenderDrawColor(g_kren, 16, 12, 10, 255);
+    SDL_SetRenderDrawColor(g_kren, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, 255);
     SDL_RenderClear(g_kren);
 
     // =========================================================
     // 1. HEADER SINISTRO & DESTRO
     // =========================================================
-    k_draw_text(20, 36, "PROFILES", 255, 110, 0);
+    k_draw_text(20, 36, "PROFILES", th.bright.r, th.bright.g, th.bright.b);
 
     plato_keymap_profile_t *p = &g_kmgr->profiles[g_sel_prof];
     char ptitle[128];
     snprintf(ptitle, sizeof(ptitle), "%s %s", p->name, p->is_builtin ? "[Built-in / Read-Only]" : "[User Defined]");
-    k_draw_text(290, 35, ptitle, 255, 110, 0);
-    k_draw_text(290, 58, p->description, 160, 160, 160);
+    k_draw_text(290, 35, ptitle, th.bright.r, th.bright.g, th.bright.b);
+    k_draw_text(290, 58, p->description, th.dim.r, th.dim.g, th.dim.b);
 
     // =========================================================
     // 2. PANNELLO SINISTRO: LISTA PROFILI
     // =========================================================
-    k_draw_rect(20, 55, 250, 500, 24, 18, 14, true, 56, 26, 0);
+    k_draw_rect(20, 55, 250, 500, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
 
     for (int i = 0; i < g_kmgr->profile_count; i++) {
         int ry = 58 + i * 26;
@@ -608,15 +619,15 @@ void linux_keymap_render(void) {
         bool is_sel = (i == g_sel_prof);
         if (is_sel) {
             /* Highlight perfettamente coincidente con la riga */
-            k_draw_rect(21, ry, 248, 25, 96, 42, 10, true, 255, 140, 20);
+            k_draw_rect(21, ry, 248, 25, th.hover_bg.r, th.hover_bg.g, th.hover_bg.b, true, th.bright.r, th.bright.g, th.bright.b);
         }
 
         char plabel[128];
         snprintf(plabel, sizeof(plabel), "%s%s", g_kmgr->profiles[i].name, g_kmgr->profiles[i].is_builtin ? " (Built-in)" : "");
 
-        uint8_t tr = is_sel ? 255 : (i == g_kmgr->active_profile_index ? 255 : 210);
-        uint8_t tg = is_sel ? 215 : (i == g_kmgr->active_profile_index ? 140 : 190);
-        uint8_t tb = is_sel ? 60  : (i == g_kmgr->active_profile_index ? 20  : 170);
+        uint8_t tr = is_sel ? th.bright.r : th.normal.r;
+        uint8_t tg = is_sel ? th.bright.g : th.normal.g;
+        uint8_t tb = is_sel ? th.bright.b : th.normal.b;
 
         /* Baseline corretta a ry + 18.0f */
         k_draw_text(26, ry + 18.0f, plabel, tr, tg, tb);
@@ -631,14 +642,14 @@ void linux_keymap_render(void) {
     // =========================================================
     // 3. PANNELLO DESTRO: TABELLA MAPPINGS 3 COLONNE
     // =========================================================
-    k_draw_rect(290, 75, 650, 440, 24, 18, 14, true, 56, 26, 0);
+    k_draw_rect(290, 75, 650, 440, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
 
     // Header Tabella con separatore (y: 75..101)
-    k_draw_rect(291, 76, 648, 26, 34, 22, 14, false, 0, 0, 0);
-    k_draw_text(298, 94.0f, "Physical Key / Combo", 210, 190, 170);
-    k_draw_text(485, 94.0f, "Target Action", 210, 190, 170);
-    k_draw_text(675, 94.0f, "Description", 210, 190, 170);
-    k_draw_rect(291, 102, 648, 1, 56, 26, 0, false, 0, 0, 0);
+    k_draw_rect(291, 76, 648, 26, th.bg_box.r, th.bg_box.g, th.bg_box.b, false, 0, 0, 0);
+    k_draw_text(298, 94.0f, "Physical Key / Combo", th.dim.r, th.dim.g, th.dim.b);
+    k_draw_text(485, 94.0f, "Target Action", th.dim.r, th.dim.g, th.dim.b);
+    k_draw_text(675, 94.0f, "Description", th.dim.r, th.dim.g, th.dim.b);
+    k_draw_rect(291, 102, 648, 1, th.border.r, th.border.g, th.border.b, false, 0, 0, 0);
 
     // Righe Bindings (y: 104..510)
     for (int i = 0; i < p->binding_count; i++) {
@@ -648,7 +659,7 @@ void linux_keymap_render(void) {
 
         bool is_sel_b = (i == g_sel_bind);
         if (is_sel_b) {
-            k_draw_rect(291, ry, 648, 25, 96, 42, 10, true, 255, 140, 20);
+            k_draw_rect(291, ry, 648, 25, th.hover_bg.r, th.hover_bg.g, th.hover_bg.b, true, th.bright.r, th.bright.g, th.bright.b);
         }
 
         char kstr[64];
@@ -657,13 +668,13 @@ void linux_keymap_render(void) {
         format_action_str(&p->bindings[i], actstr, sizeof(actstr));
 
         /* Colonna 1: Physical Key (Ambra acceso) */
-        k_draw_text(298, ry + 18.0f, kstr, 255, 160, 50);
+        k_draw_text(298, ry + 18.0f, kstr, th.bright.r, th.bright.g, th.bright.b);
 
         /* Colonna 2: Target Action (Bianco/Grigio chiaro) */
-        k_draw_text(485, ry + 18.0f, actstr, 225, 220, 215);
+        k_draw_text(485, ry + 18.0f, actstr, th.normal.r, th.normal.g, th.normal.b);
 
         /* Colonna 3: Description (Grigio tenue) */
-        k_draw_text(675, ry + 18.0f, p->bindings[i].label, 150, 145, 140);
+        k_draw_text(675, ry + 18.0f, p->bindings[i].label, th.dim.r, th.dim.g, th.dim.b);
     }
 
     // Pulsanti Sotto Tabella Mapping (Identici a macOS)
@@ -675,11 +686,11 @@ void linux_keymap_render(void) {
     // 4. BOTTOM BAR: STATO & CONTROLLI ATTIVAZIONE
     // =========================================================
     if (p->is_builtin) {
-        k_draw_text(290, 588.0f, "Built-in profile is read-only. Click 'Duplicate' to customize.", 255, 140, 20);
+        k_draw_text(290, 588.0f, "Built-in profile is read-only. Click 'Duplicate' to customize.", th.dim.r, th.dim.g, th.dim.b);
     } else {
         char count_msg[64];
         snprintf(count_msg, sizeof(count_msg), "%d custom key bindings configured.", p->binding_count);
-        k_draw_text(290, 588.0f, count_msg, 255, 140, 20);
+        k_draw_text(290, 588.0f, count_msg, th.dim.r, th.dim.g, th.dim.b);
     }
 
     bool is_act = (g_sel_prof == g_kmgr->active_profile_index);
@@ -694,38 +705,38 @@ void linux_keymap_render(void) {
         int dx = K_WIN_W/2 - dw/2;
         int dy = K_WIN_H/2 - dh/2;
 
-        k_draw_rect(dx, dy, dw, dh, 34, 17, 6, true, 255, 140, 20);
-        k_draw_text(dx + 20, dy + 25, "Edit Profile", 255, 110, 0);
+        k_draw_rect(dx, dy, dw, dh, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
+        k_draw_text(dx + 20, dy + 25, "Edit Profile", th.bright.r, th.bright.g, th.bright.b);
 
         // Campo 1: Nome
-        k_draw_text(dx + 20, dy + 42, "Profile Name:", 210, 200, 190);
+        k_draw_text(dx + 20, dy + 42, "Profile Name:", th.dim.r, th.dim.g, th.dim.b);
         bool sel_name = (g_rename_field == 0);
-        k_draw_rect(dx + 20, dy + 48, 400, 28, 18, 12, 8, true, sel_name ? 255 : 80, sel_name ? 140 : 40, sel_name ? 20 : 10);
+        k_draw_rect(dx + 20, dy + 48, 400, 28, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, true, sel_name ? th.bright.r : th.border.r, sel_name ? th.bright.g : th.border.g, sel_name ? th.bright.b : th.border.b);
         char dname[80]; snprintf(dname, sizeof(dname), "%s%s", g_rename_name, sel_name ? "_" : "");
-        k_draw_text(dx + 26, dy + 68, dname, 255, 255, 255);
+        k_draw_text(dx + 26, dy + 68, dname, th.bright.r, th.bright.g, th.bright.b);
 
         // Campo 2: Descrizione
-        k_draw_text(dx + 20, dy + 95, "Description:", 210, 200, 190);
+        k_draw_text(dx + 20, dy + 95, "Description:", th.dim.r, th.dim.g, th.dim.b);
         bool sel_desc = (g_rename_field == 1);
-        k_draw_rect(dx + 20, dy + 101, 400, 28, 18, 12, 8, true, sel_desc ? 255 : 80, sel_desc ? 140 : 40, sel_desc ? 20 : 10);
+        k_draw_rect(dx + 20, dy + 101, 400, 28, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, true, sel_desc ? th.bright.r : th.border.r, sel_desc ? th.bright.g : th.border.g, sel_desc ? th.bright.b : th.border.b);
         char ddesc[150]; snprintf(ddesc, sizeof(ddesc), "%s%s", g_rename_desc, sel_desc ? "_" : "");
-        k_draw_text(dx + 26, dy + 121, ddesc, 255, 255, 255);
+        k_draw_text(dx + 26, dy + 121, ddesc, th.normal.r, th.normal.g, th.normal.b);
 
         // Pulsanti e scorciatoie
-        k_draw_text(dx + 20, dy + 165, "(Tab: Switch, Enter: Save)", 140, 135, 130);
+        k_draw_text(dx + 20, dy + 165, "(Tab: Switch, Enter: Save)", th.dim.r, th.dim.g, th.dim.b);
         k_draw_btn(dx + 220, dy + 146, 95, 28, "Save", true);
         k_draw_btn(dx + 325, dy + 146, 95, 28, "Cancel", false);
     } else if (g_kstate == KSTATE_RECORD_KEY) {
-        k_draw_rect(K_WIN_W/2 - 250, K_WIN_H/2 - 50, 500, 100, 180, 45, 0, true, 255, 120, 0);
-        k_draw_text(K_WIN_W/2 - 215, K_WIN_H/2 - 10, "◉ PRESS ANY KEY OR COMBINATION", 255, 255, 255);
-        k_draw_text(K_WIN_W/2 - 90,  K_WIN_H/2 + 20, "(Press Esc to Cancel)", 255, 215, 180);
+        k_draw_rect(K_WIN_W/2 - 250, K_WIN_H/2 - 50, 500, 100, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.bright.r, th.bright.g, th.bright.b);
+        k_draw_text(K_WIN_W/2 - 215, K_WIN_H/2 - 10, "◉ PRESS ANY KEY OR COMBINATION", th.bright.r, th.bright.g, th.bright.b);
+        k_draw_text(K_WIN_W/2 - 90,  K_WIN_H/2 + 20, "(Press Esc to Cancel)", th.dim.r, th.dim.g, th.dim.b);
     } else if (g_kstate == KSTATE_PICK_ACTION) {
         int mx = K_WIN_W/2 - 260;
         int my = K_WIN_H/2 - 190;
         int mh = (g_pick_mode == 1) ? 360 : 285;
 
-        k_draw_rect(mx, my, 520, mh, 28, 16, 8, true, 255, 140, 20);
-        k_draw_text(mx + 20, my + 25, g_is_editing_bind ? "EDIT TARGET ACTION" : "ASSIGN TARGET ACTION", 255, 110, 0);
+        k_draw_rect(mx, my, 520, mh, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
+        k_draw_text(mx + 20, my + 25, g_is_editing_bind ? "EDIT TARGET ACTION" : "ASSIGN TARGET ACTION", th.bright.r, th.bright.g, th.bright.b);
 
         // Tabs
         k_draw_btn(mx + 60, my + 40, 195, 26, "Custom Character", g_pick_mode == 0);
@@ -742,28 +753,28 @@ void linux_keymap_render(void) {
                 k_draw_btn(bx, by, 138, 24, pkeys[i], g_pick_plato_sel == i);
             }
 
-            k_draw_text(mx + 47, my + 258, "Description / Action Label (Optional):", 210, 200, 190);
+            k_draw_text(mx + 47, my + 258, "Description / Action Label (Optional):", th.dim.r, th.dim.g, th.dim.b);
             bool sel_lbl = (g_pick_field == 1);
-            k_draw_rect(mx + 47, my + 265, 426, 28, 18, 12, 8, true, sel_lbl ? 255 : 80, sel_lbl ? 140 : 40, sel_lbl ? 20 : 10);
+            k_draw_rect(mx + 47, my + 265, 426, 28, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, true, sel_lbl ? th.bright.r : th.border.r, sel_lbl ? th.bright.g : th.border.g, sel_lbl ? th.bright.b : th.border.b);
             char dlbl[64]; snprintf(dlbl, sizeof(dlbl), "%s%s", g_label_buf, sel_lbl ? "_" : "");
-            k_draw_text(mx + 53, my + 285, dlbl, 255, 255, 255);
+            k_draw_text(mx + 53, my + 285, dlbl, th.bright.r, th.bright.g, th.bright.b);
 
             k_draw_btn(mx + 150, my + 310, 100, 30, g_is_editing_bind ? "Save" : "Assign", true);
             k_draw_btn(mx + 270, my + 310, 100, 30, "Cancel", false);
         } else {
-            k_draw_text(mx + 47, my + 95, "Type any character or symbol to send:", 210, 200, 190);
-            k_draw_text(mx + 47, my + 115, "(Letters, numbers, symbols: +, -, ;, @, etc.)", 150, 145, 140);
+            k_draw_text(mx + 47, my + 95, "Type any character or symbol to send:", th.dim.r, th.dim.g, th.dim.b);
+            k_draw_text(mx + 47, my + 115, "(Letters, numbers, symbols: +, -, ;, @, etc.)", th.dim.r, th.dim.g, th.dim.b);
 
             bool sel_chr = (g_pick_field == 0);
-            k_draw_rect(mx + 230, my + 120, 60, 30, 10, 10, 10, true, sel_chr ? 255 : 80, sel_chr ? 140 : 40, sel_chr ? 20 : 10);
+            k_draw_rect(mx + 230, my + 120, 60, 30, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, true, sel_chr ? th.bright.r : th.border.r, sel_chr ? th.bright.g : th.border.g, sel_chr ? th.bright.b : th.border.b);
             char dchr[16]; snprintf(dchr, sizeof(dchr), "%s%s", g_char_buf, sel_chr ? "_" : "");
-            k_draw_text(mx + 254, my + 142, dchr, 255, 255, 255);
+            k_draw_text(mx + 254, my + 142, dchr, th.bright.r, th.bright.g, th.bright.b);
 
-            k_draw_text(mx + 60, my + 175, "Description / Action Label (Optional):", 210, 200, 190);
+            k_draw_text(mx + 60, my + 175, "Description / Action Label (Optional):", th.dim.r, th.dim.g, th.dim.b);
             bool sel_lbl = (g_pick_field == 1);
-            k_draw_rect(mx + 60, my + 185, 400, 28, 18, 12, 8, true, sel_lbl ? 255 : 80, sel_lbl ? 140 : 40, sel_lbl ? 20 : 10);
+            k_draw_rect(mx + 60, my + 185, 400, 28, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, true, sel_lbl ? th.bright.r : th.border.r, sel_lbl ? th.bright.g : th.border.g, sel_lbl ? th.bright.b : th.border.b);
             char dlbl[64]; snprintf(dlbl, sizeof(dlbl), "%s%s", g_label_buf, sel_lbl ? "_" : "");
-            k_draw_text(mx + 66, my + 205, dlbl, 255, 255, 255);
+            k_draw_text(mx + 66, my + 205, dlbl, th.bright.r, th.bright.g, th.bright.b);
 
             k_draw_btn(mx + 150, my + 235, 100, 30, g_is_editing_bind ? "Save" : "Assign", true);
             k_draw_btn(mx + 270, my + 235, 100, 30, "Cancel", false);

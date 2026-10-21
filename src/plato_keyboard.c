@@ -81,6 +81,8 @@ void plato_keyboard_set_arrow_mode(plato_keyboard_state_t *state, plato_arrow_mo
         plato_keymap_set_active_by_name(&state->keymap_mgr, "WASD Gaming");
     } else if (mode == PLATO_ARROW_MODE_WASX) {
         plato_keymap_set_active_by_name(&state->keymap_mgr, "WASX / Avatar");
+    } else if (mode == PLATO_ARROW_MODE_WADX) {
+        plato_keymap_set_active_by_name(&state->keymap_mgr, "WADX");
     }
 }
 
@@ -90,6 +92,7 @@ plato_arrow_mode_t plato_keyboard_get_arrow_mode(const plato_keyboard_state_t *s
     if (p) {
         if (strcmp(p->name, "WASD Gaming") == 0) return PLATO_ARROW_MODE_WASD;
         if (strcmp(p->name, "WASX / Avatar") == 0) return PLATO_ARROW_MODE_WASX;
+        if (strcmp(p->name, "WADX") == 0) return PLATO_ARROW_MODE_WADX;
         if (strcmp(p->name, "Standard PLATO") == 0) return PLATO_ARROW_MODE_STANDARD;
     }
     return state->arrow_mode;
@@ -104,6 +107,7 @@ plato_arrow_mode_t plato_keyboard_cycle_arrow_mode(plato_keyboard_state_t *state
     if (p) {
         if (strcmp(p->name, "WASD Gaming") == 0) mode = PLATO_ARROW_MODE_WASD;
         else if (strcmp(p->name, "WASX / Avatar") == 0) mode = PLATO_ARROW_MODE_WASX;
+        else if (strcmp(p->name, "WADX") == 0) mode = PLATO_ARROW_MODE_WADX;
         else mode = PLATO_ARROW_MODE_STANDARD;
     }
     state->arrow_mode = mode;
@@ -136,6 +140,7 @@ bool plato_keyboard_set_active_keymap_by_index(plato_keyboard_state_t *state, in
         if (p) {
             if (strcmp(p->name, "WASD Gaming") == 0) state->arrow_mode = PLATO_ARROW_MODE_WASD;
             else if (strcmp(p->name, "WASX / Avatar") == 0) state->arrow_mode = PLATO_ARROW_MODE_WASX;
+            else if (strcmp(p->name, "WADX") == 0) state->arrow_mode = PLATO_ARROW_MODE_WADX;
             else state->arrow_mode = PLATO_ARROW_MODE_STANDARD;
             state->arrows_wasd_mode = (state->arrow_mode != PLATO_ARROW_MODE_STANDARD);
 

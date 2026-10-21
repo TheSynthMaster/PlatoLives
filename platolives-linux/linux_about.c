@@ -4,6 +4,7 @@
  */
 
 #include "linux_about.h"
+#include "linux_theme.h"
 #include "plato/plato_version.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -169,49 +170,50 @@ void linux_about_handle_event(const SDL_Event *ev) {
 }
 
 void linux_about_render(void) {
+    linux_theme_colors_t th = linux_theme_current();
     if (!g_ab_win || !g_ab_ren) return;
 
-    /* Sfondo Principale Dark Amber */
-    SDL_SetRenderDrawColor(g_ab_ren, 16, 11, 7, 255);
+    /* Sfondo Principale Dinamico */
+    SDL_SetRenderDrawColor(g_ab_ren, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, 255);
     SDL_RenderClear(g_ab_ren);
 
-    /* Bordo Esterno Finestra Radiante */
-    draw_ab_rect(g_ab_ren, 0, 0, ABOUT_WIN_W, ABOUT_WIN_H, 16, 11, 7, true, 190, 85, 12);
+    /* Bordo Esterno Finestra */
+    draw_ab_rect(g_ab_ren, 0, 0, ABOUT_WIN_W, ABOUT_WIN_H, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, true, th.border.r, th.border.g, th.border.b);
 
-    /* Testata Top Bar a 44px */
-    draw_ab_rect(g_ab_ren, 0, 0, ABOUT_WIN_W, 44, 36, 18, 6, true, 190, 85, 12);
-    draw_ab_text(g_ab_ren, 20.0f, 27.0f, "ABOUT PLATOLIVES", 255, 215, 60);
+    /* Testata Top Bar */
+    draw_ab_rect(g_ab_ren, 0, 0, ABOUT_WIN_W, 44, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
+    draw_ab_text(g_ab_ren, 20.0f, 27.0f, "ABOUT PLATOLIVES", th.bright.r, th.bright.g, th.bright.b);
 
     /* Titolo Grande */
-    draw_ab_text(g_ab_ren, 30.0f, 78.0f, "PlatoLives v" PLATO_VERSION_STRING, 255, 220, 65);
-    draw_ab_text(g_ab_ren, 30.0f, 102.0f, "CDC PLATO IV & CYBER1 TERMINAL EMULATOR", 255, 160, 40);
+    draw_ab_text(g_ab_ren, 30.0f, 78.0f, "PlatoLives v" PLATO_VERSION_STRING, th.bright.r, th.bright.g, th.bright.b);
+    draw_ab_text(g_ab_ren, 30.0f, 102.0f, "CDC PLATO IV & CYBER1 TERMINAL EMULATOR", th.normal.r, th.normal.g, th.normal.b);
 
     /* Riquadro Informativo */
-    draw_ab_rect(g_ab_ren, 25, 120, ABOUT_WIN_W - 50, 185, 24, 14, 8, true, 96, 42, 10);
+    draw_ab_rect(g_ab_ren, 25, 120, ABOUT_WIN_W - 50, 185, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
 
-    draw_ab_text(g_ab_ren, 38.0f, 145.0f, "Created by Fabio Montarsolo  (fabio.montarsolo@gmail.com)", 255, 225, 120);
-    draw_ab_text(g_ab_ren, 38.0f, 175.0f, "A modern, high-fidelity universal terminal emulator for", 230, 160, 45);
-    draw_ab_text(g_ab_ren, 38.0f, 197.0f, "CDC PLATO IV, CDC IST-II and IST-III Cyber1 mainframe systems.", 230, 160, 45);
-    draw_ab_text(g_ab_ren, 38.0f, 230.0f, "Featuring true vector typography, 5 optical shader modes,", 210, 145, 40);
-    draw_ab_text(g_ab_ren, 38.0f, 252.0f, "phosphor persistence, Z80 MicroTutor and dynamic scripting.", 210, 145, 40);
+    draw_ab_text(g_ab_ren, 38.0f, 145.0f, "Created by Fabio Montarsolo  (fabio.montarsolo@gmail.com)", th.bright.r, th.bright.g, th.bright.b);
+    draw_ab_text(g_ab_ren, 38.0f, 175.0f, "A modern, high-fidelity universal terminal emulator for", th.normal.r, th.normal.g, th.normal.b);
+    draw_ab_text(g_ab_ren, 38.0f, 197.0f, "CDC PLATO IV, CDC IST-II and IST-III Cyber1 mainframe systems.", th.normal.r, th.normal.g, th.normal.b);
+    draw_ab_text(g_ab_ren, 38.0f, 230.0f, "Featuring true vector typography, 5 optical shader modes,", th.normal.r, th.normal.g, th.normal.b);
+    draw_ab_text(g_ab_ren, 38.0f, 252.0f, "phosphor persistence, Z80 MicroTutor and dynamic scripting.", th.normal.r, th.normal.g, th.normal.b);
 
-    draw_ab_text(g_ab_ren, 38.0f, 286.0f, "(C) 2026 Fabio Montarsolo - All Rights Reserved.", 160, 105, 35);
+    draw_ab_text(g_ab_ren, 38.0f, 286.0f, "(C) 2026 Fabio Montarsolo - All Rights Reserved.", th.dim.r, th.dim.g, th.dim.b);
 
     /* Pulsante Close */
     bool fl = (g_ab_flashing && SDL_GetTicks() < g_ab_flash_until);
-    uint8_t bg_r = fl ? 255 : 36;
-    uint8_t bg_g = fl ? 220 : 18;
-    uint8_t bg_b = fl ? 0   : 8;
-    uint8_t bd_r = fl ? 255 : 120;
-    uint8_t bd_g = fl ? 245 : 60;
-    uint8_t bd_b = fl ? 120 : 20;
+    uint8_t bg_r = fl ? th.bright.r : th.bg_box.r;
+    uint8_t bg_g = fl ? th.bright.g : th.bg_box.g;
+    uint8_t bg_b = fl ? th.bright.b : th.bg_box.b;
+    uint8_t bd_r = fl ? 255 : th.border.r;
+    uint8_t bd_g = fl ? 255 : th.border.g;
+    uint8_t bd_b = fl ? 255 : th.border.b;
     draw_ab_rect(g_ab_ren, 210, 325, 100, 32, bg_r, bg_g, bg_b, true, bd_r, bd_g, bd_b);
 
     float tw = get_string_width_f("Close", 5);
     float tx = 210.0f + (100.0f - tw) / 2.0f;
-    uint8_t fg_r = fl ? 20 : 255;
-    uint8_t fg_g = fl ? 12 : 215;
-    uint8_t fg_b = fl ? 4  : 60;
+    uint8_t fg_r = fl ? 0 : th.bright.r;
+    uint8_t fg_g = fl ? 0 : th.bright.g;
+    uint8_t fg_b = fl ? 0 : th.bright.b;
     draw_ab_text(g_ab_ren, tx, 346.0f, "Close", fg_r, fg_g, fg_b);
 
     SDL_RenderPresent(g_ab_ren);

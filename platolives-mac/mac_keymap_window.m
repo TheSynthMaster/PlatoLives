@@ -1,8 +1,12 @@
 #import "mac_keymap_window.h"
+#import "mac_window.h"
 
 @interface PLATOKeyboardProfilesWindowController ()
 @property (nonatomic, strong) NSTableView *profilesTable;
 @property (nonatomic, strong) NSTableView *bindingsTable;
+@property (nonatomic, strong) NSScrollView *profScroll;
+@property (nonatomic, strong) NSScrollView *bindScroll;
+@property (nonatomic, strong) NSTextField *profHeader;
 
 @property (nonatomic, strong) NSTextField *profileTitleLabel;
 @property (nonatomic, strong) NSTextField *profileDescLabel;
@@ -150,7 +154,9 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     [profHeader setFrame:NSMakeRect(20, 580, 240, 20)];
     [content addSubview:profHeader];
 
+    _profHeader = profHeader;
     NSScrollView *profScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 70, 250, 500)];
+    _profScroll = profScroll;
     [profScroll setHasVerticalScroller:YES];
     [profScroll setBorderType:NSBezelBorder];
     [profScroll setDrawsBackground:YES];
@@ -282,6 +288,22 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     [content addSubview:closeBtn];
 
     [self refreshList];
+    [self applyCurrentThemeColors];
+}
+
+- (void)applyCurrentThemeColors {
+    PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
+    [self.window setBackgroundColor:tc.bgDark];
+    if (_profScroll) [_profScroll setBackgroundColor:tc.bgBox];
+    if (_profilesTable) [_profilesTable setBackgroundColor:tc.bgBox];
+    if (_bindScroll) [_bindScroll setBackgroundColor:tc.bgBox];
+    if (_bindingsTable) [_bindingsTable setBackgroundColor:tc.bgBox];
+    if (_profHeader) [_profHeader setTextColor:tc.normal];
+    if (_profileTitleLabel) [_profileTitleLabel setTextColor:tc.normal];
+    if (_profileDescLabel) [_profileDescLabel setTextColor:tc.muted];
+    if (_statusInfoLabel) [_statusInfoLabel setTextColor:tc.normal];
+    [_profilesTable reloadData];
+    [_bindingsTable reloadData];
 }
 
 - (void)refreshList {
@@ -717,8 +739,11 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
             NSString *title = [NSString stringWithFormat:@"%@%s", prefix, p->name];
             if (p->is_builtin) title = [title stringByAppendingString:@" (Built-in)"];
             [label setStringValue:title];
+            PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
             if (row == _keymapManager->active_profile_index) {
-                [label setTextColor:[NSColor colorWithCalibratedRed:255.0/255.0 green:110.0/255.0 blue:0.0/255.0 alpha:1.0]];
+                [label setTextColor:tc.bright];
+            } else {
+                [label setTextColor:tc.normal];
             }
         }
     } else if (tableView == _bindingsTable) {

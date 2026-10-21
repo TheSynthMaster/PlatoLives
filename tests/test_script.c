@@ -79,12 +79,50 @@ static void test_script_runner(void) {
     printf("       [PASS] Script Runner OK (total=%lld)\n", (long long)total);
 }
 
+static void test_script_network_commands(void) {
+    printf("[TEST] Testing Script Runner (disconnect, reconnect, connect)...\n");
+    plato_script_runner_t *runner = plato_script_create(NULL);
+    assert(runner != NULL);
+
+    plato_script_t script = {0};
+    snprintf(script.name, sizeof(script.name), "TestNetworkCmds");
+    script.char_delay_ms = 0;
+    script.next_delay_ms = 0;
+    script.command_delay_ms = 0;
+    snprintf(script.body, sizeof(script.body),
+             "disconnect\n"
+             "connect standard\n"
+             "reconnect\n"
+             "connect \"Cyber1\"\n"
+             "let status = 1\n"
+             "exit\n");
+
+    bool ok = plato_script_start_ex(runner, &script);
+    assert(ok);
+
+    int max_wait = 100;
+    while (plato_script_is_running(runner) && max_wait-- > 0) {
+        struct timespec ts = { 0, 10000000L };
+        nanosleep(&ts, NULL);
+    }
+    assert(!plato_script_is_running(runner));
+
+    bool found = false;
+    int64_t val = plato_script_get_var(runner, "status", &found);
+    assert(found);
+    assert(val == 1);
+
+    plato_script_destroy(runner);
+    printf("       [PASS] Network Automation Commands OK\n");
+}
+
 int main(void) {
     printf("========================================\n");
     printf(" RUNNING PLATO SCRIPT ENGINE UNIT TESTS \n");
     printf("========================================\n");
     test_script_store();
     test_script_runner();
+    test_script_network_commands();
     printf("========================================\n");
     printf(" ALL PLATO SCRIPT TESTS PASSED [100%%]   \n");
     printf("========================================\n");

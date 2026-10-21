@@ -1,3 +1,4 @@
+#include "win_theme.h"
 #ifndef WIN_MENU_H
 #define WIN_MENU_H
 
@@ -38,6 +39,17 @@
 #define IDM_VIEW_MODE_REAL_PLASMA       1300
 #define IDM_VIEW_MODE_CRISP_COLOR       1303
 #define IDM_VIEW_MODE_REAL_CRT          1304
+#define IDM_VIEW_MODE_REAL_TEKTRONIX    1305
+
+#define IDM_VIEW_TEK_SPEED_INSTANT      1310
+#define IDM_VIEW_TEK_SPEED_110          1311
+#define IDM_VIEW_TEK_SPEED_150          1312
+#define IDM_VIEW_TEK_SPEED_300          1313
+#define IDM_VIEW_TEK_SPEED_600          1314
+#define IDM_VIEW_TEK_SPEED_1200         1315
+#define IDM_VIEW_TEK_SPEED_2400         1316
+#define IDM_VIEW_TEK_SPEED_4800         1317
+#define IDM_VIEW_TEK_SPEED_9600         1318
 
 #define IDM_VIEW_PLASMA_DECAY_100       1320
 #define IDM_VIEW_PLASMA_DECAY_200       1321
@@ -101,5 +113,6 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *active_p, bool con
 
 #define IDM_TOOLS_KEYMAP_MANAGE        405
 #define IDM_TOOLS_KEYMAP_PROFILE_BASE  850 /* 850..881 */
+
 
 #endif /* WIN_MENU_H */

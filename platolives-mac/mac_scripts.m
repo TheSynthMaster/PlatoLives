@@ -1,4 +1,5 @@
 #import "mac_scripts.h"
+#import "mac_window.h"
 
 @interface PLATOScriptsWindowController ()
 @property (nonatomic, strong) NSTableView *tableView;
@@ -11,6 +12,10 @@
 @property (nonatomic, strong) NSButton *recordBtn;
 @property (nonatomic, strong) NSButton *clearKeyBtn;
 @property (nonatomic, strong) NSTextView *bodyTextView;
+@property (nonatomic, strong) NSScrollView *tableScroll;
+@property (nonatomic, strong) NSScrollView *bodyScroll;
+@property (nonatomic, strong) NSMutableArray<NSTextField *> *themeLabels;
+@property (nonatomic, strong) NSMutableArray<NSTextField *> *dimLabels;
 @property (nonatomic) NSInteger currentEditingIndex;
 @property (nonatomic) BOOL isRecordingHotkey;
 @property (nonatomic) BOOL isUpdatingUI;
@@ -46,8 +51,12 @@
     NSColor *plasmaOrange = [NSColor colorWithCalibratedRed:255.0/255.0 green:110.0/255.0 blue:0.0/255.0 alpha:1.0];
     NSColor *boxBg = [NSColor colorWithCalibratedRed:24.0/255.0 green:18.0/255.0 blue:14.0/255.0 alpha:1.0];
 
+    _themeLabels = [NSMutableArray array];
+    _dimLabels = [NSMutableArray array];
+
     // Tabella lista script a sinistra
     NSScrollView *tableScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 58, 220, 542)];
+    _tableScroll = tableScroll;
     [tableScroll setHasVerticalScroller:YES];
     [tableScroll setBorderType:NSBezelBorder];
     [tableScroll setDrawsBackground:YES];
@@ -97,12 +106,14 @@
     [titleLbl setTextColor:plasmaOrange];
     [titleLbl setFrame:NSMakeRect(rx, 578, rw, 22)];
     [content addSubview:titleLbl];
+    [_themeLabels addObject:titleLbl];
 
     // Script Name
     NSTextField *nameLbl = [NSTextField labelWithString:@"Script Name:"];
     [nameLbl setTextColor:plasmaOrange];
     [nameLbl setFrame:NSMakeRect(rx, 545, 100, 18)];
     [content addSubview:nameLbl];
+    [_themeLabels addObject:nameLbl];
 
     _nameField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx, 543, fw - 110, 22)];
     [content addSubview:_nameField];
@@ -116,6 +127,7 @@
     [hkTitleLbl setTextColor:plasmaOrange];
     [hkTitleLbl setFrame:NSMakeRect(rx, 510, 100, 18)];
     [content addSubview:hkTitleLbl];
+    [_themeLabels addObject:hkTitleLbl];
 
     _hotkeyLabel = [NSTextField labelWithString:@"None"];
     [_hotkeyLabel setFont:[NSFont boldSystemFontOfSize:13]];
@@ -142,11 +154,13 @@
     [delaysLbl setTextColor:plasmaOrange];
     [delaysLbl setFrame:NSMakeRect(rx, 475, 100, 18)];
     [content addSubview:delaysLbl];
+    [_themeLabels addObject:delaysLbl];
 
     NSTextField *cLbl = [NSTextField labelWithString:@"Char:"];
     [cLbl setTextColor:[NSColor lightGrayColor]];
     [cLbl setFrame:NSMakeRect(fx, 475, 45, 18)];
     [content addSubview:cLbl];
+    [_dimLabels addObject:cLbl];
     _charDelayField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx + 45, 473, 65, 22)];
     [content addSubview:_charDelayField];
 
@@ -154,6 +168,7 @@
     [nLbl setTextColor:[NSColor lightGrayColor]];
     [nLbl setFrame:NSMakeRect(fx + 125, 475, 45, 18)];
     [content addSubview:nLbl];
+    [_dimLabels addObject:nLbl];
     _nextDelayField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx + 170, 473, 65, 22)];
     [content addSubview:_nextDelayField];
 
@@ -161,6 +176,7 @@
     [cmLbl setTextColor:[NSColor lightGrayColor]];
     [cmLbl setFrame:NSMakeRect(fx + 250, 475, 45, 18)];
     [content addSubview:cmLbl];
+    [_dimLabels addObject:cmLbl];
     _cmdDelayField = [[NSTextField alloc] initWithFrame:NSMakeRect(fx + 295, 473, 65, 22)];
     [content addSubview:_cmdDelayField];
 
@@ -169,8 +185,10 @@
     [bodyLbl setTextColor:plasmaOrange];
     [bodyLbl setFrame:NSMakeRect(rx, 442, rw, 18)];
     [content addSubview:bodyLbl];
+    [_themeLabels addObject:bodyLbl];
 
     NSScrollView *bodyScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(rx, 58, rw, 380)];
+    _bodyScroll = bodyScroll;
     [bodyScroll setHasVerticalScroller:YES];
     [bodyScroll setBorderType:NSBezelBorder];
 
@@ -205,10 +223,32 @@
     [saveBtn setAction:@selector(onSave:)];
     [content addSubview:saveBtn];
 
+    [self applyCurrentThemeColors];
+    [self applyCurrentThemeColors];
     [self refreshList];
     if (self.scriptList && self.scriptList->count > 0) {
         [self loadScriptAtIndex:0];
     }
+}
+
+- (void)applyCurrentThemeColors {
+    PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
+    [self.window setBackgroundColor:tc.bgDark];
+    if (_tableScroll) [_tableScroll setBackgroundColor:tc.bgBox];
+    if (_tableView) [_tableView setBackgroundColor:tc.bgBox];
+    if (_bodyScroll) [_bodyScroll setBackgroundColor:tc.bgBox];
+    if (_bodyTextView) {
+        [_bodyTextView setBackgroundColor:tc.bgBox];
+        [_bodyTextView setTextColor:tc.bright];
+        [_bodyTextView setInsertionPointColor:tc.normal];
+    }
+    for (NSTextField *lbl in _themeLabels) {
+        [lbl setTextColor:tc.normal];
+    }
+    for (NSTextField *lbl in _dimLabels) {
+        [lbl setTextColor:tc.dim];
+    }
+    [_tableView reloadData];
 }
 
 - (void)refreshList {
@@ -464,11 +504,12 @@
     if (self.scriptList && row < (NSInteger)self.scriptList->count) {
         plato_script_t *s = &self.scriptList->scripts[row];
         NSString *title = [NSString stringWithUTF8String:s->name];
+        PLATOThemeColors *tc = [PLATOThemeColors currentThemeColors];
         if (!s->enabled) {
             title = [NSString stringWithFormat:@"[Disabled] %@", title];
-            [label setTextColor:[NSColor grayColor]];
+            [label setTextColor:tc.disabled];
         } else {
-            [label setTextColor:[NSColor colorWithCalibratedRed:255.0/255.0 green:160.0/255.0 blue:40.0/255.0 alpha:1.0]];
+            [label setTextColor:tc.bright];
         }
         [label setStringValue:title];
     }

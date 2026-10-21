@@ -1,3 +1,5 @@
+int g_linux_theme_mode = 0;
+int g_linux_theme_phosphor = 0;
 #define _GNU_SOURCE
 #define _DEFAULT_SOURCE
 #include <sys/resource.h>
@@ -31,6 +33,8 @@
 #include "plato/plato_keyboard.h"
 #include "plato/plato_protocol.h"
 #include "linux_menu.h"
+#include "linux_theme.h"
+#include "linux_conn.h"
 #include "linux_keyref.h"
 #include "linux_profiles.h"
 #include "linux_scriptref.h"
@@ -357,14 +361,8 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
             }
             s_has_saved_bg = true;
 
-            uint32_t col = 0xFFFF6E00; /* Default Orange Plasma */
-            if (app->profile.phosphor_color == 1) {
-                col = 0xFF33FF33;      /* Green P31 */
-            } else if (app->profile.phosphor_color == 2) {
-                col = 0xFFFFB428;      /* Amber P40 */
-            } else if (app->profile.phosphor_color == 3) {
-                col = 0xFFE0F0FF;      /* White P4 */
-            }
+            linux_theme_colors_t th = linux_theme_current();
+            uint32_t col = th.rgba_bright; /* Segue istantaneamente il tema attivo */
             for (int dy = -dot_r; dy <= dot_r; dy++) {
                 for (int dx = -dot_r; dx <= dot_r; dx++) {
                     if (dx * dx + dy * dy <= dot_r * dot_r) {
@@ -415,6 +413,11 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
             telem.display_mode = app->profile.display_mode;
             telem.persistence_ms = (app->profile.display_mode == 4 ? app->profile.crt_persistence_ms : app->profile.persistence_ms);
             telem.distortion = (app->profile.display_mode == 4 ? app->profile.crt_distortion : app->profile.plasma_distortion);
+            telem.phosphor_color = app->profile.phosphor_color;
+            telem.tek_baud = app->profile.tek_baud_rate;
+            int q_head = app->terminal.vector_queue.head;
+            int q_tail = app->terminal.vector_queue.tail;
+            telem.tek_queue_count = (q_head - q_tail + MAX_VECTOR_EVENTS) % MAX_VECTOR_EVENTS;
             telem.connected = (app->transport && app->transport->connected);
             if (app->terminal.user_name[0] && app->terminal.user_group[0]) {
                 snprintf(telem.user_info, sizeof(telem.user_info), "%s/%s (%s)",
@@ -840,6 +843,24 @@ static void linux_reset_terminal(linux_client_t *app) {
     }
 }
 
+static void on_linux_conn_result(bool success, void *user_data) {
+    linux_client_t *app = (linux_client_t *)user_data;
+    if (!app) return;
+    if (success) {
+        printf("[Network] Connesso con successo al profilo '%s'!\n", app->profile.name);
+        app->menu_ctx.connected = true;
+        char title[256];
+        snprintf(title, sizeof(title), "PlatoLives - %s (%s:%d)", app->profile.name, app->profile.host, app->profile.port);
+        SDL_SetWindowTitle(app->window, title);
+    } else {
+        printf("[Network] Connessione a '%s' non riuscita o annullata.\n", app->profile.name);
+        app->menu_ctx.connected = false;
+        char title[256];
+        snprintf(title, sizeof(title), "PlatoLives - %s (Offline)", app->profile.name);
+        SDL_SetWindowTitle(app->window, title);
+    }
+}
+
 static void linux_connect_profile(linux_client_t *app, const plato_profile_t *p) {
     if (!app || !p) return;
 
@@ -867,20 +888,8 @@ static void linux_connect_profile(linux_client_t *app, const plato_profile_t *p)
 
     if (app->transport) {
         plato_transport_set_logging(app->transport, app->menu_ctx.diag_log);
-        printf("[Network] Connessione a %s:%d (Profilo: '%s')...\n", app->profile.host, app->profile.port, app->profile.name);
-        if (plato_transport_connect(app->transport, app->profile.host, app->profile.port)) {
-            printf("[Network] Connesso con successo al profilo '%s'!\n", app->profile.name);
-            app->menu_ctx.connected = true;
-            char title[256];
-            snprintf(title, sizeof(title), "PlatoLives - %s (%s:%d)", app->profile.name, app->profile.host, app->profile.port);
-            SDL_SetWindowTitle(app->window, title);
-        } else {
-            printf("[Network] Profilo '%s': %s:%d offline\n", app->profile.name, app->profile.host, app->profile.port);
-            app->menu_ctx.connected = false;
-            char title[256];
-            snprintf(title, sizeof(title), "PlatoLives - %s (Offline)", app->profile.name);
-            SDL_SetWindowTitle(app->window, title);
-        }
+        printf("[Network] Avvio tentativo di connessione a %s:%d (Profilo: '%s')...\n", app->profile.host, app->profile.port, app->profile.name);
+        linux_conn_show(&app->profile, app->transport, on_linux_conn_result, app);
     }
 }
 
@@ -973,11 +982,13 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_SPLIT_MONO:
         case ACT_VIEW_REAL_PLASMA:
         case ACT_VIEW_CRISP_COLOR:
-        case ACT_VIEW_REAL_CRT: {
+        case ACT_VIEW_REAL_CRT:
+        case ACT_VIEW_REAL_TEKTRONIX: {
             int new_mode = (action == ACT_VIEW_CRISP_MONO) ? 1 :
                            (action == ACT_VIEW_SPLIT_MONO) ? 2 :
                            (action == ACT_VIEW_REAL_PLASMA) ? 0 :
-                           (action == ACT_VIEW_CRISP_COLOR) ? 3 : 4;
+                           (action == ACT_VIEW_CRISP_COLOR) ? 3 :
+                           (action == ACT_VIEW_REAL_CRT) ? 4 : 5;
 
             int old_mode = app->profile.display_mode;
             bool cur_is_color = (old_mode == 3 || old_mode == 4);
@@ -1041,9 +1052,39 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_COLOR_AMBER:   app->profile.phosphor_color = 2; goto sync_optical_palette;
         case ACT_VIEW_COLOR_WHITE:   app->profile.phosphor_color = 3; goto sync_optical_palette;
 
+        /* Tektronix Baud Rate Selectors */
+        case ACT_VIEW_TEK_SPEED_INSTANT:
+        case ACT_VIEW_TEK_SPEED_110:
+        case ACT_VIEW_TEK_SPEED_150:
+        case ACT_VIEW_TEK_SPEED_300:
+        case ACT_VIEW_TEK_SPEED_600:
+        case ACT_VIEW_TEK_SPEED_1200:
+        case ACT_VIEW_TEK_SPEED_2400:
+        case ACT_VIEW_TEK_SPEED_4800:
+        case ACT_VIEW_TEK_SPEED_9600: {
+            int baud = 2400;
+            if (action == ACT_VIEW_TEK_SPEED_INSTANT) baud = 0;
+            else if (action == ACT_VIEW_TEK_SPEED_110) baud = 110;
+            else if (action == ACT_VIEW_TEK_SPEED_150) baud = 150;
+            else if (action == ACT_VIEW_TEK_SPEED_300) baud = 300;
+            else if (action == ACT_VIEW_TEK_SPEED_600) baud = 600;
+            else if (action == ACT_VIEW_TEK_SPEED_1200) baud = 1200;
+            else if (action == ACT_VIEW_TEK_SPEED_2400) baud = 2400;
+            else if (action == ACT_VIEW_TEK_SPEED_4800) baud = 4800;
+            else if (action == ACT_VIEW_TEK_SPEED_9600) baud = 9600;
+
+            app->profile.tek_baud_rate = baud;
+            if (app->menu_ctx.current_profile_idx >= 0 && (size_t)app->menu_ctx.current_profile_idx < app->menu_ctx.profiles.count) {
+                app->menu_ctx.profiles.profiles[app->menu_ctx.current_profile_idx].tek_baud_rate = baud;
+                plato_profiles_save(&app->menu_ctx.profiles);
+            }
+            break;
+        }
+
 sync_optical_palette:
         plato_terminal_set_palette(&app->terminal, (plato_palette_t)app->profile.phosphor_color);
 sync_optical_view:
+            linux_theme_set_current(app->profile.display_mode, app->profile.phosphor_color);
             plato_optical_invalidate(app->optical);
             app->terminal.fb.dirty = true;
             if (app->menu_ctx.current_profile_idx >= 0 && (size_t)app->menu_ctx.current_profile_idx < app->menu_ctx.profiles.count) {
@@ -1135,6 +1176,7 @@ sync_optical_view:
             printf("[Paste] Cancel Paste richiesto.\n");
             break;
         case ACT_MT_BOOT_MTE: {
+            if (app->profile.display_mode == 5) break; /* Inibito in modalità Tektronix */
             linux_mte_task_t *task = (linux_mte_task_t *)malloc(sizeof(linux_mte_task_t));
             if (task) {
                 task->app = app;
@@ -1145,6 +1187,7 @@ sync_optical_view:
             break;
         }
         case ACT_MT_TOGGLE_LOG:
+            if (app->profile.display_mode == 5) break; /* Inibito in modalità Tektronix */
             app->menu_ctx.z80_log = !app->menu_ctx.z80_log;
             plato_microtutor_set_logging(&app->terminal.mt, app->menu_ctx.z80_log);
             printf("[MicroTutor] Z80 Diagnostic Log: %s\n", app->menu_ctx.z80_log ? "ABILITATO" : "DISABILITATO");
@@ -1490,11 +1533,11 @@ int main(int argc, char *argv[]) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "-V") == 0) {
-            printf("PlatoLives GUI v" PLATO_VERSION_STRING " (Linux/OpenGL)\n");
+            printf("PlatoLives v" PLATO_VERSION_STRING "\n");
             return 0;
         }
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printf("PlatoLives v4.5 - CDC PLATO IV & Cyber1 Terminal Emulator\n\n"
+            printf("PlatoLives v" PLATO_VERSION_STRING " - CDC PLATO IV & Cyber1 Terminal Emulator\n\n"
                    "Usage:\n  PlatoLives [options] [host] [port]\n\n"
                    "Options:\n"
                    "  --profile, -p <name>   Load specific connection profile\n"
@@ -1524,7 +1567,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    printf("[PlatoLives GUI] Avvio client desktop con Barra Menu V4.5 unificata...\n");
+    printf("[PlatoLives GUI] Avvio client desktop con Barra Menu v" PLATO_VERSION_STRING " unificata...\n");
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) != 0) {
         fprintf(stderr, "Errore SDL_Init: %s\n", SDL_GetError());
@@ -1635,6 +1678,7 @@ int main(int argc, char *argv[]) {
     if (cli_host) snprintf(app.profile.host, sizeof(app.profile.host), "%s", cli_host);
     if (cli_port > 0) app.profile.port = cli_port;
 
+    linux_theme_set_current(app.profile.display_mode, app.profile.phosphor_color);
     app.optical = plato_optical_create();
     app.render_buffer = (uint32_t *)calloc(TEXTURE_WIDTH * TEXTURE_HEIGHT, sizeof(uint32_t));
 
@@ -1685,6 +1729,7 @@ int main(int argc, char *argv[]) {
             linux_keymap_handle_event(&event);
             linux_livetext_handle_event(&event);
             linux_about_handle_event(&event);
+            linux_conn_handle_event(&event);
             linux_hud_handle_event(&event);
 
             /* Filtro eventi per finestra secondaria: non toccare la finestra principale se l'evento è per Keyref */
@@ -1755,7 +1800,14 @@ int main(int argc, char *argv[]) {
             linux_keymap_render();
             linux_livetext_render();
             linux_about_render();
-            linux_hud_render();
+            linux_conn_render();
+            if (linux_hud_is_open()) {
+                int q_head = app.terminal.vector_queue.head;
+                int q_tail = app.terminal.vector_queue.tail;
+                int q_count = (q_head - q_tail + MAX_VECTOR_EVENTS) % MAX_VECTOR_EVENTS;
+                linux_hud_update_queue(q_count, app.profile.display_mode, app.profile.tek_baud_rate);
+                linux_hud_render();
+            }
 
             uint32_t elapsed = SDL_GetTicks() - frame_start;
             if (elapsed < frame_delay_ms) {
@@ -1764,6 +1816,10 @@ int main(int argc, char *argv[]) {
         } else {
             /* IDLE PURO: Salta il rendering GL e SDL_GL_SwapWindow per azzerare l'overhead di Mesa VirGL */
             if (linux_hud_is_open()) {
+                int q_head = app.terminal.vector_queue.head;
+                int q_tail = app.terminal.vector_queue.tail;
+                int q_count = (q_head - q_tail + MAX_VECTOR_EVENTS) % MAX_VECTOR_EVENTS;
+                linux_hud_update_queue(q_count, app.profile.display_mode, app.profile.tek_baud_rate);
                 linux_hud_render();
             }
             SDL_Delay(10);

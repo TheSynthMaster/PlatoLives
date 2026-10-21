@@ -4,6 +4,7 @@
  */
 
 #include "linux_livetext.h"
+#include "linux_theme.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -126,13 +127,14 @@ static void draw_lt_rect(SDL_Renderer *ren, int x, int y, int w, int h, uint8_t 
 }
 
 static void draw_lt_button(SDL_Renderer *ren, int x, int y, int w, int h, const char *label, bool selected, bool flashing) {
-    uint8_t bg_r = flashing ? 255 : (selected ? 96 : 36);
-    uint8_t bg_g = flashing ? 220 : (selected ? 42 : 18);
-    uint8_t bg_b = flashing ? 0   : (selected ? 10 : 8);
+    linux_theme_colors_t th = linux_theme_current();
+    uint8_t bg_r = flashing ? th.bright.r : (selected ? th.hover_bg.r : th.bg_box.r);
+    uint8_t bg_g = flashing ? th.bright.g : (selected ? th.hover_bg.g : th.bg_box.g);
+    uint8_t bg_b = flashing ? th.bright.b : (selected ? th.hover_bg.b : th.bg_box.b);
 
-    uint8_t bd_r = flashing ? 255 : (selected ? 255 : 120);
-    uint8_t bd_g = flashing ? 245 : (selected ? 140 : 60);
-    uint8_t bd_b = flashing ? 120 : (selected ? 20  : 20);
+    uint8_t bd_r = flashing ? 255 : (selected ? th.bright.r : th.border.r);
+    uint8_t bd_g = flashing ? 255 : (selected ? th.bright.g : th.border.g);
+    uint8_t bd_b = flashing ? 255 : (selected ? th.bright.b : th.border.b);
 
     draw_lt_rect(ren, x, y, w, h, bg_r, bg_g, bg_b, true, bd_r, bd_g, bd_b);
 
@@ -140,9 +142,9 @@ static void draw_lt_button(SDL_Renderer *ren, int x, int y, int w, int h, const 
     float tx = (float)x + ((float)w - tw) / 2.0f;
     float ty = (float)y + 17.0f;
 
-    uint8_t fg_r = flashing ? 20  : (selected ? 255 : 210);
-    uint8_t fg_g = flashing ? 12  : (selected ? 215 : 130);
-    uint8_t fg_b = flashing ? 4   : (selected ? 60  : 20);
+    uint8_t fg_r = flashing ? 0 : (selected ? th.bright.r : th.normal.r);
+    uint8_t fg_g = flashing ? 0 : (selected ? th.bright.g : th.normal.g);
+    uint8_t fg_b = flashing ? 0 : (selected ? th.bright.b : th.normal.b);
 
     draw_lt_text(ren, tx, ty, label, fg_r, fg_g, fg_b);
 }
@@ -408,6 +410,7 @@ void linux_livetext_handle_event(const SDL_Event *ev) {
 }
 
 void linux_livetext_render(void) {
+    linux_theme_colors_t th = linux_theme_current();
     if (!g_lt_win || !g_lt_ren) return;
 
     refresh_buffer();
@@ -416,7 +419,7 @@ void linux_livetext_render(void) {
     SDL_GetWindowSize(g_lt_win, &win_w, &win_h);
 
     /* Sfondo Principale Dark Amber */
-    SDL_SetRenderDrawColor(g_lt_ren, 14, 9, 5, 255);
+    SDL_SetRenderDrawColor(g_lt_ren, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, 255);
     SDL_RenderClear(g_lt_ren);
 
     /* Render Righe di Testo 32x64 */
@@ -438,39 +441,39 @@ void linux_livetext_render(void) {
         if (py >= -16 && py < win_h - LT_BOTTOM_BAR_H + 16) {
             bool sel = is_pos_selected(r, c);
             if (sel) {
-                draw_lt_rect(g_lt_ren, px - 1, py - 1, (int)LT_CHAR_W + 1, LT_LINE_H, 96, 42, 10, false, 0, 0, 0);
+                draw_lt_rect(g_lt_ren, px - 1, py - 1, (int)LT_CHAR_W + 1, LT_LINE_H, th.hover_bg.r, th.hover_bg.g, th.hover_bg.b, false, 0, 0, 0);
             }
             char s[2] = { ch, '\0' };
-            uint8_t cr = sel ? 255 : 245;
-            uint8_t cg = sel ? 230 : 175;
-            uint8_t cb = sel ? 80  : 35;
+            uint8_t cr = sel ? th.bright.r : th.normal.r;
+            uint8_t cg = sel ? th.bright.g : th.normal.g;
+            uint8_t cb = sel ? th.bright.b : th.normal.b;
             draw_lt_text(g_lt_ren, (float)px, (float)(py + 13), s, cr, cg, cb);
         }
         c++;
     }
 
     /* BARRA INFERIORE A 44px */
-    draw_lt_rect(g_lt_ren, 0, win_h - LT_BOTTOM_BAR_H, win_w, LT_BOTTOM_BAR_H, 34, 17, 6, true, 190, 85, 12);
+    draw_lt_rect(g_lt_ren, 0, win_h - LT_BOTTOM_BAR_H, win_w, LT_BOTTOM_BAR_H, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
 
     /* Pulsanti Inferiori con Flash Giallo */
     draw_lt_button(g_lt_ren, 12, win_h - 35, 85, 26, "Select All", false, is_lt_btn_flashing(LT_BTN_SELALL));
     draw_lt_button(g_lt_ren, 105, win_h - 35, 115, 26, "Deselect / Live", false, is_lt_btn_flashing(LT_BTN_LIVE));
 
     /* Checkbox Compact */
-    draw_lt_rect(g_lt_ren, 230, win_h - 31, 16, 16, 26, 14, 8, true, 180, 90, 20);
+    draw_lt_rect(g_lt_ren, 230, win_h - 31, 16, 16, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
     if (g_lt_compact) {
-        draw_lt_rect(g_lt_ren, 234, win_h - 27, 8, 8, 255, 180, 40, false, 0, 0, 0);
+        draw_lt_rect(g_lt_ren, 234, win_h - 27, 8, 8, th.bright.r, th.bright.g, th.bright.b, false, 0, 0, 0);
     }
-    draw_lt_text(g_lt_ren, 252.0f, (float)(win_h - 18), "Compact", 240, 180, 50);
+    draw_lt_text(g_lt_ren, 252.0f, (float)(win_h - 18), "Compact", th.normal.r, th.normal.g, th.normal.b);
 
     /* Pulsante Copy to Clipboard */
     draw_lt_button(g_lt_ren, 325, win_h - 35, 140, 26, "Copy to Clipboard", false, is_lt_btn_flashing(LT_BTN_COPY));
 
     /* Status Indicator Badge a Destra */
     if (g_lt_frozen) {
-        draw_lt_text(g_lt_ren, (float)(win_w - 110), (float)(win_h - 17), "[⏸ FROZEN]", 255, 160, 40);
+        draw_lt_text(g_lt_ren, (float)(win_w - 110), (float)(win_h - 17), "[⏸ FROZEN]", th.dim.r, th.dim.g, th.dim.b);
     } else {
-        draw_lt_text(g_lt_ren, (float)(win_w - 95), (float)(win_h - 17), "[● LIVE]", 50, 230, 80);
+        draw_lt_text(g_lt_ren, (float)(win_w - 95), (float)(win_h - 17), "[● LIVE]", th.bright.r, th.bright.g, th.bright.b);
     }
 
     /* Scrollbar laterale */
@@ -480,7 +483,7 @@ void linux_livetext_render(void) {
         int bar_h = (view_h * view_h) / content_h;
         if (bar_h < 30) bar_h = 30;
         int bar_y = (g_lt_scroll_y * (view_h - bar_h)) / (content_h - view_h);
-        draw_lt_rect(g_lt_ren, win_w - 7, bar_y, 5, bar_h, 190, 85, 12, false, 0, 0, 0);
+        draw_lt_rect(g_lt_ren, win_w - 7, bar_y, 5, bar_h, th.border.r, th.border.g, th.border.b, false, 0, 0, 0);
     }
 
     SDL_RenderPresent(g_lt_ren);

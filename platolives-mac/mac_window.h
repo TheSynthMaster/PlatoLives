@@ -8,6 +8,22 @@
 @class PLATOTerminalWindowController;
 @class PLATOTextBufferWindowController;
 
+
+@interface PLATOThemeColors : NSObject
+@property (nonatomic, strong) NSColor *normal;
+@property (nonatomic, strong) NSColor *bright;
+@property (nonatomic, strong) NSColor *disabled;
+@property (nonatomic, strong) NSColor *muted;
+@property (nonatomic, strong) NSColor *dim;
+@property (nonatomic, strong) NSColor *bgDark;
+@property (nonatomic, strong) NSColor *bgBox;
+@property (nonatomic, strong) NSColor *hoverBg;
+@property (nonatomic, strong) NSColor *border;
+
++ (PLATOThemeColors *)currentThemeColors;
++ (PLATOThemeColors *)colorsForMode:(NSInteger)mode phosphor:(NSInteger)phosphor;
+@end
+
 @protocol PLATOTerminalWindowDelegate <NSObject>
 - (void)terminalWindowControllerWillClose:(PLATOTerminalWindowController *)controller;
 @end
@@ -71,4 +87,6 @@
 - (void)showTextBufferWindow:(id)sender;
 - (void)pasteText:(id)sender;
 - (void)cancelPaste:(id)sender;
+- (void)updateTekBaudMenu:(NSInteger)baud;
+- (void)refreshAllModalWindowThemes;
 @end

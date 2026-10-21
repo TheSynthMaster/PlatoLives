@@ -12,6 +12,9 @@ typedef struct {
     int display_mode;
     int persistence_ms;
     int distortion;
+    int phosphor_color;
+    int tek_baud;
+    int tek_queue_count;
     char user_info[128];
     bool connected;
 } linux_hud_telemetry_t;
@@ -19,6 +22,7 @@ typedef struct {
 void linux_hud_toggle(void);
 bool linux_hud_is_open(void);
 void linux_hud_update_data(const linux_hud_telemetry_t *telem);
+void linux_hud_update_queue(int tek_queue_count, int display_mode, int tek_baud);
 void linux_hud_handle_event(const SDL_Event *ev);
 void linux_hud_render(void);
 void linux_hud_destroy(void);

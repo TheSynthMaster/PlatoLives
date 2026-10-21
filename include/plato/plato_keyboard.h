@@ -43,7 +43,8 @@ typedef void (*plato_feedback_callback_t)(const char *message, double duration_s
 typedef enum {
     PLATO_ARROW_MODE_STANDARD = 0, /* PLATO Standard: SUPER, SUB, ERASE, TAB */
     PLATO_ARROW_MODE_WASD,         /* WASD Gaming: Up=W, Down=S, Left=A, Right=D */
-    PLATO_ARROW_MODE_WASX          /* WASX Gaming (Avatar/Oubliette): Up=W, Down=X, Left=A, Right=D */
+    PLATO_ARROW_MODE_WASX,         /* WASX Gaming (Avatar/Oubliette): Up=W, Down=X, Left=A, Right=D */
+    PLATO_ARROW_MODE_WADX          /* WADX Classic PLATO / TUTOR: Up=W, Down=X, Left=A, Right=D */
 } plato_arrow_mode_t;
 
 typedef struct {

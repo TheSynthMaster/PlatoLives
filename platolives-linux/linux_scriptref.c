@@ -4,6 +4,7 @@
  */
 
 #include "linux_scriptref.h"
+#include "linux_theme.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -228,13 +229,14 @@ static void draw_sr_string(SDL_Renderer *ren, float x, float y, const char *str,
 }
 
 void linux_scriptref_render(void) {
+    linux_theme_colors_t th = linux_theme_current();
     if (!g_sr_win || !g_sr_ren) return;
 
     int win_w, win_h;
     SDL_GetWindowSize(g_sr_win, &win_w, &win_h);
 
     /* Sfondo principale Dark Amber Plasma */
-    SDL_SetRenderDrawColor(g_sr_ren, 14, 9, 5, 255);
+    SDL_SetRenderDrawColor(g_sr_ren, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, 255);
     SDL_RenderClear(g_sr_ren);
 
     int start_y = SCRIPTREF_TOP_BAR_H + 8 - g_sr_scroll_y;
@@ -249,37 +251,37 @@ void linux_scriptref_render(void) {
 
         if (line[0] == '#' && line[1] == ' ' && line[2] == '#') {
             /* Separatore o banner */
-            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, 140, 70, 20);
+            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, th.dim.r, th.dim.g, th.dim.b);
         } else if (line[0] == '#') {
             /* Commento */
-            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, 160, 110, 45);
+            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, th.dim.r, th.dim.g, th.dim.b);
         } else if (line[0] == '@' || (strncmp(line, "===", 3) == 0)) {
             /* Label o Sezione principale */
-            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, 255, 225, 75);
+            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, th.bright.r, th.bright.g, th.bright.b);
         } else if (strncmp(line, "wait_", 5) == 0 || strncmp(line, "send", 4) == 0 ||
                    strncmp(line, "key", 3) == 0 || strncmp(line, "let", 3) == 0 ||
                    strncmp(line, "for", 3) == 0 || strncmp(line, "if", 2) == 0 ||
                    strncmp(line, "find_text", 9) == 0 || strncmp(line, "exit", 4) == 0) {
             /* Istruzione evidenziata */
-            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, 255, 185, 40);
+            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, th.bright.r, th.bright.g, th.bright.b);
         } else {
             /* Testo standard ambra radiante */
-            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, 235, 150, 30);
+            draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, th.normal.r, th.normal.g, th.normal.b);
         }
     }
 
     /* BARRA SUPERIORE FISSA IN LOOK PLASMA */
-    SDL_SetRenderDrawColor(g_sr_ren, 36, 18, 6, 255);
+    SDL_SetRenderDrawColor(g_sr_ren, th.bg_box.r, th.bg_box.g, th.bg_box.b, 255);
     SDL_Rect bar_bg = { 0, 0, win_w, SCRIPTREF_TOP_BAR_H };
     SDL_RenderFillRect(g_sr_ren, &bar_bg);
 
-    SDL_SetRenderDrawColor(g_sr_ren, 190, 85, 12, 255);
+    SDL_SetRenderDrawColor(g_sr_ren, th.border.r, th.border.g, th.border.b, 255);
     SDL_Rect bar_border = { 0, SCRIPTREF_TOP_BAR_H - 2, win_w, 2 };
     SDL_RenderFillRect(g_sr_ren, &bar_border);
 
     /* Titolo in oro plasma */
-    draw_sr_string(g_sr_ren, 28.0f, 26.0f, "PLATO SCRIPTING LANGUAGE REFERENCE", 255, 220, 65);
-    draw_sr_string(g_sr_ren, 28.0f, 52.0f, "Commands, Syntax & Examples — Press Esc to close", 210, 140, 35);
+    draw_sr_string(g_sr_ren, 28.0f, 26.0f, "PLATO SCRIPTING LANGUAGE REFERENCE", th.bright.r, th.bright.g, th.bright.b);
+    draw_sr_string(g_sr_ren, 28.0f, 52.0f, "Commands, Syntax & Examples — Press Esc to close", th.dim.r, th.dim.g, th.dim.b);
 
     /* Scrollbar laterale ambra plasma */
     int content_h = g_sr_line_count * SCRIPTREF_LINE_H;
@@ -288,7 +290,7 @@ void linux_scriptref_render(void) {
         int bar_h = (view_h * view_h) / content_h;
         if (bar_h < 30) bar_h = 30;
         int bar_y = SCRIPTREF_TOP_BAR_H + (g_sr_scroll_y * (view_h - bar_h)) / (content_h - view_h);
-        SDL_SetRenderDrawColor(g_sr_ren, 190, 85, 12, 230);
+        SDL_SetRenderDrawColor(g_sr_ren, th.border.r, th.border.g, th.border.b, 255);
         SDL_Rect bar_rect = { win_w - 7, bar_y, 5, bar_h };
         SDL_RenderFillRect(g_sr_ren, &bar_rect);
     }

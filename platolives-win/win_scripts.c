@@ -1,15 +1,10 @@
+#include "win_theme.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_scripts.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define PLATO_PLASMA_COLOR     RGB(255, 110, 0)
-#define PLATO_PLASMA_BRIGHT    RGB(255, 160, 40)
-#define PLATO_PLASMA_DISABLED  RGB(120, 55, 0)
-#define PLATO_BG_DARK          RGB(16, 12, 10)
-#define PLATO_BG_BOX           RGB(24, 18, 14)
-#define PLATO_BG_HOVER         RGB(45, 20, 0)
 
 #define IDC_SCR_LIST           401
 #define IDC_SCR_BTN_NEW        402

@@ -1,3 +1,4 @@
+#include "win_theme.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_keymap.h"
 #include "win_menu.h"
@@ -7,12 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PLATO_PLASMA_COLOR     RGB(255, 110, 0)
-#define PLATO_PLASMA_BRIGHT    RGB(255, 160, 40)
-#define PLATO_PLASMA_DIM       RGB(140, 70, 20)
-#define PLATO_BG_DARK          RGB(16, 12, 10)
-#define PLATO_BG_BOX           RGB(24, 18, 14)
-#define PLATO_BG_HOVER         RGB(60, 28, 10)
 
 #define IDC_K_LIST_PROF   801
 #define IDC_K_LIST_BIND   802

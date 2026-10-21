@@ -4,6 +4,7 @@
  */
 
 #include "linux_keyref.h"
+#include "linux_theme.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -225,13 +226,14 @@ static void draw_kr_string(SDL_Renderer *ren, float x, float y, const char *str,
 }
 
 void linux_keyref_render(void) {
+    linux_theme_colors_t th = linux_theme_current();
     if (!g_kr_win || !g_kr_ren) return;
 
     int win_w, win_h;
     SDL_GetWindowSize(g_kr_win, &win_w, &win_h);
 
     /* Sfondo principale Dark Amber Plasma */
-    SDL_SetRenderDrawColor(g_kr_ren, 14, 9, 5, 255);
+    SDL_SetRenderDrawColor(g_kr_ren, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, 255);
     SDL_RenderClear(g_kr_ren);
 
     int total_entries = (int)(sizeof(g_kr_table) / sizeof(g_kr_table[0]));
@@ -246,34 +248,34 @@ void linux_keyref_render(void) {
 
         const keyref_entry_t *e = &g_kr_table[i];
         if (e->is_header) {
-            draw_kr_string(g_kr_ren, 36.0f, (float)(y + 15), e->key, 255, 195, 45);
+            draw_kr_string(g_kr_ren, 36.0f, (float)(y + 15), e->key, th.bright.r, th.bright.g, th.bright.b);
         } else if (e->key[0] == '-') {
-            draw_kr_string(g_kr_ren, 36.0f, (float)(y + 15), e->key, 130, 55, 12);
-            draw_kr_string(g_kr_ren, 230.0f, (float)(y + 15), e->shortcut, 130, 55, 12);
+            draw_kr_string(g_kr_ren, 36.0f, (float)(y + 15), e->key, th.dim.r, th.dim.g, th.dim.b);
+            draw_kr_string(g_kr_ren, 230.0f, (float)(y + 15), e->shortcut, th.dim.r, th.dim.g, th.dim.b);
         } else if (e->key[0] != '\0') {
             /* Tasto PLATO in Ambra Intenso e Scorciatoia in Ambra Radiante */
-            draw_kr_string(g_kr_ren, 36.0f, (float)(y + 15), e->key, 255, 180, 35);
-            draw_kr_string(g_kr_ren, 230.0f, (float)(y + 15), e->shortcut, 245, 145, 22);
+            draw_kr_string(g_kr_ren, 36.0f, (float)(y + 15), e->key, th.bright.r, th.bright.g, th.bright.b);
+            draw_kr_string(g_kr_ren, 230.0f, (float)(y + 15), e->shortcut, th.normal.r, th.normal.g, th.normal.b);
         }
     }
 
     /* BARRA SUPERIORE FISSA IN LOOK PLASMA CANONICO */
     /* 1. Sfondo testata ambra plasma intenso */
-    SDL_SetRenderDrawColor(g_kr_ren, 36, 18, 6, 255);
+    SDL_SetRenderDrawColor(g_kr_ren, th.bg_box.r, th.bg_box.g, th.bg_box.b, 255);
     SDL_Rect bar_bg = { 0, 0, win_w, top_bar_h };
     SDL_RenderFillRect(g_kr_ren, &bar_bg);
 
     /* 2. Bordo inferiore radiante plasma */
-    SDL_SetRenderDrawColor(g_kr_ren, 190, 85, 12, 255);
+    SDL_SetRenderDrawColor(g_kr_ren, th.border.r, th.border.g, th.border.b, 255);
     SDL_Rect bar_border = { 0, top_bar_h - 2, win_w, 2 };
     SDL_RenderFillRect(g_kr_ren, &bar_border);
 
     /* 3. Titolo principale finestra in oro plasma */
-    draw_kr_string(g_kr_ren, 36.0f, 26.0f, "PLATO KEYBOARD REFERENCE", 255, 220, 65);
+    draw_kr_string(g_kr_ren, 36.0f, 26.0f, "PLATO KEYBOARD REFERENCE", th.bright.r, th.bright.g, th.bright.b);
 
     /* 4. Intestazioni delle colonne fisse */
-    draw_kr_string(g_kr_ren, 36.0f, 56.0f, "PLATO KEY", 255, 175, 40);
-    draw_kr_string(g_kr_ren, 230.0f, 56.0f, "WINDOWS / MAC SHORTCUT", 255, 175, 40);
+    draw_kr_string(g_kr_ren, 36.0f, 56.0f, "PLATO KEY", th.dim.r, th.dim.g, th.dim.b);
+    draw_kr_string(g_kr_ren, 230.0f, 56.0f, "WINDOWS / MAC SHORTCUT", th.dim.r, th.dim.g, th.dim.b);
 
     /* Scrollbar laterale ambra plasma */
     int content_h = total_entries * row_h;
@@ -282,7 +284,7 @@ void linux_keyref_render(void) {
         int bar_h = (view_h * view_h) / content_h;
         if (bar_h < 30) bar_h = 30;
         int bar_y = top_bar_h + (g_kr_scroll_y * (view_h - bar_h)) / (content_h - view_h);
-        SDL_SetRenderDrawColor(g_kr_ren, 190, 85, 12, 230);
+        SDL_SetRenderDrawColor(g_kr_ren, th.border.r, th.border.g, th.border.b, 230);
         SDL_Rect bar_rect = { win_w - 7, bar_y, 5, bar_h };
         SDL_RenderFillRect(g_kr_ren, &bar_rect);
     }

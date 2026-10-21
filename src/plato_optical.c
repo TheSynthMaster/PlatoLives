@@ -45,6 +45,14 @@ struct PLATOPlasmaState {
     int crtDistortion;
     int plasmaDistortion;
     int phosphorColor;
+
+    /* Motore Fisico Tektronix 4014 (DVBST) */
+    float *tek_flare;       /* Energia transitoria del raggio (Transient Flare) */
+    float *tek_stored;      /* Carica bistabile del dielettrico (Stored State) */
+    double tek_erase_time;  /* Timestamp inizio scarica dielettrica (Erase Flash) */
+    double tek_erase_grace_until; /* Deadline Grace Period anti-strobe (1.0s di soppressione) */
+    double tek_pacer_last_sec;    /* Timestamp ultimo accredito bit Pacer Tektronix */
+    double tek_pacer_credit_bits; /* Credito di bit residuo per disegno progressivo */
 };
 
 struct plato_optical {
@@ -75,6 +83,8 @@ static void plasmaFreeState(struct PLATOPlasmaState *ps) {
     if (!ps) return;
     free(ps->gain); free(ps->energy); free(ps->source); free(ps->tmp);
     free(ps->local); free(ps->wide); free(ps->crisp); free(ps->logical);
+    free(ps->tek_flare); free(ps->tek_stored);
+    ps->tek_flare = ps->tek_stored = NULL;
     ps->gain = ps->energy = ps->source = ps->tmp = ps->local = ps->wide = NULL;
     ps->crisp = ps->logical = NULL;
     ps->lastTime = 0.0;
@@ -94,8 +104,14 @@ static bool plasmaAllocState(struct PLATOPlasmaState *ps) {
     ps->wide = (float *)calloc(PLASMA_PIXELS, sizeof(float));
     ps->crisp = (uint32_t *)calloc(PLASMA_PIXELS, sizeof(uint32_t));
     ps->logical = (uint32_t *)calloc(logicalPixels, sizeof(uint32_t));
+    ps->tek_flare = (float *)calloc(PLASMA_PIXELS, sizeof(float));
+    ps->tek_stored = (float *)calloc(PLASMA_PIXELS, sizeof(float));
+    ps->tek_erase_time = 0.0;
+    ps->tek_erase_grace_until = 0.0;
+    ps->tek_pacer_last_sec = 0.0;
+    ps->tek_pacer_credit_bits = 0.0;
     if (!ps->gain || !ps->energy || !ps->source || !ps->tmp ||
-        !ps->local || !ps->wide || !ps->crisp || !ps->logical) {
+        !ps->local || !ps->wide || !ps->crisp || !ps->logical || !ps->tek_flare || !ps->tek_stored) {
         plasmaFreeState(ps);
         return false;
     }
@@ -745,6 +761,440 @@ static void crtComposeTile(plato_optical_t *opt, uint32_t *output, int tileX, in
     }
 }
 
+
+/* ========================================================================= */
+/* TEKTRONIX 4014 DVBST BEAM INTEGRATOR (Spazio Continuo 2048x2048)          */
+/* ========================================================================= */
+
+static void plato_tek_splat_point(float *flare, float *stored, int width, int height,
+                                  float x, float y, float intensity, float sigma, float stored_ratio) {
+    int r = (int)ceilf(sigma * 3.0f);
+    int x0 = (int)floorf(x - r);
+    int x1 = (int)ceilf(x + r);
+    int y0 = (int)floorf(y - r);
+    int y1 = (int)ceilf(y + r);
+
+    if (x0 < 0) x0 = 0;
+    if (x1 >= width) x1 = width - 1;
+    if (y0 < 0) y0 = 0;
+    if (y1 >= height) y1 = height - 1;
+
+    float inv_two_sig_sq = 1.0f / (2.0f * sigma * sigma);
+
+    for (int py = y0; py <= y1; py++) {
+        float dy = (float)py - y;
+        float dy2 = dy * dy;
+        float *row_f = flare + py * width;
+        float *row_s = stored + py * width;
+
+        for (int px = x0; px <= x1; px++) {
+            float dx = (float)px - x;
+            float d2 = dx * dx + dy2;
+            float w = expf(-d2 * inv_two_sig_sq);
+            float val = intensity * w;
+
+            row_f[px] += val;
+            float s_val = row_s[px] + val * stored_ratio;
+            row_s[px] = (s_val > 1.0f) ? 1.0f : s_val;
+        }
+    }
+}
+
+static void plato_tek_splat_line(float *flare, float *stored, int width, int height,
+                                 float x0, float y0, float x1, float y1) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float dist = sqrtf(dx * dx + dy * dy);
+
+    if (dist < 0.5f) {
+        /* Punto isolato con Dwell spot */
+        plato_tek_splat_point(flare, stored, width, height, x0, y0, 1.4f, 1.5f, 0.85f);
+        return;
+    }
+
+    /* 1. Dwell Time ai vertici: sovraesposizione all'inizio e alla fine del vettore */
+    plato_tek_splat_point(flare, stored, width, height, x0, y0, 0.9f, 1.6f, 0.7f);
+    plato_tek_splat_point(flare, stored, width, height, x1, y1, 0.9f, 1.6f, 0.7f);
+
+    /* 2. Tracciamento continuo del raggio sub-pixel lungo il vettore */
+    float step = 0.8f;
+    int steps = (int)ceilf(dist / step);
+    float inv_steps = 1.0f / (float)steps;
+    float x_step = dx * inv_steps;
+    float y_step = dy * inv_steps;
+
+    float cx = x0;
+    float cy = y0;
+    const float sigma = 1.0f;
+    const float inv_two_sig_sq = 1.0f / (2.0f * sigma * sigma);
+    const float intensity = 0.45f;
+    const int r = 2;
+
+    for (int i = 0; i <= steps; i++) {
+        int px_min = (int)(cx - r);
+        int px_max = (int)(cx + r);
+        int py_min = (int)(cy - r);
+        int py_max = (int)(cy + r);
+
+        if (px_min < 0) px_min = 0;
+        if (px_max >= width) px_max = width - 1;
+        if (py_min < 0) py_min = 0;
+        if (py_max >= height) py_max = height - 1;
+
+        for (int py = py_min; py <= py_max; py++) {
+            float d_y = (float)py - cy;
+            float d_y2 = d_y * d_y;
+            float *row_f = flare + py * width;
+            float *row_s = stored + py * width;
+
+            for (int px = px_min; px <= px_max; px++) {
+                float d_x = (float)px - cx;
+                float d2 = d_x * d_x + d_y2;
+                float w = expf(-d2 * inv_two_sig_sq);
+                float val = intensity * w;
+
+                row_f[px] += val;
+                float s_val = row_s[px] + val * 0.7f;
+                row_s[px] = (s_val > 1.0f) ? 1.0f : s_val;
+            }
+        }
+
+        cx += x_step;
+        cy += y_step;
+    }
+}
+
+
+static void plato_tek_resync_box_from_fb(float *flare, float *stored, int width, int height,
+                                         const plato_framebuffer_t *fb,
+                                         int x0, int y0, int x1, int y1) {
+    if (!fb || !flare || !stored) return;
+
+    if (x0 < 0) x0 = 0;
+    if (x1 >= PLATO_WIDTH) x1 = PLATO_WIDTH - 1;
+    if (y0 < 0) y0 = 0;
+    if (y1 >= PLATO_HEIGHT) y1 = PLATO_HEIGHT - 1;
+    if (x0 > x1 || y0 > y1) return;
+
+    /* Estendi di 1 pixel PLATO (4 subpixel) per assorbire e ripulire l'intero alone gaussiano (sigma=1.15, r=3) */
+    int px_min = (x0 > 0 ? x0 - 1 : 0) * PLASMA_SCALE;
+    int px_max = (x1 < PLATO_WIDTH - 1 ? x1 + 2 : PLATO_WIDTH) * PLASMA_SCALE - 1;
+    int py_min = ((PLATO_HEIGHT - 1) - (y1 < PLATO_HEIGHT - 1 ? y1 + 1 : y1)) * PLASMA_SCALE;
+    int py_max = ((PLATO_HEIGHT - 1) - (y0 > 0 ? y0 - 1 : 0) + 1) * PLASMA_SCALE - 1;
+
+    if (px_min < 0) px_min = 0;
+    if (px_max >= width) px_max = width - 1;
+    if (py_min < 0) py_min = 0;
+    if (py_max >= height) py_max = height - 1;
+
+    /* 1. Azzeramento locale chirurgico del dielettrico nel rettangolo con margine alone */
+    for (int py = py_min; py <= py_max; py++) {
+        float *row_s = stored + (size_t)py * width;
+        float *row_f = flare + (size_t)py * width;
+        for (int px = px_min; px <= px_max; px++) {
+            row_s[px] = 0.0f;
+            row_f[px] = 0.0f;
+        }
+    }
+
+    /* 2. Ricostruzione perfetta dei soli punti realmente accesi in fb in quel rettangolo */
+    int scan_x0 = (x0 > 0 ? x0 - 1 : 0);
+    int scan_x1 = (x1 < PLATO_WIDTH - 1 ? x1 + 1 : PLATO_WIDTH - 1);
+    int scan_y0 = (y0 > 0 ? y0 - 1 : 0);
+    int scan_y1 = (y1 < PLATO_HEIGHT - 1 ? y1 + 1 : PLATO_HEIGHT - 1);
+
+    for (int py = scan_y0; py <= scan_y1; py++) {
+        int ry = (PLATO_HEIGHT - 1) - py;
+        float cy = (float)ry * (float)PLASMA_SCALE + 2.0f;
+        for (int px = scan_x0; px <= scan_x1; px++) {
+            if (plato_fb_get_pixel(fb, px, py)) {
+                float cx = (float)px * (float)PLASMA_SCALE + 2.0f;
+                plato_tek_splat_point(flare, stored, width, height, cx, cy, 1.15f, 1.75f, 0.95f);
+            }
+        }
+    }
+}
+
+static void plato_tek_splat_char(float *flare, float *stored, int width, int height,
+                                 const plato_font_t *font, plato_charset_t charset, uint8_t ch,
+                                 float x, float y, int scale, plato_screen_mode_t mode,
+                                 const plato_framebuffer_t *fb) {
+    if (!font) return;
+    const uint8_t *glyph = plato_font_get_glyph(font, charset, ch);
+    if (!glyph) return;
+
+    if (scale <= 1) scale = 1;
+    float y_base = y + ((scale > 1) ? (float)(scale - 1) * 5.0f : 0.0f);
+
+    /* 1. In modalita REWRITE o ERASE, ricostruiamo localmente la cella da fb con padding alone */
+    if (fb && (mode == PLATO_SCREEN_REWRITE || mode == PLATO_SCREEN_ERASE)) {
+        int x0 = (int)x;
+        int x1 = x0 + PLATO_CHAR_WIDTH * scale - 1;
+        int y0 = (int)y_base;
+        int y1 = y0 + PLATO_CHAR_HEIGHT * scale - 1;
+        plato_tek_resync_box_from_fb(flare, stored, width, height, fb, x0, y0, x1, y1);
+        return;
+    }
+
+    if (ch == ' ' || ch == 0x20 || ch == 0) return;
+
+    /* 2. In modalita WRITE (puramente additiva), splat gaussiano continuo dei soli punti accesi */
+    for (int row = 0; row < PLATO_CHAR_HEIGHT; row++) {
+        uint8_t bits = glyph[row];
+        if (bits == 0) continue;
+
+        float py = y_base + (float)((PLATO_CHAR_HEIGHT - 1 - row) * scale);
+        float screen_y = ((float)(PLATO_HEIGHT - 1) - py) * (float)PLASMA_SCALE + 2.0f;
+
+        for (int col = 0; col < PLATO_CHAR_WIDTH; col++) {
+            if (bits & (0x80 >> col)) {
+                float cx = (x + (float)col * (float)scale) * (float)PLASMA_SCALE + 2.0f;
+                plato_tek_splat_point(flare, stored, width, height, cx, screen_y, 1.15f, 1.75f, 0.95f);
+            }
+        }
+    }
+}
+
+static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_baud) {
+    if (!opt || !opt->term || !opt->state) return;
+    struct PLATOPlasmaState *p = opt->state;
+
+    if (tek_baud > 0) {
+        double dt = p->tek_pacer_last_sec > 0.0 ? (now_sec - p->tek_pacer_last_sec) : 0.0;
+        if (dt < 0.0) dt = 0.0;
+        if (dt > 0.250) dt = 0.250;
+        p->tek_pacer_last_sec = now_sec;
+        p->tek_pacer_credit_bits += dt * (double)tek_baud;
+        double max_credit = (double)tek_baud * 0.250;
+        if (max_credit < 40.0) max_credit = 40.0; /* Garantisce drain di almeno 1 vettore linea (40 bit) a 110/150 Baud */
+        if (p->tek_pacer_credit_bits > max_credit) p->tek_pacer_credit_bits = max_credit;
+    } else {
+        p->tek_pacer_last_sec = now_sec;
+        p->tek_pacer_credit_bits = 0.0;
+    }
+
+    while (opt->term->vector_queue.tail != opt->term->vector_queue.head) {
+        if (tek_baud > 0) {
+            plato_vector_event_t *ev_peek = &opt->term->vector_queue.events[opt->term->vector_queue.tail];
+            double cost_bits = 40.0; /* 4 byte seriali standard per coordinata Tektronix 4014 (10 bit/byte) */
+            if (ev_peek->type == VEC_EVENT_CHAR) cost_bits = 10.0;
+            else if (ev_peek->type == VEC_EVENT_ERASE) cost_bits = 20.0;
+
+            if (p->tek_pacer_credit_bits < cost_bits) {
+                break; /* Budget esaurito per questo frame: i vettori restanti rimangono in coda! */
+            }
+            p->tek_pacer_credit_bits -= cost_bits;
+        }
+        plato_vector_event_t ev = opt->term->vector_queue.events[opt->term->vector_queue.tail];
+        opt->term->vector_queue.tail = (opt->term->vector_queue.tail + 1) % MAX_VECTOR_EVENTS;
+
+        if (ev.type == VEC_EVENT_LINE) {
+            float x0 = ev.x0 * (float)PLASMA_SCALE;
+            float y0 = ((float)(PLATO_HEIGHT - 1) - ev.y0) * (float)PLASMA_SCALE;
+            float x1 = ev.x1 * (float)PLASMA_SCALE;
+            float y1 = ((float)(PLATO_HEIGHT - 1) - ev.y1) * (float)PLASMA_SCALE;
+            if (ev.mode == PLATO_SCREEN_ERASE || ev.mode == PLATO_SCREEN_INVERSE) {
+                /* Pulizia linea */
+                float dx = x1 - x0, dy = y1 - y0;
+                float dist = sqrtf(dx * dx + dy * dy);
+                int steps = (int)ceilf(dist / 1.0f);
+                float inv = steps > 0 ? (1.0f / (float)steps) : 1.0f;
+                float cx = x0, cy = y0;
+                for (int s = 0; s <= steps; s++) {
+                    int r = 3;
+                    int bx0 = (int)(cx - r); if (bx0 < 0) bx0 = 0;
+                    int bx1 = (int)(cx + r); if (bx1 >= PLASMA_WIDTH) bx1 = PLASMA_WIDTH - 1;
+                    int by0 = (int)(cy - r); if (by0 < 0) by0 = 0;
+                    int by1 = (int)(cy + r); if (by1 >= PLASMA_HEIGHT) by1 = PLASMA_HEIGHT - 1;
+                    for (int py = by0; py <= by1; py++) {
+                        float *row_s = p->tek_stored + py * PLASMA_WIDTH;
+                        for (int px = bx0; px <= bx1; px++) row_s[px] = 0.0f;
+                    }
+                    cx += dx * inv; cy += dy * inv;
+                }
+            } else {
+                plato_tek_splat_line(p->tek_flare, p->tek_stored, PLASMA_WIDTH, PLASMA_HEIGHT, x0, y0, x1, y1);
+            }
+        } else if (ev.type == VEC_EVENT_POINT) {
+            float x = ev.x0 * (float)PLASMA_SCALE;
+            float y = ((float)(PLATO_HEIGHT - 1) - ev.y0) * (float)PLASMA_SCALE;
+            if (ev.mode == PLATO_SCREEN_ERASE) {
+                int r = 3;
+                int bx0 = (int)(x - r); if (bx0 < 0) bx0 = 0;
+                int bx1 = (int)(x + r); if (bx1 >= PLASMA_WIDTH) bx1 = PLASMA_WIDTH - 1;
+                int by0 = (int)(y - r); if (by0 < 0) by0 = 0;
+                int by1 = (int)(y + r); if (by1 >= PLASMA_HEIGHT) by1 = PLASMA_HEIGHT - 1;
+                for (int py = by0; py <= by1; py++) {
+                    float *row_s = p->tek_stored + py * PLASMA_WIDTH;
+                    for (int px = bx0; px <= bx1; px++) row_s[px] = 0.0f;
+                }
+            } else {
+                plato_tek_splat_point(p->tek_flare, p->tek_stored, PLASMA_WIDTH, PLASMA_HEIGHT, x, y, 1.4f, 1.5f, 0.85f);
+            }
+        } else if (ev.type == VEC_EVENT_BLOCK) {
+            float min_x_p = (ev.x0 < ev.x1 ? ev.x0 : ev.x1);
+            float max_x_p = (ev.x0 < ev.x1 ? ev.x1 : ev.x0);
+            float min_y_p = (ev.y0 < ev.y1 ? ev.y0 : ev.y1);
+            float max_y_p = (ev.y0 < ev.y1 ? ev.y1 : ev.y0);
+
+            if (ev.mode == PLATO_SCREEN_ERASE || ev.mode == PLATO_SCREEN_INVERSE) {
+                int bx0 = (int)floorf(min_x_p);
+                int bx1 = (int)ceilf(max_x_p);
+                int by0 = (int)floorf(min_y_p);
+                int by1 = (int)ceilf(max_y_p);
+                plato_tek_resync_box_from_fb(p->tek_flare, p->tek_stored, PLASMA_WIDTH, PLASMA_HEIGHT,
+                                             &opt->term->fb, bx0, by0, bx1, by1);
+            } else if (ev.mode == PLATO_SCREEN_WRITE || ev.mode == PLATO_SCREEN_REWRITE) {
+                float bx0_f = min_x_p * (float)PLASMA_SCALE;
+                float bx1_f = max_x_p * (float)PLASMA_SCALE + (float)PLASMA_SCALE;
+                float by0_f = ((float)(PLATO_HEIGHT - 1) - max_y_p) * (float)PLASMA_SCALE;
+                float by1_f = ((float)(PLATO_HEIGHT - 1) - min_y_p) * (float)PLASMA_SCALE + (float)PLASMA_SCALE;
+
+                int px0 = (int)floorf(bx0_f); if (px0 < 0) px0 = 0;
+                int px1 = (int)ceilf(bx1_f);  if (px1 >= PLASMA_WIDTH) px1 = PLASMA_WIDTH - 1;
+                int py0 = (int)floorf(by0_f); if (py0 < 0) py0 = 0;
+                int py1 = (int)ceilf(by1_f);  if (py1 >= PLASMA_HEIGHT) py1 = PLASMA_HEIGHT - 1;
+
+                for (int py = py0; py <= py1; py++) {
+                    float *row_s = p->tek_stored + py * PLASMA_WIDTH;
+                    float *row_f = p->tek_flare + py * PLASMA_WIDTH;
+                    for (int px = px0; px <= px1; px++) {
+                        row_s[px] = 0.95f;
+                        row_f[px] = 0.50f;
+                    }
+                }
+            }
+        } else if (ev.type == VEC_EVENT_CHAR) {
+            plato_screen_mode_t mode = (plato_screen_mode_t)ev.mode;
+            if (mode == PLATO_SCREEN_REWRITE || mode == PLATO_SCREEN_ERASE) {
+                int scale = ev.scale > 1 ? (int)ev.scale : 1;
+                int x0 = (int)ev.x0;
+                int x1 = x0 + PLATO_CHAR_WIDTH * scale - 1;
+                int y0 = (int)ev.y0 + (scale > 1 ? (scale - 1) * 5 : 0);
+                int y1 = y0 + PLATO_CHAR_HEIGHT * scale - 1;
+
+                while (opt->term->vector_queue.tail != opt->term->vector_queue.head) {
+                    plato_vector_event_t *next =
+                        &opt->term->vector_queue.events[opt->term->vector_queue.tail];
+                    int next_scale = next->scale > 1 ? (int)next->scale : 1;
+                    int next_x0 = (int)next->x0;
+                    int next_x1 = next_x0 + PLATO_CHAR_WIDTH * next_scale - 1;
+                    int next_y0 = (int)next->y0 + (next_scale > 1 ? (next_scale - 1) * 5 : 0);
+                    int next_y1 = next_y0 + PLATO_CHAR_HEIGHT * next_scale - 1;
+
+                    if (next->type != VEC_EVENT_CHAR ||
+                        next->mode != ev.mode ||
+                        next_scale != scale ||
+                        next_y0 != y0 ||
+                        next_y1 != y1 ||
+                        next_x0 > x1 + 1 ||
+                        next_x1 < x0 - 1) {
+                        break;
+                    }
+
+                    if (next_x0 < x0) x0 = next_x0;
+                    if (next_x1 > x1) x1 = next_x1;
+                    opt->term->vector_queue.tail =
+                        (opt->term->vector_queue.tail + 1) % MAX_VECTOR_EVENTS;
+                }
+
+                plato_tek_resync_box_from_fb(p->tek_flare, p->tek_stored,
+                                             PLASMA_WIDTH, PLASMA_HEIGHT,
+                                             &opt->term->fb, x0, y0, x1, y1);
+            } else {
+                plato_tek_splat_char(p->tek_flare, p->tek_stored,
+                                     PLASMA_WIDTH, PLASMA_HEIGHT,
+                                     &opt->term->font,
+                                     (plato_charset_t)ev.charset, ev.ch,
+                                     ev.x0, ev.y0, (int)ev.scale, mode,
+                                     &opt->term->fb);
+            }
+        } else if (ev.type == VEC_EVENT_ERASE) {
+            memset(p->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
+            /* Grace Period anti-strobe di 1.0 secondo */
+            if (now_sec >= p->tek_erase_grace_until) {
+                p->tek_erase_time = now_sec;
+            }
+            p->tek_erase_grace_until = now_sec + 1.0;
+        }
+    }
+}
+
+
+/* ========================================================================= */
+/* TEKTRONIX 4014 DVBST RENDER ENGINE (Transient Flare + Stored + Erase Flash) */
+/* ========================================================================= */
+
+static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_sec, int tek_baud) {
+    if (!opt || !opt->state || !opt->term || !output) return;
+    struct PLATOPlasmaState *p = opt->state;
+    if (!p->tek_flare || !p->tek_stored) return;
+
+    float dt = p->lastTime > 0.0 ? (float)(now_sec - p->lastTime) : (1.0f / 60.0f);
+    p->lastTime = now_sec;
+    dt = plasmaClamp(dt, 0.0005f, 0.1f);
+
+    /* 1. Assorbi i vettori dalla coda vettoriale con pacing Tektronix */
+    plato_tek_drain_queue(opt, now_sec, tek_baud);
+
+    /* 2. Fisica dell'Erase Flash (Scarica Dielettrica violenta di ~400ms) */
+    float erase_flash = 0.0f;
+    if (p->tek_erase_time > 0.0) {
+        double elapsed = now_sec - p->tek_erase_time;
+        if (elapsed < 0.400) {
+            float t = (float)(elapsed / 0.400);
+            erase_flash = (1.0f - t) * (1.0f - t); /* Decadimento quadratico */
+        } else {
+            p->tek_erase_time = 0.0;
+        }
+    }
+
+    /* 3. Decadimento del Transient Flare (Bagliore transitorio accecante, ~45ms) */
+    float flare_decay = expf(-dt / 0.045f);
+    bool has_activity = (erase_flash > 0.001f);
+
+    /* 4. Sintesi Cromatica P31 Phosphor HDR nello spazio 2048x2048 */
+    for (size_t i = 0; i < (size_t)PLASMA_PIXELS; i++) {
+        float f = p->tek_flare[i];
+        float s = p->tek_stored[i];
+
+        f *= flare_decay;
+        if (f < 0.001f) f = 0.0f;
+        else has_activity = true;
+        p->tek_flare[i] = f;
+
+        /* Flood Gun Ambient Glow: sottile emissione di fondo reale dello schermo DVBST */
+        float bg_glow = 0.015f;
+
+        if (f <= 0.0001f && s <= 0.0001f && erase_flash <= 0.0001f) {
+            /* Nero caldo fluorescente P31 delle flood guns a riposo */
+            output[i] = plasmaRGBA(bg_glow * 0.3f, bg_glow * 1.0f, bg_glow * 0.4f);
+            continue;
+        }
+
+        /* Stored state bistabile: brillantezza piena al 92% (invece di 60%) */
+        float stored_lum = (s > 1.0f ? 1.0f : s) * 0.92f;
+
+        /* Modello Iper-Saturazione Termoluminescente (White-Hot Core)
+           flare_base: alone fluorescente P31 lineare (Emerald Bloom)
+           core_burn: sovraccarico del fosforo che satura RGB a bianco (Decadimento quadratico rapido) */
+        float flare_base = f * 2.20f;
+        float core_burn  = f * f * 2.00f;
+
+        /* P31 Phosphor Spectrum radioso: Verde smeraldo profondo, Bloom verde brillante, Core BIANCO incandescente */
+        float r = bg_glow * 0.3f + stored_lum * 0.16f + flare_base * 0.30f + core_burn + erase_flash * 0.35f;
+        float g = bg_glow * 1.0f + stored_lum * 0.96f + flare_base * 1.00f + core_burn + erase_flash * 0.98f;
+        float b = bg_glow * 0.4f + stored_lum * 0.30f + flare_base * 0.10f + core_burn + erase_flash * 0.40f;
+
+        output[i] = plasmaRGBA(r, g, b);
+    }
+
+    if (has_activity || opt->term->vector_queue.tail != opt->term->vector_queue.head) {
+        opt->state->animateUntil = now_sec + 0.080;
+    }
+    opt->last_was_full = true;
+}
+
 static void crtRender(plato_optical_t *opt, uint32_t *output, double now_sec) {
     struct PLATOPlasmaState *p = opt->state;
     float deltaTime = p->lastTime > 0.0 ? (float)(now_sec - p->lastTime) : 1.0f / 60.0f;
@@ -829,6 +1279,8 @@ void plato_optical_invalidate(plato_optical_t *opt) {
     if (opt && opt->state) {
         opt->state->tilesInitialized = false;
         opt->state->lastTime = 0.0;
+        opt->state->tek_erase_time = 0.0;
+        opt->state->tek_erase_grace_until = 0.0;
     }
 }
 
@@ -875,6 +1327,7 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
         opt->state->tilesInitialized = false; /* Forza re-inizializzazione e ridisegno di tutti i tile */
         opt->state->lastTime = 0.0;
         double dur = (prof->display_mode == 4) ? new_crt_decay_dur : new_decay_dur;
+        if (prof->display_mode == 5) dur = 0.50;
         if (dur < 0.10) dur = 0.10;
         opt->state->animateUntil = now_sec + dur;
     }
@@ -898,6 +1351,24 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
         opt->last_was_full = false;
     } else if (prof->display_mode == 4) {
         crtRender(opt, out_bgra, now_sec);
+    } else if (prof->display_mode == 5) {
+        if (!opt->state->tilesInitialized) {
+            memset(opt->state->tek_flare, 0, (size_t)PLASMA_PIXELS * sizeof(float));
+            memset(opt->state->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
+            for (int y = 0; y < PLATO_HEIGHT; y++) {
+                int ry = (PLATO_HEIGHT - 1) - y;
+                for (int x = 0; x < PLATO_WIDTH; x++) {
+                    if (plato_fb_get_pixel(&term->fb, x, y)) {
+                        float cx = (float)x * (float)PLASMA_SCALE + 2.0f;
+                        float cy = (float)ry * (float)PLASMA_SCALE + 2.0f;
+                        plato_tek_splat_point(opt->state->tek_flare, opt->state->tek_stored,
+                                              PLASMA_WIDTH, PLASMA_HEIGHT, cx, cy, 1.15f, 1.75f, 0.95f);
+                    }
+                }
+            }
+            opt->state->tilesInitialized = true;
+        }
+        tektronixRender(opt, out_bgra, now_sec, prof->tek_baud_rate);
     } else {
         plasmaRender(opt, out_bgra, now_sec);
         if (prof->display_mode == 2) {

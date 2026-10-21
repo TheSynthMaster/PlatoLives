@@ -1,3 +1,13 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+#if !defined(_POSIX_C_SOURCE) || (_POSIX_C_SOURCE < 199309L)
+#undef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 199309L
+#endif
 #include "plato/plato_terminal.h"
 #include <string.h>
 
@@ -6,12 +16,78 @@ static void terminal_ram_write_word(plato_terminal_t *term, uint16_t address, ui
     term->ram[(uint16_t)(address + 1u)] = (uint8_t)(value >> 8);
 }
 
+
+#if defined(_WIN32)
+#include <windows.h>
+static uint64_t plato_sys_time_us(void) {
+    static LARGE_INTEGER freq;
+    static int initialized = 0;
+    if (!initialized) {
+        QueryPerformanceFrequency(&freq);
+        initialized = 1;
+    }
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (uint64_t)((counter.QuadPart * 1000000ULL) / freq.QuadPart);
+}
+#else
+#include <time.h>
+static uint64_t plato_sys_time_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+}
+#endif
+
+void plato_terminal_push_vector(plato_terminal_t *term, plato_vector_type_t type, float x0, float y0, float x1, float y1, plato_screen_mode_t mode) {
+    if (!term) return;
+    
+    uint32_t next_head = (term->vector_queue.head + 1) % MAX_VECTOR_EVENTS;
+    if (next_head == term->vector_queue.tail) {
+        return; /* Ring buffer saturo: drop non bloccante */
+    }
+    
+    plato_vector_event_t *ev = &term->vector_queue.events[term->vector_queue.head];
+    ev->timestamp_us = plato_sys_time_us();
+    ev->type = type;
+    ev->x0 = x0;
+    ev->y0 = y0;
+    ev->x1 = x1;
+    ev->y1 = y1;
+    ev->mode = (uint8_t)mode;
+    
+    term->vector_queue.head = next_head;
+}
+
+
+void plato_terminal_push_char(plato_terminal_t *term, uint8_t charset, uint8_t ch, int x, int y, int scale, plato_screen_mode_t mode) {
+    if (!term) return;
+    uint32_t next_head = (term->vector_queue.head + 1) % MAX_VECTOR_EVENTS;
+    if (next_head == term->vector_queue.tail) {
+        return;
+    }
+    plato_vector_event_t *ev = &term->vector_queue.events[term->vector_queue.head];
+    ev->timestamp_us = plato_sys_time_us();
+    ev->type = VEC_EVENT_CHAR;
+    ev->x0 = (float)x;
+    ev->y0 = (float)y;
+    ev->x1 = 0.0f;
+    ev->y1 = 0.0f;
+    ev->ch = ch;
+    ev->charset = charset;
+    ev->scale = (uint8_t)scale;
+    ev->mode = (uint8_t)mode;
+    term->vector_queue.head = next_head;
+}
+
 void plato_terminal_reset(plato_terminal_t *term) {
     if (!term) return;
 
     term->x = 0;
     term->y = 496;
     term->margin_x = 0;
+    term->vector_queue.head = 0;
+    term->vector_queue.tail = 0;
     term->delay_requested = false;
 
     memset(term->ram, 0, sizeof(term->ram));
@@ -30,6 +106,8 @@ void plato_terminal_init(plato_terminal_t *term) {
     term->x = 0;
     term->y = 496;
     term->margin_x = 0;
+    term->vector_queue.head = 0;
+    term->vector_queue.tail = 0;
     term->palette = PLATO_PALETTE_ORANGE_PLASMA;
     term->transport = NULL;
     term->beep_callback = NULL;

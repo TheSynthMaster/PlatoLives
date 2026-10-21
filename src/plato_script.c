@@ -4,10 +4,12 @@
 #define _XOPEN_SOURCE 700
 
 #include "plato/plato_script.h"
+#include "plato/plato_version.h"
 #include "plato/plato_keyboard.h"
 #include "plato/plato_protocol.h"
 #include "plato/plato_transport.h"
 #include "plato/plato_ringbuf.h"
+#include "plato/plato_profile.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -710,6 +712,124 @@ static void* script_worker(void *arg) {
                 printf("[Script] Diagnostic logging %s\n", en ? "enabled" : "disabled");
                 fflush(stdout);
             }
+        } else if (strcmp(op, "disconnect") == 0 || strcmp(op, "disconnetti") == 0) {
+            if (r->term && r->term->transport) {
+                printf("[Script] Disconnecting cleanly from active session...\n");
+                fflush(stdout);
+                plato_transport_disconnect(r->term->transport);
+                plato_protocol_init(&r->term->decoder);
+                plato_terminal_clear_text(r->term);
+            } else {
+                printf("[Script] Disconnect (no active transport/headless)\n");
+                fflush(stdout);
+            }
+        } else if (strcmp(op, "reconnect") == 0 || strcmp(op, "riconnetti") == 0) {
+            char target_host[128] = {0};
+            int target_port = 0;
+            if (r->term && r->term->transport && r->term->transport->host[0] != '\0') {
+                snprintf(target_host, sizeof(target_host), "%s", r->term->transport->host);
+                target_port = r->term->transport->port;
+            } else {
+                plato_profile_list_t plist;
+                if (plato_profiles_load(&plist)) {
+                    plato_profile_t *def_p = plato_profiles_get_default(&plist);
+                    if (def_p && def_p->host[0] != '\0') {
+                        snprintf(target_host, sizeof(target_host), "%s", def_p->host);
+                        target_port = def_p->port;
+                    }
+                }
+                if (target_host[0] == '\0') {
+                    snprintf(target_host, sizeof(target_host), "%s", CYBER1_DEFAULT_HOST);
+                    target_port = CYBER1_DEFAULT_PORT;
+                }
+            }
+            if (r->term && r->term->transport) {
+                printf("[Script] Reconnecting to %s:%d...\n", target_host, target_port);
+                fflush(stdout);
+                plato_transport_disconnect(r->term->transport);
+                plato_protocol_init(&r->term->decoder);
+                plato_terminal_clear_text(r->term);
+                bool ok = plato_transport_connect(r->term->transport, target_host, target_port);
+                if (ok) {
+                    printf("[Script] Reconnected successfully to %s:%d\n", target_host, target_port);
+                } else {
+                    fprintf(stderr, "[Script] Reconnect failed to %s:%d\n", target_host, target_port);
+                }
+                fflush(stdout);
+                fflush(stderr);
+            } else {
+                printf("[Script] Reconnect to %s:%d (headless/no transport)\n", target_host, target_port);
+                fflush(stdout);
+            }
+        } else if (strcmp(op, "connect") == 0 || strcmp(op, "connetti") == 0) {
+            trim_s(av);
+            strip_q(av);
+            char target_host[128] = {0};
+            int target_port = 0;
+            if (strcasecmp(av, "last") == 0 || strcasecmp(av, "reconnect") == 0) {
+                if (r->term && r->term->transport && r->term->transport->host[0] != '\0') {
+                    snprintf(target_host, sizeof(target_host), "%s", r->term->transport->host);
+                    target_port = r->term->transport->port;
+                }
+            } else if (strcasecmp(av, "standard") == 0 || strcasecmp(av, "default") == 0 || strlen(av) == 0) {
+                plato_profile_list_t plist;
+                if (plato_profiles_load(&plist)) {
+                    plato_profile_t *def_p = plato_profiles_get_default(&plist);
+                    if (def_p && def_p->host[0] != '\0') {
+                        snprintf(target_host, sizeof(target_host), "%s", def_p->host);
+                        target_port = def_p->port;
+                    }
+                }
+                if (target_host[0] == '\0') {
+                    snprintf(target_host, sizeof(target_host), "%s", CYBER1_DEFAULT_HOST);
+                    target_port = CYBER1_DEFAULT_PORT;
+                }
+            } else {
+                plato_profile_list_t plist;
+                bool found = false;
+                if (plato_profiles_load(&plist)) {
+                    for (size_t pi = 0; pi < plist.count; pi++) {
+                        if (strcasecmp(plist.profiles[pi].name, av) == 0 ||
+                            strcasecmp(plist.profiles[pi].id, av) == 0) {
+                            snprintf(target_host, sizeof(target_host), "%s", plist.profiles[pi].host);
+                            target_port = plist.profiles[pi].port;
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) {
+                    char hbuf[128] = {0};
+                    int pnum = CYBER1_DEFAULT_PORT;
+                    if (sscanf(av, "%127[^:]:%d", hbuf, &pnum) >= 1) {
+                        snprintf(target_host, sizeof(target_host), "%s", hbuf);
+                        target_port = pnum;
+                    } else {
+                        fprintf(stderr, "[Script] Unknown profile or endpoint: \"%s\"\n", av);
+                        fflush(stderr);
+                    }
+                }
+            }
+            if (target_host[0] != '\0') {
+                if (r->term && r->term->transport) {
+                    printf("[Script] Connecting to %s:%d...\n", target_host, target_port);
+                    fflush(stdout);
+                    plato_transport_disconnect(r->term->transport);
+                    plato_protocol_init(&r->term->decoder);
+                    plato_terminal_clear_text(r->term);
+                    bool ok = plato_transport_connect(r->term->transport, target_host, target_port);
+                    if (ok) {
+                        printf("[Script] Connected successfully to %s:%d\n", target_host, target_port);
+                    } else {
+                        fprintf(stderr, "[Script] Connect failed to %s:%d\n", target_host, target_port);
+                    }
+                    fflush(stdout);
+                    fflush(stderr);
+                } else {
+                    printf("[Script] Connect to %s:%d (headless/no transport)\n", target_host, target_port);
+                    fflush(stdout);
+                }
+            }
         } else if (strcmp(op, "renderer") == 0 || strcmp(op, "persistence") == 0 ||
                    strcmp(op, "distortion") == 0 || strcmp(op, "beam") == 0 ||
                    strcmp(op, "display") == 0 || strcmp(op, "plasma-log") == 0) {
@@ -919,7 +1039,7 @@ int plato_script_run_file(const char *filepath, const char *host, int port) {
 
 static const char *s_manual_part1 =
 "================================================================================\n"
-"                    PLATOLIVES SCRIPTING ENGINE REFERENCE (v4.5)\n"
+"                    PLATOLIVES SCRIPTING ENGINE REFERENCE (v" PLATO_VERSION_STRING ")\n"
 "================================================================================\n\n"
 "1. GENERAL SYNTAX & RULES\n"
 "--------------------------------------------------------------------------------\n"
@@ -985,14 +1105,26 @@ static const char *s_manual_part2 =
 "          SHIFT-STOP, SHIFT-NEXT, SHIFT-HELP, SHIFT-LAB, SHIFT-DATA, SHIFT-EDIT,\n"
 "          DIVIDE, MULTIPLY, ASSIGN, SUPER, SUB, FONT, UP, DOWN, LEFT, RIGHT, TAB\n"
 "    Examples: key NEXT  |  key SHIFT-STOP\n\n"
-"6. TIMING, DELAYS & PACING\n"
+"6. NETWORK AUTOMATION & RECOVERY\n"
+"--------------------------------------------------------------------------------\n"
+"- disconnect (Clean Session Terminate): disconnect\n"
+"    Gracefully closes active network transport, resets decoder and clears terminal.\n"
+"- reconnect (Self-Healing Fast Reconnect): reconnect\n"
+"    Immediately resets state and reconnects to active/last used host and port.\n"
+"- connect (Connection Profile / Endpoint):\n"
+"    connect <profile_name>       (Connect to named profile from Profile Manager)\n"
+"    connect standard             (Connect to default server / Cyber1)\n"
+"    connect last                 (Reconnect to last active session endpoint)\n"
+"    connect <host>:<port>        (Direct network connection to arbitrary host)\n"
+"    Examples: connect \"Cyber1\"  |  connect standard  |  connect last\n\n"
+"7. TIMING, DELAYS & PACING\n"
 "--------------------------------------------------------------------------------\n"
 "- wait: wait <time> (e.g. wait 500ms | wait 2s | wait 1500)\n"
 "- Custom Delays:\n"
 "    char-delay <ms>      (Pacing between characters; default: 250ms)\n"
 "    next-delay <ms>      (Delay after NEXT keypress; default: 500ms)\n"
 "    command-delay <ms>   (Delay between script lines; default: 0ms)\n\n"
-"7. SCREENSHOT & DIAGNOSTICS\n"
+"8. SCREENSHOT & DIAGNOSTICS\n"
 "--------------------------------------------------------------------------------\n"
 "- screenshot (512x512 Raw Matrix Image Export):\n"
 "    screenshot \"<filename.png>\"  |  screenshot \"<filename.bmp>\"\n"

@@ -13,4 +13,5 @@
 
 - (instancetype)initWithScriptList:(plato_script_list_t *)list;
 - (void)refreshList;
+- (void)applyCurrentThemeColors;
 @end

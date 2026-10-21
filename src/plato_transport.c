@@ -36,6 +36,7 @@
   #include <netinet/in.h>
   #include <netinet/tcp.h>
   #define plato_close_socket(s) close(s)
+  typedef int SOCKET;
 #endif
 
 static const char* byte_name(uint8_t value) {
@@ -247,12 +248,28 @@ void plato_transport_destroy(plato_transport_t *t) {
     free(t);
 }
 
-bool plato_transport_connect(plato_transport_t *t, const char *host, int port) {
+void plato_transport_cancel_connect(plato_transport_t *t) {
+    if (!t) return;
+    t->cancel_requested = true;
+    if (t->socket_fd >= 0) {
+        shutdown(t->socket_fd, SHUT_RDWR);
+    }
+}
+
+bool plato_transport_is_cancelled(const plato_transport_t *t) {
+    return t ? t->cancel_requested : false;
+}
+
+bool plato_transport_connect_timeout(plato_transport_t *t, const char *host, int port, int timeout_ms) {
     if (!t || !host) return false;
     plato_transport_disconnect(t);
+    t->cancel_requested = false;
     strncpy(t->host, host, sizeof(t->host) - 1);
-    t->host[sizeof(t->host) - 1] = '\0';
+    t->host[sizeof(t->host) - 1] = 0;
     t->port = port;
+    t->last_error[0] = 0;
+
+    if (timeout_ms <= 0) timeout_ms = 5000;
 
     char port_str[16];
     snprintf(port_str, sizeof(port_str), "%d", port);
@@ -260,7 +277,7 @@ bool plato_transport_connect(plato_transport_t *t, const char *host, int port) {
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
-    t->last_error[0] = '\0';
+
     int gai_err = getaddrinfo(host, port_str, &hints, &res);
     if (gai_err != 0) {
         snprintf(t->last_error, sizeof(t->last_error), "%s", gai_strerror(gai_err));
@@ -269,19 +286,125 @@ bool plato_transport_connect(plato_transport_t *t, const char *host, int port) {
 
     int fd = -1;
     for (rp = res; rp != NULL; rp = rp->ai_next) {
-        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (fd == -1) continue;
+        if (t->cancel_requested) {
+            snprintf(t->last_error, sizeof(t->last_error), "Connection cancelled by user");
+            break;
+        }
+
+        fd = (int)socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+
         int nodelay = 1;
         setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&nodelay, sizeof(nodelay));
-        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
-        snprintf(t->last_error, sizeof(t->last_error), "%s", strerror(errno));
-        plato_close_socket(fd);
-        fd = -1;
+
+        /* Imposta modalità non-bloccante per la connessione con timeout e annullamento */
+#ifdef _WIN32
+        u_long nb = 1;
+        ioctlsocket((SOCKET)fd, FIONBIO, &nb);
+#else
+        int flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+#endif
+
+        int conn_res = connect(fd, rp->ai_addr, (socklen_t)rp->ai_addrlen);
+        bool connect_success = false;
+
+        if (conn_res == 0) {
+            connect_success = true;
+        } else {
+#ifdef _WIN32
+            int wsa_err = WSAGetLastError();
+            bool in_progress = (wsa_err == WSAEWOULDBLOCK || wsa_err == WSAEINPROGRESS);
+#else
+            int sock_err = errno;
+            bool in_progress = (sock_err == EINPROGRESS);
+#endif
+            if (!in_progress) {
+#ifdef _WIN32
+                if (wsa_err == WSAECONNREFUSED) snprintf(t->last_error, sizeof(t->last_error), "Connection refused");
+                else if (wsa_err == WSAETIMEDOUT) snprintf(t->last_error, sizeof(t->last_error), "Connection timed out");
+                else if (wsa_err == WSAENETUNREACH || wsa_err == WSAEHOSTUNREACH) snprintf(t->last_error, sizeof(t->last_error), "Host unreachable");
+                else snprintf(t->last_error, sizeof(t->last_error), "Socket error %d", wsa_err);
+#else
+                snprintf(t->last_error, sizeof(t->last_error), "%s", strerror(sock_err));
+#endif
+                plato_close_socket(fd);
+                fd = -1;
+                continue;
+            }
+
+            /* Attesa connessione con fette di 50ms per consentire il cancel reattivo */
+            int elapsed_ms = 0;
+            while (elapsed_ms < timeout_ms) {
+                if (t->cancel_requested) {
+                    snprintf(t->last_error, sizeof(t->last_error), "Connection cancelled by user");
+                    plato_close_socket(fd);
+                    fd = -1;
+                    freeaddrinfo(res);
+                    return false;
+                }
+
+                fd_set wfds, efds;
+                FD_ZERO(&wfds);
+                FD_ZERO(&efds);
+                FD_SET((SOCKET)fd, &wfds);
+                FD_SET((SOCKET)fd, &efds);
+
+                struct timeval tv;
+                tv.tv_sec = 0;
+                tv.tv_usec = 50 * 1000; /* 50 ms */
+
+                int sel = select(fd + 1, NULL, &wfds, &efds, &tv);
+                if (sel > 0) {
+                    int so_error = 0;
+                    socklen_t so_len = sizeof(so_error);
+                    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&so_error, &so_len) == 0) {
+                        if (so_error == 0) {
+                            connect_success = true;
+                            break;
+                        } else {
+#ifdef _WIN32
+                            if (so_error == WSAECONNREFUSED) snprintf(t->last_error, sizeof(t->last_error), "Connection refused");
+                            else if (so_error == WSAETIMEDOUT) snprintf(t->last_error, sizeof(t->last_error), "Connection timed out");
+                            else if (so_error == WSAENETUNREACH || so_error == WSAEHOSTUNREACH) snprintf(t->last_error, sizeof(t->last_error), "Host unreachable");
+                            else snprintf(t->last_error, sizeof(t->last_error), "Socket error %d", so_error);
+#else
+                            snprintf(t->last_error, sizeof(t->last_error), "%s", strerror(so_error));
+#endif
+                            break;
+                        }
+                    }
+                }
+                elapsed_ms += 50;
+            }
+
+            if (!connect_success) {
+                if (elapsed_ms >= timeout_ms && t->last_error[0] == 0) {
+                    snprintf(t->last_error, sizeof(t->last_error), "Connection timed out (%d s)", timeout_ms / 1000);
+                }
+                plato_close_socket(fd);
+                fd = -1;
+                continue;
+            }
+        }
+
+        if (connect_success) {
+            /* Ripristina modalità socket bloccante per normale traffico */
+#ifdef _WIN32
+            u_long blk = 0;
+            ioctlsocket((SOCKET)fd, FIONBIO, &blk);
+#else
+            fcntl(fd, F_SETFL, flags);
+#endif
+            break;
+        }
     }
+
     freeaddrinfo(res);
-    if (fd == -1) {
-        if (t->last_error[0] == '\0') {
-            snprintf(t->last_error, sizeof(t->last_error), "Connection refused");
+
+    if (fd < 0) {
+        if (t->last_error[0] == 0) {
+            snprintf(t->last_error, sizeof(t->last_error), "Connection refused or server unreachable");
         }
         return false;
     }
@@ -289,6 +412,10 @@ bool plato_transport_connect(plato_transport_t *t, const char *host, int port) {
     t->socket_fd = fd;
     t->connected = true;
     return true;
+}
+
+bool plato_transport_connect(plato_transport_t *t, const char *host, int port) {
+    return plato_transport_connect_timeout(t, host, port, 5000);
 }
 
 void plato_transport_disconnect(plato_transport_t *t) {

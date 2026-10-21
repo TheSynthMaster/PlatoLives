@@ -6,7 +6,7 @@
 #include "plato/plato_script.h"
 
 static void print_help(const char *progname) {
-    printf("PlatoLives v4.5 - CDC PLATO IV & Cyber1 Terminal Emulator\n\n");
+    printf("PlatoLives v" PLATO_VERSION_STRING " - CDC PLATO IV & Cyber1 Terminal Emulator\n\n");
     printf("Usage:\n  %s [options] [host] [port]\n\n", progname);
     printf("Options:\n");
     printf("  --script <file>        Execute a PLATO script autonomously (headless)\n");

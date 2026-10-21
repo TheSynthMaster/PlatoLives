@@ -145,11 +145,13 @@ static void coordinate_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
     if (dec->state == STATE_LOAD_COORD) {
         term->x = x; term->y = y; dec->state = STATE_NORMAL; dec->first_line_coord = false;
     } else if (dec->data_mode == PLATO_MODE_POINT) {
+        plato_terminal_push_vector(term, VEC_EVENT_POINT, (float)x, (float)y, (float)x, (float)y, dec->screen_mode);
         plato_draw_point(&term->fb, x, y, dec->screen_mode); term->x = x; term->y = y;
     } else if (dec->data_mode == PLATO_MODE_LINE) {
         if (dec->first_line_coord) { term->x = x; term->y = y; dec->first_line_coord = false; }
         else {
-            plato_draw_line(&term->fb, term->x, term->y, x, y, dec->screen_mode);
+            plato_terminal_push_vector(term, VEC_EVENT_LINE, (float)term->x, (float)term->y, (float)x, (float)y, dec->screen_mode);
+        plato_draw_line(&term->fb, term->x, term->y, x, y, dec->screen_mode);
             plato_transport_log_msg(term->transport, "[LINE] (%d,%d)->(%d,%d) mode=%d fg=0x%08X\n",
                                     term->x, term->y, x, y, dec->screen_mode, term->fb.fg_color);
             term->x = x; term->y = y;
@@ -157,6 +159,7 @@ static void coordinate_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
     } else if (dec->data_mode == PLATO_MODE_BLOCK) {
         if (dec->first_block_coord) { dec->block_x0 = x; dec->block_y0 = y; dec->first_block_coord = false; }
         else {
+            plato_terminal_push_vector(term, VEC_EVENT_BLOCK, (float)dec->block_x0, (float)dec->block_y0, (float)x, (float)y, dec->screen_mode);
             plato_draw_block(&term->fb, dec->block_x0, dec->block_y0, x, y, dec->screen_mode);
             plato_transport_log_msg(term->transport, "[BLOCK] (%d,%d)->(%d,%d) mode=%d fg=0x%08X bg=0x%08X\n",
                                     dec->block_x0, dec->block_y0, x, y, dec->screen_mode, term->fb.fg_color, term->fb.bg_color);
@@ -404,6 +407,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             case 0x03: break;
             case 0x0C:
                 plato_transport_log_msg(term->transport, "[CLEAR SCREEN ESC 0x0C] bg=0x%08X color=%d\n", term->fb.bg_color, term->fb.color_enabled);
+                plato_terminal_push_vector(term, VEC_EVENT_ERASE, 0.0f, 0.0f, 0.0f, 0.0f, PLATO_SCREEN_WRITE);
                 plato_fb_clear(&term->fb); term->x = 0; term->y = 496; term->margin_x = 0;
                 plato_terminal_clear_text(term);
                 dec->char_size = 1;
@@ -561,6 +565,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         int scale = (dec->char_size <= 1) ? 1 : dec->char_size;
         int tracking = (scale > 2) ? (scale * 2 + 2) : (scale == 2 ? 0 : 0);
         int advance = (8 * scale) + tracking;
+        plato_terminal_push_char(term, dec->charset, byte, term->x, term->y, scale, dec->screen_mode);
         plato_draw_char(&term->fb, &term->font, dec->charset, byte, term->x, term->y, dec->screen_mode, scale);
         plato_terminal_put_char(term, term->x, term->y, byte, dec->charset, dec->screen_mode, scale);
         /* In Alpha PLATO l avanzamento orizzontale avvolge modulo 512 senza LF o scroll. */

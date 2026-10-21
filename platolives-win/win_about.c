@@ -1,3 +1,4 @@
+#include "win_theme.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_about.h"
 #include "plato/plato_version.h"
@@ -6,12 +7,8 @@
 
 #define IDC_ABOUT_BTN_CLOSE 601
 
-#define PLATO_PLASMA_COLOR  RGB(255, 110, 0)
-#define PLATO_PLASMA_BRIGHT RGB(255, 160, 40)
-#define PLATO_PLASMA_MUTED  RGB(190, 85, 10)
-#define PLATO_BG_DARK       RGB(16, 12, 10)
-#define PLATO_BTN_BG        RGB(46, 20, 8)
-#define PLATO_BTN_PUSHED    RGB(75, 32, 12)
+#define PLATO_BTN_BG        PLATO_BG_BOX
+#define PLATO_BTN_PUSHED    PLATO_BG_HOVER
 
 typedef struct {
     HWND hwnd;
@@ -44,7 +41,7 @@ static void about_draw_button(about_ctx_t *ctx, DRAWITEMSTRUCT *dis) {
     SelectObject(hdc, oldPen);
 
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, pushed ? RGB(255, 200, 70) : PLATO_PLASMA_COLOR);
+    SetTextColor(hdc, pushed ? PLATO_PLASMA_BRIGHT : PLATO_PLASMA_COLOR);
     HFONT oldFont = (HFONT)SelectObject(hdc, ctx->hFontSub);
     DrawTextW(hdc, L"Close", -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, oldFont);
@@ -79,7 +76,7 @@ static LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
             SetBkMode(hdc, TRANSPARENT);
 
-            /* 2. Titolo PlatoLives v4.5 */
+            /* 2. Titolo PlatoLives */
             SetTextColor(hdc, PLATO_PLASMA_BRIGHT);
             SelectObject(hdc, ctx->hFontTitle);
             RECT rcTitle = { 0, 92, rcClient.right, 122 };

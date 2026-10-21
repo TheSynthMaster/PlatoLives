@@ -14,4 +14,5 @@
 
 - (instancetype)initWithKeymapManager:(plato_keymap_manager_t *)mgr;
 - (void)refreshList;
+- (void)applyCurrentThemeColors;
 @end

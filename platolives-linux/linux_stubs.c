@@ -79,3 +79,7 @@ void  SDL_FreeSurface(void *surface) { (void)surface; }
 void SDL_GL_ResetAttributes(void) {}
 
 int SDL_GL_MakeCurrent(void *window, void *context) { (void)window; (void)context; return 0; }
+
+void SDL_RenderDrawLine(void) {}
+
+int SDL_SetTextureAlphaMod(void *texture, unsigned char alpha) { (void)texture; (void)alpha; return 0; }

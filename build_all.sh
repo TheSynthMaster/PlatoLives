@@ -65,6 +65,7 @@ zig cc -target aarch64-linux-gnu -std=c11 -O2 -s \
     platolives-linux/linux_keymap.c \
     platolives-linux/linux_livetext.c \
     platolives-linux/linux_about.c \
+    platolives-linux/linux_conn.c \
     platolives-linux/linux_hud.c \
     platolives-linux/linux_audio.c \
     platolives-linux/stb_impl.c \
@@ -101,6 +102,7 @@ zig cc -target x86_64-linux-gnu -std=c11 -O2 -s \
     platolives-linux/linux_keymap.c \
     platolives-linux/linux_livetext.c \
     platolives-linux/linux_about.c \
+    platolives-linux/linux_conn.c \
     platolives-linux/linux_hud.c \
     platolives-linux/linux_audio.c \
     platolives-linux/stb_impl.c \
@@ -152,6 +154,7 @@ zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     platolives-win/win_keyref.c \
     platolives-win/win_scriptref.c \
     platolives-win/win_about.c \
+    platolives-win/win_conn.c \
     platolives-win/PlatoLives.rc \
     src/plato_protocol.c \
     src/plato_terminal.c \
@@ -184,6 +187,7 @@ zig cc -target aarch64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     platolives-win/win_keyref.c \
     platolives-win/win_scriptref.c \
     platolives-win/win_about.c \
+    platolives-win/win_conn.c \
     platolives-win/PlatoLives.rc \
     src/plato_protocol.c \
     src/plato_terminal.c \

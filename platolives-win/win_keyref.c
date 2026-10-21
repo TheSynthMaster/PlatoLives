@@ -1,3 +1,4 @@
+#include "win_theme.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_keyref.h"
 #include <stdio.h>
@@ -93,7 +94,7 @@ static void kr_draw_button(keyref_ctx_t *ctx, DRAWITEMSTRUCT *dis, const wchar_t
     SelectObject(hdc, oldPen);
 
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, RGB(255, 110, 0));
+    SetTextColor(hdc, PLATO_PLASMA_COLOR);
     SelectObject(hdc, ctx->hFontUi);
 
     DrawTextW(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -148,7 +149,7 @@ static LRESULT CALLBACK KeyRefWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             RECT bar_rc = { 0, edit_h, rc.right, rc.bottom };
             FillRect(hdc, &bar_rc, ctx->hBrushBarBg);
 
-            HPEN hPenLine = CreatePen(PS_SOLID, 1, RGB(46, 20, 8));
+            HPEN hPenLine = CreatePen(PS_SOLID, 1, PLATO_BG_BOX);
             HPEN oldPen = (HPEN)SelectObject(hdc, hPenLine);
             MoveToEx(hdc, 0, edit_h, NULL);
             LineTo(hdc, rc.right, edit_h);
@@ -164,8 +165,8 @@ static LRESULT CALLBACK KeyRefWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             HDC hdc = (HDC)wParam;
             HWND hCtrl = (HWND)lParam;
             if (hCtrl == ctx->hEdit) {
-                SetTextColor(hdc, RGB(255, 110, 0)); /* Orange Plasma Identico */
-                SetBkColor(hdc, RGB(9, 3, 1));        /* Sfondo Scuro Gas */
+                SetTextColor(hdc, PLATO_PLASMA_COLOR); /* Orange Plasma Identico */
+                SetBkColor(hdc, PLATO_BG_DARK);        /* Sfondo Scuro Gas */
                 return (LRESULT)ctx->hBrushEditBg;
             }
             break;
@@ -227,10 +228,10 @@ void win_keyref_show(HWND hwndParent) {
     wc.lpszClassName = L"PlatoKeyRefClass";
     RegisterClassExW(&wc);
 
-    ctx->hBrushEditBg   = CreateSolidBrush(RGB(9, 3, 1));
-    ctx->hBrushBarBg    = CreateSolidBrush(RGB(10, 4, 1));
-    ctx->hBrushBtnBg    = CreateSolidBrush(RGB(46, 20, 8));
-    ctx->hBrushBtnPushed= CreateSolidBrush(RGB(75, 32, 12));
+    ctx->hBrushEditBg   = CreateSolidBrush(PLATO_BG_DARK);
+    ctx->hBrushBarBg    = CreateSolidBrush(PLATO_BG_DARK);
+    ctx->hBrushBtnBg    = CreateSolidBrush(PLATO_BG_BOX);
+    ctx->hBrushBtnPushed= CreateSolidBrush(PLATO_BG_HOVER);
     ctx->hPenBtnBorder  = CreatePen(PS_SOLID, 1, RGB(80, 35, 12));
 
     ctx->hFontMono = CreateFontW(
@@ -271,7 +272,7 @@ void win_keyref_show(HWND hwndParent) {
         if (set_attr) {
             BOOL dark = TRUE;
             COLORREF cap = RGB(16, 12, 10);
-            COLORREF txt = RGB(255, 110, 0);
+            COLORREF txt = PLATO_PLASMA_COLOR;
             set_attr(ctx->hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
             set_attr(ctx->hwnd, 35, &cap, sizeof(cap));
             set_attr(ctx->hwnd, 36, &txt, sizeof(txt));

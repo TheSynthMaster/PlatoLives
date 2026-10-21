@@ -4,6 +4,7 @@
  */
 
 #include "linux_hud.h"
+#include "linux_theme.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,8 +12,8 @@
 #include "plato/stb_truetype.h"
 #include "fonts/roboto_font_data.h"
 
-#define HUD_WIN_W 420
-#define HUD_WIN_H 290
+#define HUD_WIN_W 380
+#define HUD_WIN_H 210
 
 static SDL_Window *g_hud_win = NULL;
 static SDL_Renderer *g_hud_ren = NULL;
@@ -65,11 +66,12 @@ static void draw_hud_text(SDL_Renderer *ren, float x, float y, const char *str, 
     }
 }
 
-static void draw_hud_box(SDL_Renderer *ren, int x, int y, int w, int h, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b, uint8_t border_r, uint8_t border_g, uint8_t border_b) {
+static void draw_hud_box(SDL_Renderer *ren, int x, int y, int w, int h,
+                         uint8_t bg_r, uint8_t bg_g, uint8_t bg_b,
+                         uint8_t border_r, uint8_t border_g, uint8_t border_b) {
     SDL_Rect rc = { x, y, w, h };
     SDL_SetRenderDrawColor(ren, bg_r, bg_g, bg_b, 255);
     SDL_RenderFillRect(ren, &rc);
-
     SDL_SetRenderDrawColor(ren, border_r, border_g, border_b, 255);
     SDL_RenderDrawRect(ren, &rc);
 }
@@ -77,24 +79,29 @@ static void draw_hud_box(SDL_Renderer *ren, int x, int y, int w, int h, uint8_t 
 void linux_hud_toggle(void) {
     if (g_hud_win) {
         linux_hud_destroy();
-        return;
-    }
+    } else {
+        g_hud_win = SDL_CreateWindow(
+            "PLATO Telemetry HUD",
+            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+            HUD_WIN_W, HUD_WIN_H,
+            SDL_WINDOW_SHOWN
+        );
+        if (!g_hud_win) return;
 
-    g_hud_win = SDL_CreateWindow(
-        "PlatoLives - Performance Telemetry",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        HUD_WIN_W, HUD_WIN_H,
-        SDL_WINDOW_SHOWN
-    );
-    if (!g_hud_win) return;
-
-    g_hud_ren = SDL_CreateRenderer(g_hud_win, -1, SDL_RENDERER_SOFTWARE);
-    if (!g_hud_ren) {
-        g_hud_ren = SDL_CreateRenderer(g_hud_win, -1, 0);
+        g_hud_ren = SDL_CreateRenderer(g_hud_win, -1, SDL_RENDERER_SOFTWARE);
+        if (!g_hud_ren) {
+            g_hud_ren = SDL_CreateRenderer(g_hud_win, -1, 0);
+        }
+        if (!g_hud_ren) {
+            SDL_DestroyWindow(g_hud_win);
+            g_hud_win = NULL;
+            return;
+        }
+        g_hud_font_ready = false;
+        init_hud_font();
+        SDL_RaiseWindow(g_hud_win);
+        g_hud_needs_redraw = true;
     }
-    g_hud_font_ready = false;
-    init_hud_font();
-    g_hud_needs_redraw = true;
 }
 
 bool linux_hud_is_open(void) {
@@ -107,83 +114,127 @@ void linux_hud_update_data(const linux_hud_telemetry_t *telem) {
     g_hud_needs_redraw = true;
 }
 
-void linux_hud_handle_event(const SDL_Event *ev) {
-    if (!g_hud_win) return;
-    uint32_t win_id = SDL_GetWindowID(g_hud_win);
+void linux_hud_update_queue(int tek_queue_count, int display_mode, int tek_baud) {
+    g_hud_data.tek_queue_count = tek_queue_count;
+    g_hud_data.display_mode = display_mode;
+    g_hud_data.tek_baud = tek_baud;
+}
 
-    if (ev->type == SDL_WINDOWEVENT && ev->window.windowID == win_id) {
+void linux_hud_handle_event(const SDL_Event *ev) {
+    if (!ev || !g_hud_win) return;
+    if (ev->type == SDL_WINDOWEVENT && ev->window.windowID == SDL_GetWindowID(g_hud_win)) {
         if (ev->window.event == SDL_WINDOWEVENT_CLOSE) {
             linux_hud_destroy();
-            return;
-        }
-        if (ev->window.event == SDL_WINDOWEVENT_EXPOSED) {
+        } else if (ev->window.event == SDL_WINDOWEVENT_EXPOSED) {
             g_hud_needs_redraw = true;
-        }
-    } else if (ev->type == SDL_KEYDOWN && ev->key.windowID == win_id) {
-        if (ev->key.keysym.sym == SDLK_ESCAPE || ev->key.keysym.sym == SDLK_F12) {
-            linux_hud_destroy();
-            return;
         }
     }
 }
 
-static const char* get_display_mode_name(int mode) {
+static const char *get_display_mode_name(int mode) {
     switch (mode) {
-        case 0: return "Real Plasma (Orange Glow)";
-        case 1: return "Crisp Mono (Pure Vector)";
-        case 2: return "Split Mono (Luminance)";
-        case 3: return "Crisp Color (RGB Matrix)";
-        case 4: return "Real CRT (Phosphor Decay)";
-        default: return "Custom Pipeline";
+        case 0: return "Real Plasma";
+        case 1: return "Crisp Monochrome";
+        case 2: return "Split Monochrome";
+        case 3: return "Crisp Color";
+        case 4: return "Real Color CRT";
+        case 5: return "Real Tektronix 4014";
+        default: return "Unknown";
     }
 }
 
 void linux_hud_render(void) {
-    if (!g_hud_win || !g_hud_ren || !g_hud_needs_redraw) return;
-    g_hud_needs_redraw = false;
+    if (!g_hud_win || !g_hud_ren) return;
 
-    /* Sfondo principale Dark Charcoal Amber */
-    SDL_SetRenderDrawColor(g_hud_ren, 12, 8, 5, 255);
+    linux_theme_colors_t th = linux_theme_current();
+
+    SDL_SetRenderDrawColor(g_hud_ren, th.bg_dark.r, th.bg_dark.g, th.bg_dark.b, 255);
     SDL_RenderClear(g_hud_ren);
 
-    /* 1. Testata Superiore Plasma */
-    draw_hud_box(g_hud_ren, 8, 8, HUD_WIN_W - 16, 36, 22, 12, 6, 95, 45, 12);
-    draw_hud_text(g_hud_ren, 20.0f, 31.0f, "PLATOLIVES REAL-TIME TELEMETRY", 255, 190, 40);
+    /* Riquadro Unico Compatto */
+    draw_hud_box(g_hud_ren, 8, 8, HUD_WIN_W - 16, HUD_WIN_H - 16,
+                 th.bg_box.r, th.bg_box.g, th.bg_box.b,
+                 th.border.r, th.border.g, th.border.b);
 
-    /* Indicatore stato connessione in alto a destra */
-    if (g_hud_data.connected) {
-        draw_hud_text(g_hud_ren, HUD_WIN_W - 130.0f, 31.0f, "[CONNECTED]", 80, 225, 80);
+    draw_hud_text(g_hud_ren, 20.0f, 26.0f, "PLATO TELEMETRY MONITOR", th.bright.r, th.bright.g, th.bright.b);
+
+    /* Linea di separazione */
+    SDL_SetRenderDrawColor(g_hud_ren, th.border.r, th.border.g, th.border.b, 255);
+    SDL_Rect sep_rc = { 16, 36, HUD_WIN_W - 32, 1 }; SDL_RenderFillRect(g_hud_ren, &sep_rc);
+
+    char label[32], val[128];
+    float y = 58.0f;
+    float dy = 24.0f;
+
+    /* Riga 1: USER / SLOT */
+    snprintf(label, sizeof(label), "USER    ");
+    snprintf(val, sizeof(val), "%s", (g_hud_data.user_info[0] ? g_hud_data.user_info : "STANDALONE"));
+    draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+    draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+    y += dy;
+
+    /* Riga 2: FPS */
+    snprintf(label, sizeof(label), "FPS     ");
+    snprintf(val, sizeof(val), "%5.1f", g_hud_data.fps_total);
+    draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+    draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+    y += dy;
+
+    int mode = g_hud_data.display_mode;
+    if (mode == 5) {
+        /* Tektronix 4014: SPEED, QUEUE, CPU */
+        snprintf(label, sizeof(label), "SPEED   ");
+        if (g_hud_data.tek_baud > 0) snprintf(val, sizeof(val), "%d BAUD", g_hud_data.tek_baud);
+        else snprintf(val, sizeof(val), "INSTANT (UNCAPPED)");
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "QUEUE   ");
+        int pct = (int)(((double)g_hud_data.tek_queue_count * 100.0 / 8192.0) + 0.5);
+        if (g_hud_data.tek_queue_count > 0 && pct == 0) pct = 1;
+        snprintf(val, sizeof(val), "%2d%% (%d/8192)", pct, g_hud_data.tek_queue_count);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "CPU     ");
+        snprintf(val, sizeof(val), "%5.1f%%", g_hud_data.cpu_percent);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
+    } else if (mode == 1 || mode == 3) {
+        /* Crisp Mono o Crisp Color: CPU */
+        snprintf(label, sizeof(label), "CPU     ");
+        snprintf(val, sizeof(val), "%5.1f%%", g_hud_data.cpu_percent);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
     } else {
-        draw_hud_text(g_hud_ren, HUD_WIN_W - 145.0f, 31.0f, "[OFFLINE / IDLE]", 200, 100, 30);
+        /* Plasma (0, 2) o CRT (4): PARTIAL, FULL, CPU */
+        snprintf(label, sizeof(label), "PARTIAL ");
+        snprintf(val, sizeof(val), "%5.1f", g_hud_data.fps_partial);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "FULL    ");
+        snprintf(val, sizeof(val), "%5.1f", g_hud_data.fps_full);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "CPU     ");
+        snprintf(val, sizeof(val), "%5.1f%%", g_hud_data.cpu_percent);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
     }
 
-    /* 2. Riquadro Framerate & CPU */
-    draw_hud_box(g_hud_ren, 8, 50, HUD_WIN_W - 16, 75, 16, 10, 6, 65, 30, 8);
-    draw_hud_text(g_hud_ren, 18.0f, 68.0f, "RENDERING PERFORMANCE", 255, 150, 20);
-
-    char buf[128];
-    snprintf(buf, sizeof(buf), "FPS TOTAL:    %5.1f       FULL: %5.1f", g_hud_data.fps_total, g_hud_data.fps_full);
-    draw_hud_text(g_hud_ren, 22.0f, 88.0f, buf, 240, 210, 160);
-
-    snprintf(buf, sizeof(buf), "CPU USAGE:    %5.1f %%     PARTIAL: %5.1f", g_hud_data.cpu_percent, g_hud_data.fps_partial);
-    draw_hud_text(g_hud_ren, 22.0f, 107.0f, buf, 240, 210, 160);
-
-    /* 3. Riquadro Ottica & Display Mode */
-    draw_hud_box(g_hud_ren, 8, 131, HUD_WIN_W - 16, 85, 16, 10, 6, 65, 30, 8);
-    draw_hud_text(g_hud_ren, 18.0f, 149.0f, "DISPLAY & OPTICAL EMULATION", 255, 150, 20);
-
-    snprintf(buf, sizeof(buf), "MODE:         %s", get_display_mode_name(g_hud_data.display_mode));
-    draw_hud_text(g_hud_ren, 22.0f, 169.0f, buf, 240, 210, 160);
-
-    snprintf(buf, sizeof(buf), "PERSISTENCE:  %d ms        DISTORTION: %d %%", g_hud_data.persistence_ms, g_hud_data.distortion);
-    draw_hud_text(g_hud_ren, 22.0f, 189.0f, buf, 240, 210, 160);
-
-    /* 4. Riquadro Sessione Cyber1 */
-    draw_hud_box(g_hud_ren, 8, 222, HUD_WIN_W - 16, 58, 16, 10, 6, 65, 30, 8);
-    draw_hud_text(g_hud_ren, 18.0f, 240.0f, "CYBER1 / PLATO IV SESSION", 255, 150, 20);
-
-    snprintf(buf, sizeof(buf), "USER INFO:    %s", (g_hud_data.user_info[0] ? g_hud_data.user_info : "GUEST / NONE"));
-    draw_hud_text(g_hud_ren, 22.0f, 260.0f, buf, 255, 180, 40);
+    /* Riga inferiore: modalità attiva */
+    char mode_str[64];
+    snprintf(mode_str, sizeof(mode_str), "MODE: %s", get_display_mode_name(mode));
+    draw_hud_text(g_hud_ren, 22.0f, (float)(HUD_WIN_H - 24), mode_str, th.muted.r, th.muted.g, th.muted.b);
 
     SDL_RenderPresent(g_hud_ren);
 }

@@ -31,6 +31,19 @@ file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PLATO_VERSION_RAW LIMIT_COUNT
 string(STRIP "${PLATO_VERSION_RAW}" PLATO_PROJECT_VERSION)
 project(PlatoLives VERSION ${PLATO_PROJECT_VERSION} LANGUAGES C OBJC)
 
+# Sincronizzazione automatica SSOT: genera include/plato/plato_version.h da VERSION
+file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/include/plato/plato_version.h"
+"/* Single Source of Truth - PlatoLives Version Header */
+/* Automatically generated from VERSION file - DO NOT EDIT MANUALLY */
+#ifndef PLATO_VERSION_H
+#define PLATO_VERSION_H
+
+#define PLATO_VERSION_STRING \"${PLATO_PROJECT_VERSION}\"
+#define PLATO_VERSION_WSTRING L\"${PLATO_PROJECT_VERSION}\"
+
+#endif /* PLATO_VERSION_H */
+")
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
@@ -85,6 +98,7 @@ if(APPLE)
         platolives-mac/mac_window.m
         platolives-mac/mac_scripts.m
         platolives-mac/mac_keymap_window.m
+        platolives-mac/mac_conn.m
         platolives-mac/test_runner.m
         src/console_runner.c
     )

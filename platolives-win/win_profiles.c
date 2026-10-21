@@ -1,3 +1,4 @@
+#include "win_theme.h"
 #include "plato/plato_script.h"
 #define WIN32_LEAN_AND_MEAN
 #include "win_profiles.h"
@@ -5,12 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PLATO_PLASMA_COLOR     RGB(255, 110, 0)
-#define PLATO_PLASMA_BRIGHT    RGB(255, 160, 40)
-#define PLATO_PLASMA_DISABLED  RGB(120, 55, 0)
-#define PLATO_BG_DARK          RGB(16, 12, 10)
-#define PLATO_BG_BOX           RGB(24, 18, 14)
-#define PLATO_BG_HOVER         RGB(45, 20, 0)
 
 #define IDC_LIST_PROFILES       201
 #define IDC_EDIT_NAME           202
@@ -44,6 +39,8 @@
 
 #define IDC_LBL_PHOSPHOR_COLOR   226
 #define IDC_COMBO_PHOSPHOR_COLOR 227
+#define IDC_LBL_TEK_BAUD         228
+#define IDC_COMBO_TEK_BAUD       229
 
 typedef struct {
     HWND hwnd;
@@ -56,6 +53,7 @@ typedef struct {
     HWND hLblCrtBeam, hComboCrtBeam;
     HWND hLblCrtDecay, hComboCrtDecay;
     HWND hLblCrtDist, hComboCrtDist;
+    HWND hLblTekBaud, hComboTekBaud;
     HWND hChkFullscreen, hChkDefault, hChkScript, hEditScript;
     HWND hBtnNew, hBtnDelete, hBtnDefault, hBtnConnect, hBtnSave, hBtnClose;
 
@@ -77,6 +75,7 @@ static dlg_ctx_t g_dlg;
 
 static const int g_decay_ms_values[] = { 100, 200, 500, 1000, 2000, 5000 };
 static const int g_crt_decay_ms_values[] = { 20, 200, 500, 1000, 2000, 5000 };
+static const int g_tek_baud_values[9] = { 0, 110, 150, 300, 600, 1200, 2400, 4800, 9600 };
 
 static int index_for_ms(const int *arr, size_t count, int val) {
     for (size_t i = 0; i < count; i++) {
@@ -87,7 +86,8 @@ static int index_for_ms(const int *arr, size_t count, int val) {
 
 static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
     bool isPlasma = (mode == 0 || mode == 2); /* Real Plasma o Split */
-    bool isCRT = (mode == 4);                 /* Real Color CRT */
+    bool isCRT    = (mode == 4);                 /* Real Color CRT */
+    bool isTek    = (mode == 5);                 /* Real Tektronix 4014 (DVBST) */
 
     ShowWindow(ctx->hLblPlasmaDecay, isPlasma ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hComboPlasmaDecay, isPlasma ? SW_SHOW : SW_HIDE);
@@ -101,9 +101,13 @@ static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
     ShowWindow(ctx->hLblCrtDist, isCRT ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hComboCrtDist, isCRT ? SW_SHOW : SW_HIDE);
 
-    /* Phosphor Color disabilitato solo in Crisp Color (modalità 3) */
-    EnableWindow(ctx->hLblPhosphor, mode != 3);
-    EnableWindow(ctx->hComboPhosphor, mode != 3);
+    ShowWindow(ctx->hLblTekBaud, isTek ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hComboTekBaud, isTek ? SW_SHOW : SW_HIDE);
+
+    /* Phosphor Color disabilitato in Crisp Color (3) e Tektronix P31 Storage Tube (5) */
+    bool canOverride = (mode != 3 && mode != 5);
+    EnableWindow(ctx->hLblPhosphor, canOverride);
+    EnableWindow(ctx->hComboPhosphor, canOverride);
 }
 
 static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
@@ -130,6 +134,16 @@ static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
     int cd_idx = index_for_ms(g_crt_decay_ms_values, 6, p->crt_persistence_ms);
     SendMessage(ctx->hComboCrtDecay, CB_SETCURSEL, (WPARAM)cd_idx, 0);
     SendMessage(ctx->hComboCrtDist, CB_SETCURSEL, (WPARAM)p->crt_distortion, 0);
+
+    /* Tektronix Baud Rate */
+    int tb_idx = 6; /* 2400 Baud di default */
+    for (int i = 0; i < 9; i++) {
+        if (g_tek_baud_values[i] == p->tek_baud_rate) {
+            tb_idx = i;
+            break;
+        }
+    }
+    SendMessage(ctx->hComboTekBaud, CB_SETCURSEL, (WPARAM)tb_idx, 0);
 
     SendMessage(ctx->hChkFullscreen, BM_SETCHECK, p->full_screen ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(ctx->hChkDefault, BM_SETCHECK, p->is_default ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -195,6 +209,9 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
     int cd_idx = (int)SendMessage(ctx->hComboCrtDecay, CB_GETCURSEL, 0, 0);
     p->crt_persistence_ms = (cd_idx >= 0 && cd_idx < 6) ? g_crt_decay_ms_values[cd_idx] : 20;
     p->crt_distortion = (int)SendMessage(ctx->hComboCrtDist, CB_GETCURSEL, 0, 0);
+
+    int tb_idx = (int)SendMessage(ctx->hComboTekBaud, CB_GETCURSEL, 0, 0);
+    p->tek_baud_rate = (tb_idx >= 0 && tb_idx < 9) ? g_tek_baud_values[tb_idx] : 2400;
 
     p->full_screen = (SendMessage(ctx->hChkFullscreen, BM_GETCHECK, 0, 0) == BST_CHECKED);
     p->startup_script_enabled = (SendMessage(ctx->hChkScript, BM_GETCHECK, 0, 0) == BST_CHECKED);
@@ -316,6 +333,12 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
             if (wmId == IDC_COMBO_MODE && wmEvent == CBN_SELCHANGE) {
                 int mode = (int)SendMessage(ctx->hComboMode, CB_GETCURSEL, 0, 0);
+                if (mode == 5) {
+                    int cur_b = (int)SendMessage(ctx->hComboTekBaud, CB_GETCURSEL, 0, 0);
+                    if (cur_b <= 0) {
+                        SendMessage(ctx->hComboTekBaud, CB_SETCURSEL, 6, 0); /* Auto-proposta 2400 Baud */
+                    }
+                }
                 dlg_update_visibility(ctx, mode);
                 return 0;
             }
@@ -348,6 +371,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     np.crt_persistence_ms = 20;
                     np.crt_distortion = 2;
                     np.phosphor_color = 0;
+                    np.tek_baud_rate = 2400;
                     snprintf(np.startup_script, sizeof(np.startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
                     plato_profiles_add(ctx->list, &np);
                     ctx->current_index = (int)(ctx->list->count - 1);
@@ -514,6 +538,7 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Split Monochrome");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Crisp Color");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Color CRT");
+    SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Tektronix 4014 (DVBST)");
 
     g_dlg.hLblPhosphor = CreateWindowW(L"STATIC", L"Phosphor Color:", WS_CHILD | WS_VISIBLE, rx + 420, 108, 160, 18, hwnd, (HMENU)IDC_LBL_PHOSPHOR_COLOR, wc.hInstance, NULL);
     g_dlg.hComboPhosphor = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 420, 126, 400, 150, hwnd, (HMENU)IDC_COMBO_PHOSPHOR_COLOR, wc.hInstance, NULL);
@@ -559,6 +584,19 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboCrtDist, CB_ADDSTRING, 0, (LPARAM)L"None (Flat)");
     SendMessageW(g_dlg.hComboCrtDist, CB_ADDSTRING, 0, (LPARAM)L"Barrel (Curved Glass)");
     SendMessageW(g_dlg.hComboCrtDist, CB_ADDSTRING, 0, (LPARAM)L"Cylindrical");
+
+    /* Controlli Real Tektronix 4014 (DVBST) */
+    g_dlg.hLblTekBaud = CreateWindowW(L"STATIC", L"Tektronix Connection Speed:", WS_CHILD, rx, 156, 400, 18, hwnd, (HMENU)IDC_LBL_TEK_BAUD, wc.hInstance, NULL);
+    g_dlg.hComboTekBaud = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx, 174, 400, 150, hwnd, (HMENU)IDC_COMBO_TEK_BAUD, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"Instant (Uncapped)");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"110 Baud");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"150 Baud");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"300 Baud");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"600 Baud");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"1200 Baud");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"2400 Baud");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"4800 Baud");
+    SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"9600 Baud");
 
     /* Checkbox Opzioni */
     g_dlg.hChkFullscreen = CreateWindowW(L"BUTTON", L"Launch in Full Screen", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 206, 240, 18, hwnd, (HMENU)IDC_CHK_FULLSCREEN, wc.hInstance, NULL);

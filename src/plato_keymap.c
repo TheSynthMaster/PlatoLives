@@ -151,6 +151,32 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         p->bindings[p->binding_count++] = b;
     }
 
+    /* 5. Profilo Built-in: WADX Mode (Standard Direzionale PLATO / TUTOR) */
+    {
+        plato_keymap_profile_t *p = &mgr->profiles[mgr->profile_count++];
+        memset(p, 0, sizeof(*p));
+        snprintf(p->name, sizeof(p->name), "WADX");
+        snprintf(p->description, sizeof(p->description), "Classic PLATO / TUTOR directional layout (W=Up, A=Left, D=Right, X=Down)");
+        p->is_builtin = true;
+
+        plato_key_binding_t b;
+        memset(&b, 0, sizeof(b));
+        b.type = PLATO_BIND_ACTION_RAW_BYTE;
+        b.modifiers = 0;
+
+        b.vkey = PLATO_VKEY_UP;    b.target.raw_byte = 'w'; snprintf(b.label, sizeof(b.label), "Move Up (W)");
+        p->bindings[p->binding_count++] = b;
+
+        b.vkey = PLATO_VKEY_DOWN;  b.target.raw_byte = 'x'; snprintf(b.label, sizeof(b.label), "Move Down (X)");
+        p->bindings[p->binding_count++] = b;
+
+        b.vkey = PLATO_VKEY_LEFT;  b.target.raw_byte = 'a'; snprintf(b.label, sizeof(b.label), "Move Left (A)");
+        p->bindings[p->binding_count++] = b;
+
+        b.vkey = PLATO_VKEY_RIGHT; b.target.raw_byte = 'd'; snprintf(b.label, sizeof(b.label), "Move Right (D)");
+        p->bindings[p->binding_count++] = b;
+    }
+
     snprintf(mgr->active_profile_name, sizeof(mgr->active_profile_name), "%s", mgr->profiles[0].name);
 }
 

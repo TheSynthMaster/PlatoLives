@@ -13,13 +13,14 @@ typedef struct {
     char name[64];
     char host[128];
     int port;
-    int display_mode;        /* 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT */
+    int display_mode;        /* 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT, 5: Real Tektronix */
     int persistence_ms;      /* 100, 200, 500, 1000, 2000, 5000 */
     int plasma_distortion;   /* 0: None, 1: Barrel, 2: Cylindrical */
     int crt_beam_level;      /* 0: Standard, 1: High, 2: Ultra */
     int crt_persistence_ms;  /* 20, 200, 500, 1000, 2000, 5000 */
     int crt_distortion;      /* 0: None, 1: Barrel, 2: Cylindrical */
     int phosphor_color;      /* 0: Default (Orange/White), 1: Green P31, 2: Amber P40 */
+    int tek_baud_rate;       /* 0: Instant; otherwise 110, 150, 300, 600, 1200, 2400, 4800 or 9600 bps */
     bool full_screen;
     bool is_default;
     bool startup_script_enabled;

@@ -29,11 +29,15 @@ struct plato_transport {
     bool rx_previous_valid;
     bool tx_previous_valid;
     char last_error[128];
+    volatile bool cancel_requested;
 };
 
 plato_transport_t* plato_transport_create(void);
 void plato_transport_destroy(plato_transport_t *t);
 bool plato_transport_connect(plato_transport_t *t, const char *host, int port);
+bool plato_transport_connect_timeout(plato_transport_t *t, const char *host, int port, int timeout_ms);
+void plato_transport_cancel_connect(plato_transport_t *t);
+bool plato_transport_is_cancelled(const plato_transport_t *t);
 void plato_transport_disconnect(plato_transport_t *t);
 int plato_transport_send(plato_transport_t *t, const uint8_t *data, size_t len);
 int plato_transport_recv(plato_transport_t *t, uint8_t *buf, size_t max_len);

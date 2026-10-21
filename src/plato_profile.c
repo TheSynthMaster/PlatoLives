@@ -54,6 +54,7 @@ static void init_default_cyber1(plato_profile_list_t *list) {
     p->crt_persistence_ms = 20;  /* 20 ms Default CRT */
     p->crt_distortion = 2;       /* Cylindrical */
     p->phosphor_color = 0;       /* Default (Orange/Standard) */
+    p->tek_baud_rate = 2400;    /* Default Tektronix Speed */
     p->full_screen = false;
     p->is_default = true;
     p->startup_script_enabled = false;
@@ -101,6 +102,7 @@ bool plato_profiles_load(plato_profile_list_t *list) {
                 cur->crt_persistence_ms = 20;
                 cur->crt_distortion = 2;
                 cur->phosphor_color = 0;
+                cur->tek_baud_rate = 2400;
             } else {
                 cur = NULL;
             }
@@ -125,6 +127,11 @@ bool plato_profiles_load(plato_profile_list_t *list) {
         else if (strcmp(p, "crt_persistence_ms") == 0) cur->crt_persistence_ms = atoi(val);
         else if (strcmp(p, "crt_distortion") == 0) cur->crt_distortion = atoi(val);
         else if (strcmp(p, "phosphor_color") == 0) cur->phosphor_color = atoi(val);
+        else if (strcmp(p, "tek_baud_rate") == 0) {
+            int baud = atoi(val);
+            cur->tek_baud_rate = (baud == 110 || baud == 150 || baud == 300 || baud == 600 ||
+                                  baud == 1200 || baud == 2400 || baud == 4800 || baud == 9600) ? baud : 0;
+        }
         else if (strcmp(p, "full_screen") == 0) cur->full_screen = (atoi(val) != 0);
         else if (strcmp(p, "is_default") == 0) {
             cur->is_default = (atoi(val) != 0);
@@ -177,6 +184,7 @@ bool plato_profiles_save(const plato_profile_list_t *list) {
         fprintf(f, "crt_persistence_ms=%d\n", p->crt_persistence_ms);
         fprintf(f, "crt_distortion=%d\n", p->crt_distortion);
         fprintf(f, "phosphor_color=%d\n", p->phosphor_color);
+        fprintf(f, "tek_baud_rate=%d\n", p->tek_baud_rate);
         fprintf(f, "full_screen=%d\n", p->full_screen ? 1 : 0);
         fprintf(f, "is_default=%d\n", p->is_default ? 1 : 0);
         fprintf(f, "startup_script_enabled=%d\n", p->startup_script_enabled ? 1 : 0);

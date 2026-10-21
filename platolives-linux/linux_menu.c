@@ -1,4 +1,5 @@
 #include "linux_menu.h"
+#include "linux_theme.h"
 #include "linux_hud.h"
 #include "linux_gl.h"
 #include <SDL2/SDL.h>
@@ -18,16 +19,16 @@
 /* Palette Dark Amber Canonica PLATO (Endianness Little-Endian Little-Safe) */
 #define COLOR_RGBA(r, g, b, a) ((uint32_t)(r) | ((uint32_t)(g) << 8) | ((uint32_t)(b) << 16) | ((uint32_t)(a) << 24))
 
-#define COL_BG           COLOR_RGBA(16, 10, 6, 255)   /* Dark plasma background */
-#define COL_BAR_BG       COLOR_RGBA(34, 17, 6, 255)   /* Barra superiore Plasma Look */
-#define COL_BORDER       COLOR_RGBA(190, 85, 12, 255)  /* Bordo radiante Plasma */
-#define COL_HOVER        COLOR_RGBA(96, 42, 10, 255)   /* Hover ambra plasma acceso */
-#define COL_HOVER_BORDER COLOR_RGBA(255, 140, 20, 255) /* Bordo hover ambra brillante */
-#define COL_TEXT         COLOR_RGBA(255, 140, 20, 255) /* Testo ambra caldo #FF8C14 */
-#define COL_TEXT_HI      COLOR_RGBA(255, 215, 60, 255) /* Testo oro ambra acceso #FFD73C */
-#define COL_TEXT_DIM     COLOR_RGBA(136, 68, 0, 255)   /* Dim amber #884400 */
-#define COL_SHORTCUT     COLOR_RGBA(204, 102, 0, 255)  /* Shortcut amber #CC6600 */
-#define COL_SEPARATOR    COLOR_RGBA(56, 26, 0, 255)    /* Separator #381A00 */
+#define COL_BG           (linux_theme_current().rgba_bg_dark)
+#define COL_BAR_BG       (linux_theme_current().rgba_bg_box)
+#define COL_BORDER       (linux_theme_current().rgba_border)
+#define COL_HOVER        (linux_theme_current().rgba_hover_bg)
+#define COL_HOVER_BORDER (linux_theme_current().rgba_bright)
+#define COL_TEXT         (linux_theme_current().rgba_normal)
+#define COL_TEXT_HI      (linux_theme_current().rgba_bright)
+#define COL_TEXT_DIM     (linux_theme_current().rgba_disabled)
+#define COL_SHORTCUT     (linux_theme_current().rgba_dim)
+#define COL_SEPARATOR    (linux_theme_current().rgba_border)
 #define DROPDOWN_GAP     3                             /* Separatore menu-dropdown */
 
 /* Motore TrueType ad Anti-Aliasing Vettoriale Integrato */
@@ -190,6 +191,7 @@ enum {
     SUB_VIEW_CRT_BEAM,
     SUB_VIEW_CRT_DECAY,
     SUB_VIEW_CRT_DIST,
+    SUB_VIEW_TEK_SPEED,
     SUB_VIEW_OVERRIDE_COLOR
 };
 
@@ -309,11 +311,14 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"CRT Persistence", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_CRT_DECAY, false, false, !isCRT};
         it[n++] = (gui_menu_item_t){"CRT Distortion", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_CRT_DIST, false, false, !isCRT};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Real Tektronix 4014 (DVBST)", NULL, ACT_VIEW_REAL_TEKTRONIX, TYPE_ITEM, 0, true, p->display_mode == 5, false};
+        it[n++] = (gui_menu_item_t){"Tektronix Connection Speed", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_TEK_SPEED, false, false, (p->display_mode != 5)};
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Full Screen", "F11", ACT_VIEW_FULLSCREEN, TYPE_ITEM, 0, false, ctx->fullscreen, false};
         it[n++] = (gui_menu_item_t){"Show Performance HUD (FPS/CPU)", "F12", ACT_VIEW_FPS_HUD, TYPE_ITEM, 0, false, linux_hud_is_open(), false};
         it[n++] = (gui_menu_item_t){"Hide Menu Bar", "Ctrl+Shift+M", ACT_VIEW_HIDE_MENU_BAR, TYPE_ITEM, 0, true, ctx->hide_menu_bar, false};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
-        it[n++] = (gui_menu_item_t){"Override Color", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_OVERRIDE_COLOR, false, false, (p->display_mode == 3)};
+        it[n++] = (gui_menu_item_t){"Override Color", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_OVERRIDE_COLOR, false, false, (p->display_mode == 5)};
         top[2].item_count = n;
     }
 
@@ -363,6 +368,7 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
     }
 
     /* 6. Micro Tutor */
+    bool isTek = (p->display_mode == 5);
     top[5].title = "Micro Tutor";
     top[5].x = x_cur;
     top[5].width = get_text_width(top[5].title) + 18;
@@ -370,8 +376,8 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
     {
         gui_menu_item_t *it = top[5].items;
         int n = 0;
-        it[n++] = (gui_menu_item_t){"Load and Boot from MTE...", NULL, ACT_MT_BOOT_MTE, TYPE_ITEM, 0, false, false, false};
-        it[n++] = (gui_menu_item_t){"Enable Z80 Diagnostic Log", NULL, ACT_MT_TOGGLE_LOG, TYPE_ITEM, 0, false, ctx->z80_log, false};
+        it[n++] = (gui_menu_item_t){"Load and Boot from MTE...", NULL, ACT_MT_BOOT_MTE, TYPE_ITEM, 0, false, false, isTek};
+        it[n++] = (gui_menu_item_t){"Enable Z80 Diagnostic Log", NULL, ACT_MT_TOGGLE_LOG, TYPE_ITEM, 0, false, ctx->z80_log, isTek};
         top[5].item_count = n;
     }
 
@@ -455,6 +461,19 @@ static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, in
             items[n++] = (gui_menu_item_t){"Barrel (Curved Glass)", NULL, ACT_VIEW_CRT_DIST_BARREL, TYPE_ITEM, 0, true, p->crt_distortion == 1, false};
             items[n++] = (gui_menu_item_t){"Cylindrical", NULL, ACT_VIEW_CRT_DIST_CYL, TYPE_ITEM, 0, true, p->crt_distortion == 2, false};
             break;
+        case SUB_VIEW_TEK_SPEED: {
+            int baud = p->tek_baud_rate;
+            items[n++] = (gui_menu_item_t){"Instant (Uncapped)", NULL, ACT_VIEW_TEK_SPEED_INSTANT, TYPE_ITEM, 0, true, baud == 0, false};
+            items[n++] = (gui_menu_item_t){"110 Baud", NULL, ACT_VIEW_TEK_SPEED_110, TYPE_ITEM, 0, true, baud == 110, false};
+            items[n++] = (gui_menu_item_t){"150 Baud", NULL, ACT_VIEW_TEK_SPEED_150, TYPE_ITEM, 0, true, baud == 150, false};
+            items[n++] = (gui_menu_item_t){"300 Baud", NULL, ACT_VIEW_TEK_SPEED_300, TYPE_ITEM, 0, true, baud == 300, false};
+            items[n++] = (gui_menu_item_t){"600 Baud", NULL, ACT_VIEW_TEK_SPEED_600, TYPE_ITEM, 0, true, baud == 600, false};
+            items[n++] = (gui_menu_item_t){"1200 Baud", NULL, ACT_VIEW_TEK_SPEED_1200, TYPE_ITEM, 0, true, baud == 1200, false};
+            items[n++] = (gui_menu_item_t){"2400 Baud", NULL, ACT_VIEW_TEK_SPEED_2400, TYPE_ITEM, 0, true, baud == 2400, false};
+            items[n++] = (gui_menu_item_t){"4800 Baud", NULL, ACT_VIEW_TEK_SPEED_4800, TYPE_ITEM, 0, true, baud == 4800, false};
+            items[n++] = (gui_menu_item_t){"9600 Baud", NULL, ACT_VIEW_TEK_SPEED_9600, TYPE_ITEM, 0, true, baud == 9600, false};
+            break;
+        }
         case SUB_VIEW_OVERRIDE_COLOR:
             items[n++] = (gui_menu_item_t){"Default", NULL, ACT_VIEW_COLOR_DEFAULT, TYPE_ITEM, 0, true, p->phosphor_color == 0, false};
             items[n++] = (gui_menu_item_t){"Green (P31)", NULL, ACT_VIEW_COLOR_GREEN, TYPE_ITEM, 0, true, p->phosphor_color == 1, false};
@@ -562,6 +581,12 @@ menu_action_code_t linux_menu_handle_mouse(linux_menu_context_t *ctx, const plat
             int sub_w = SUB_POPUP_WIDTH;
             int sub_h = sub_count * ITEM_HEIGHT;
 
+            /* Auto-flip verso l'alto se sfora in basso */
+            if (ctx->ui_height > 0 && (sub_y + sub_h) > (ctx->ui_height - 6)) {
+                sub_y = ctx->ui_height - sub_h - 6;
+            }
+            if (sub_y < MENU_BAR_HEIGHT) sub_y = MENU_BAR_HEIGHT;
+
             if (mouse_x >= sub_x && mouse_x <= (sub_x + sub_w) &&
                 mouse_y >= sub_y && mouse_y <= (sub_y + sub_h)) {
                 
@@ -617,8 +642,7 @@ menu_action_code_t linux_menu_handle_mouse(linux_menu_context_t *ctx, const plat
 }
 
 void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t *p, const struct plato_terminal *term, int win_w, int win_h) {
-    int max_h = 520;
-    if (max_h > win_h) max_h = win_h;
+    int max_h = (win_h > 768) ? 768 : win_h;
 
     size_t req_size = (size_t)win_w * max_h;
     if (ctx->ui_width != win_w || ctx->ui_height != max_h || !ctx->ui_surface) {
@@ -640,7 +664,9 @@ void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t 
     /* 2. Disegno Titoli Top Bar */
     for (int i = 0; i < top_count; ++i) {
         uint32_t tcol = COL_TEXT;
-        if (ctx->is_open && ctx->active_top_menu == i) {
+        if (i == 5 && p && p->display_mode == 5) {
+            tcol = COL_TEXT_DIM; /* Micro Tutor dimmed su Tektronix 4014 */
+        } else if (ctx->is_open && ctx->active_top_menu == i) {
             fill_rect(ctx->ui_surface, win_w, max_h, top[i].x, 3, top[i].width, MENU_BAR_HEIGHT - 6, COL_HOVER);
             tcol = COL_TEXT_HI;
         }
@@ -705,6 +731,12 @@ void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t 
             int sub_count = build_submenu(ctx, p, ctx->active_sub_menu, sub_items);
             int sub_w = SUB_POPUP_WIDTH;
             int sub_h = sub_count * ITEM_HEIGHT;
+
+            /* Auto-flip verso l'alto se sfora in basso */
+            if ((sub_y + sub_h) > (max_h - 6)) {
+                sub_y = max_h - sub_h - 6;
+            }
+            if (sub_y < MENU_BAR_HEIGHT) sub_y = MENU_BAR_HEIGHT;
 
             fill_rect(ctx->ui_surface, win_w, max_h, sub_x, sub_y, sub_w, sub_h, COL_BG);
             fill_rect(ctx->ui_surface, win_w, max_h, sub_x, sub_y, sub_w, 1, COL_HOVER_BORDER);
