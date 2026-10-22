@@ -26,7 +26,7 @@ At the same time, PlatoLives is a modern client. It supports copy and paste, scr
 
 In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to execute standalone MicroTutor floppy disk images locally without connecting to a host, returning cleanly to an online PLATO session when finished.
 
-📖 **Documentation:** [User and Technical Manual (PDF)](docs/PlatoLives_3.5_User_and_Technical_Manual.pdf)
+📖 **Documentation:** [User and Technical Manual (PDF)](docs/PlatoLives_5.0.0_User_and_Technical_Manual.pdf)
 
 ---
 
