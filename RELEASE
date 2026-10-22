@@ -1,24 +1,20 @@
-# PlatoLives v4.8.0 Release Notes
+# PlatoLives v5.0.1 Release Notes
 
-### Universal Phosphor Display Profiles & Real-time Optical Overrides
-- **Multi-Phosphor Optical Engine (`plato_optical.c`)**:
-  - Full physical recalibration of the gas-plasma sub-pixel decay model and monochrome CRT electron beam characteristics across 4 distinct phosphor chemistries:
-    - **Default (Orange/Native)**: Canonical warm orange gas-plasma discharge (Ne-Ar glow) and standard CRT phosphors.
-    - **Green P31**: Pure, vibrant emerald green vector phosphor with high persistence and luminous saturation.
-    - **Amber P40**: Rich golden amber phosphor, delivering vintage terminal warmth and extended decay curves.
-    - **White P4**: High-contrast, clean monochrome CRT phosphor with authentic cool white response.
-  - Zero-overhead, pure C11 mathematical color transformation preserving sharp text clarity, vector strokes, and optical curvature.
+### Tektronix 4014 DVBST Engine Recalibration & Fixes
+- **Empirical Erase Flash Timing**:
+  - Flash duration recalibrated to exactly 66.7 ms (2 video frames @ 30 fps), aligning with physical high-speed CRT tube recordings and correcting the previous theoretical 400 ms hold-off timing assumption.
+- **Asymmetric Secondary Emission Flash Model**:
+  - Two-stage physical cycle:
+    1. **Target Prep / Flood-in (0–28 ms)**: Positive target charge acceleration where previous screen contents remain visible, gradually submerged into a full-screen emerald saturation bloom.
+    2. **Negative Dielectric Cutoff & P31 Phosphor Decay (28–67 ms)**: Rapid target discharge followed by quadratic $(1 - t)^2$ phosphor falloff down to the ambient floor.
+- **Hardware Erase Hold-Off (Race Condition Elimination)**:
+  - Vector queue consumption is now strictly inhibited during active erase cycles, replicating physical beam hold-off and deflector unblanking lockout.
+  - Prevents subsequent draw commands (e.g. Othello board grid lines and text glyphs) from being cleared by deferred dielectric discharge.
+- **Calibrated Flood Gun Ambient Luminescence**:
+  - Background glow floor (`bg_glow`) tuned to 0.080 (8.0% P31 luminescence) based on René Richarz's Tek4010 historical reference, capturing the subtle green phosphorescent haze of real DVBST tubes under continuous flood electron bombardment.
 
-### Unified Cross-Platform UI & Desktop Integration
-- **macOS (Cocoa / Metal)**: Dedicated "Override Color" submenu in View menu with radio-check items; native ComboBox integration in Profile Management modal.
-- **Windows (Win32 / Direct3D 11)**: Custom owner-draw dark amber styled "Override Color" submenu; dual-column profile editor modal with mode-aware control enabling across both x86_64 and native ARM64 pipelines.
-- **Linux Desktop (SDL2 / OpenGL Core 3.3)**: Procedural GUI View menu integration; dedicated 4-button Phosphor selector matrix seamlessly integrated into the Linux profile editor modal.
-
-### Adaptive Automation Indicator
-- Visual script-execution status dot dynamically updates its chromatic palette to match the active phosphor profile (Green P31, Amber P40, White P4, or Default Orange).
-
-### Full Multi-Target Distribution
-- macOS DMG package (Universal Apple Silicon / Intel)
+### Multi-Target Distribution
+- macOS DMG package (Universal Apple Silicon / Intel) with LICENSE and README
 - Windows x86_64 and ARM64 Direct3D 11 executables
 - Linux Desktop GUI binaries (ARM64 and x86_64) & Self-Installing Tarball
 - Linux Console CLI static musl executables (ARM64 and x86_64)

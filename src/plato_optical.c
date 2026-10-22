@@ -959,6 +959,14 @@ static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_
     if (!opt || !opt->term || !opt->state) return;
     struct PLATOPlasmaState *p = opt->state;
 
+    /* ERASE HOLD-OFF REALE DVBST:
+       Mentre il tubo e' in fase di scarica dielettrica (flash + cutoff, ~67ms),
+       i circuiti di deflessione sono interdetti. Nessun nuovo vettore deve essere
+       estratto o disegnato su tek_stored, altrimenti verrebbe cancellato dal cutoff! */
+    if (p->tek_erase_time != 0.0) {
+        return;
+    }
+
     if (tek_baud > 0) {
         double dt = p->tek_pacer_last_sec > 0.0 ? (now_sec - p->tek_pacer_last_sec) : 0.0;
         if (dt < 0.0) dt = 0.0;
@@ -1110,12 +1118,15 @@ static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_
                                      &opt->term->fb);
             }
         } else if (ev.type == VEC_EVENT_ERASE) {
-            memset(p->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
-            /* Grace Period anti-strobe di 1.0 secondo */
             if (now_sec >= p->tek_erase_grace_until) {
                 p->tek_erase_time = now_sec;
+                p->tek_erase_grace_until = now_sec + 1.0;
+                /* Interrompi immediatamente il consumo: i vettori successivi attendono la fine del flash! */
+                break;
+            } else {
+                /* Grace period attivo: pulizia immediata a freddo senza lampo per evitare strobe */
+                memset(p->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
             }
-            p->tek_erase_grace_until = now_sec + 1.0;
         }
     }
 }
@@ -1137,14 +1148,37 @@ static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_s
     /* 1. Assorbi i vettori dalla coda vettoriale con pacing Tektronix */
     plato_tek_drain_queue(opt, now_sec, tek_baud);
 
-    /* 2. Fisica dell'Erase Flash (Scarica Dielettrica violenta di ~400ms) */
+    /* 2. Fisica dell'Erase Flash Asimmetrico (DVBST Target Prep + Negative Cutoff)
+          Durata totale: 67ms (~2 frame @ 30fps).
+          - Fase 1 (0 -> 28ms): Inondazione positiva. Lo sfondo sale a saturazione MA tek_stored
+            rimane intatto, venendo annegato nella luce (Fotogramma 3 -> 2).
+          - Cutoff (t = 28ms): Polarita' target invertita, azzeramento dielettrico tek_stored.
+          - Fase 2 (28ms -> 67ms): Decadimento rapido del fosforo P31 verso il nero (Fotogramma 1). */
     float erase_flash = 0.0f;
-    if (p->tek_erase_time > 0.0) {
-        double elapsed = now_sec - p->tek_erase_time;
-        if (elapsed < 0.400) {
-            float t = (float)(elapsed / 0.400);
-            erase_flash = (1.0f - t) * (1.0f - t); /* Decadimento quadratico */
+    if (p->tek_erase_time != 0.0) {
+        double erase_start = (p->tek_erase_time > 0.0) ? p->tek_erase_time : -p->tek_erase_time;
+        double elapsed = now_sec - erase_start;
+        const double kRiseTime = 0.028;  /* 28ms salita flood gun */
+        const double kTotalDur = 0.067;  /* 67ms spegnimento totale */
+
+        if (elapsed < kRiseTime) {
+            /* Fase 1: Inondazione - il disegno e' presente e sovraccaricato */
+            float u = (float)(elapsed / kRiseTime);
+            erase_flash = u * (2.0f - u); /* Salita rapida verso la saturazione */
+        } else if (elapsed < kTotalDur) {
+            /* Transizione Cutoff: scarica della griglia dielettrica (una sola volta) */
+            if (p->tek_erase_time > 0.0) {
+                memset(p->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
+                p->tek_erase_time = -p->tek_erase_time; /* Sentinella: scarica avvenuta */
+            }
+            /* Fase 2: Decadimento quadratico della luminescenza P31 */
+            float v = (float)((elapsed - kRiseTime) / (kTotalDur - kRiseTime));
+            erase_flash = (1.0f - v) * (1.0f - v);
         } else {
+            /* Ciclo completato: ripristino */
+            if (p->tek_erase_time > 0.0) {
+                memset(p->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
+            }
             p->tek_erase_time = 0.0;
         }
     }
@@ -1164,7 +1198,8 @@ static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_s
         p->tek_flare[i] = f;
 
         /* Flood Gun Ambient Glow: sottile emissione di fondo reale dello schermo DVBST */
-        float bg_glow = 0.015f;
+        /* Flood Gun Ambient Glow: calibrato su BLACK_INTENSITY = 0.08 da Tek4010 di René Richarz */
+        float bg_glow = 0.080f;
 
         if (f <= 0.0001f && s <= 0.0001f && erase_flash <= 0.0001f) {
             /* Nero caldo fluorescente P31 delle flood guns a riposo */
