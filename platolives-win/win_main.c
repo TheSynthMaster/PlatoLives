@@ -85,6 +85,7 @@ typedef struct {
     plato_ringbuf_t ringbuf;
     plato_keyboard_state_t keyboard_state;
     plato_profile_list_t profile_list;
+    plato_profile_t active_profile;
     plato_script_runner_t *script_runner;
     plato_script_list_t *script_list;
     int current_profile_idx;
@@ -486,10 +487,10 @@ static void win_render_hud_overlay(win_app_t *app, double now_sec, bool is_anima
         snprintf(user_info, sizeof(user_info), "SLOT    %s\n", app->terminal.user_station);
     }
 
-    int mode = app->profile_list.profiles[app->current_profile_idx].display_mode;
+    int mode = app->active_profile.display_mode;
     if (mode == 5) {
         char baud_str[32];
-        int tek_baud = app->profile_list.profiles[app->current_profile_idx].tek_baud_rate;
+        int tek_baud = app->active_profile.tek_baud_rate;
         if (tek_baud > 0) {
             snprintf(baud_str, sizeof(baud_str), "%d BAUD", tek_baud);
         } else {
@@ -592,7 +593,7 @@ static void win_render_frame(win_app_t *app) {
 
     plato_keyboard_poll(&app->keyboard_state, &app->terminal, win_get_time_sec());
     
-    plato_profile_t *cur_p = &app->profile_list.profiles[app->current_profile_idx];
+    plato_profile_t *cur_p = &app->active_profile;
     double now = win_get_time_sec();
     bool is_animating = plato_optical_render(app->optical, &app->terminal, cur_p, now, app->optical_fb);
 
@@ -1056,6 +1057,7 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data) {
         }
     }
 
+    app->active_profile = *p;
     app->display_mode = p->display_mode;
     app->distortion = p->plasma_distortion;
     plato_terminal_set_color_mode(&app->terminal, (p->display_mode == 3 || p->display_mode == 4));
@@ -1722,6 +1724,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     }
                     cur_p->display_mode = new_mode;
                     g_app.display_mode = new_mode;
+                    g_app.active_profile.display_mode = new_mode;
                     plato_profiles_save(&g_app.profile_list);
                     win_connect_profile(cur_p, &g_app);
                     plato_optical_invalidate(g_app.optical);
@@ -1733,6 +1736,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
                 cur_p->display_mode = new_mode;
                 g_app.display_mode = new_mode;
+                g_app.active_profile.display_mode = new_mode;
                 plato_profiles_save(&g_app.profile_list);
                 plato_terminal_set_color_mode(&g_app.terminal, new_is_color);
                 plato_optical_invalidate(g_app.optical);
@@ -1742,10 +1746,27 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
+            if (cmdId == IDM_VIEW_TEK_ERASE_FLASH) {
+                g_app.active_profile.tek_erase_flash = !g_app.active_profile.tek_erase_flash;
+                plato_optical_invalidate(g_app.optical);
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                return 0;
+            }
+
+            if (cmdId == IDM_VIEW_TEK_ACCURATE_BG) {
+                g_app.active_profile.tek_accurate_bg = !g_app.active_profile.tek_accurate_bg;
+                plato_optical_invalidate(g_app.optical);
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                return 0;
+            }
+
             /* Menu Tektronix Connection Speed */
             if (cmdId >= IDM_VIEW_TEK_SPEED_INSTANT && cmdId <= IDM_VIEW_TEK_SPEED_9600) {
                 const int speeds[] = { 0, 110, 150, 300, 600, 1200, 2400, 4800, 9600 };
                 cur_p->tek_baud_rate = speeds[cmdId - IDM_VIEW_TEK_SPEED_INSTANT];
+                g_app.active_profile.tek_baud_rate = cur_p->tek_baud_rate;
                 plato_profiles_save(&g_app.profile_list);
                 win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
@@ -1873,20 +1894,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
                 case IDM_CONN_MANAGE_PROFILES:
                     win_profiles_dialog_show(hwnd, &g_app.profile_list, win_connect_profile, &g_app);
-                    if (g_app.profile_list.default_index >= 0 && (size_t)g_app.profile_list.default_index < g_app.profile_list.count) {
-                        g_app.current_profile_idx = g_app.profile_list.default_index;
-                    }
-                    cur_p = &g_app.profile_list.profiles[g_app.current_profile_idx];
-                    g_app.display_mode = cur_p->display_mode;
-                    g_app.distortion = cur_p->plasma_distortion;
-                    plato_terminal_set_color_mode(&g_app.terminal, (cur_p->display_mode == 3 || cur_p->display_mode == 4));
-                    plato_terminal_set_palette(&g_app.terminal, (plato_palette_t)cur_p->phosphor_color);
-                    plato_optical_invalidate(g_app.optical);
                     DestroyMenu(g_app.menu);
                     g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
                     win_setup_ownerdraw_menu(g_app.menu, true);
                     SetMenu(hwnd, g_app.menu);
-                    win_menu_update_state(g_app.menu, cur_p,
+                    win_menu_update_state(g_app.menu, &g_app.active_profile,
                                          g_app.transport && g_app.transport->connected,
                                          g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen,
                                          &g_app.profile_list, g_app.current_profile_idx);
@@ -2110,6 +2122,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     plato_profiles_load(&g_app.profile_list);
     g_app.current_profile_idx = g_app.profile_list.default_index;
+    if (g_app.current_profile_idx >= 0 && (size_t)g_app.current_profile_idx < g_app.profile_list.count) {
+        g_app.active_profile = g_app.profile_list.profiles[g_app.current_profile_idx];
+    }
     g_app.script_runner = plato_script_create(&g_app.terminal);
 
     /* Inizializzazione gestore script */

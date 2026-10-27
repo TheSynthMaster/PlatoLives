@@ -57,6 +57,7 @@ include_directories(include include/plato)
 set(LIBPLATO_SOURCES
     src/plato_framebuffer.c
     src/plato_font.c
+    src/plato_tek_font.c
     src/plato_graphics.c
     src/plato_protocol.c
     src/plato_keyboard.c

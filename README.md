@@ -1,6 +1,6 @@
-# PlatoLives (v5.0)
+# PlatoLives (v5.2)
 
-## Latest Changes (v5.0)
+## Latest Changes (v5.2)
 
 - **Authentic Tektronix 4014 (DVBST) Emulation**: A dedicated vector storage-tube engine reproducing the optical, electrical, and mechanical behavior of the Direct View Bistable Storage Tube terminals used with PLATO. Features dual-layer dielectric charge simulation, writing-beam transient flare, configurable serial transmission speeds with progressive vector drawing, authentic full-screen flash erase, and P31 emerald green phosphors.
 - **Real-Time Vector HUD**: Telemetry overlay displaying vector queue saturation (`QUEUE xx%`), pacing speed, and hardware performance.
@@ -30,9 +30,9 @@ In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to 
 
 ---
 
-# What's new in v5.0
+# What's new in v5.2
 
-Version 5.0 introduces high-fidelity **Tektronix 4014 (DVBST) vector terminal emulation**, bringing historic storage-tube PLATO access to life alongside gas-plasma and CRT displays.
+Version 5.2 introduces high-fidelity **Tektronix 4014 (DVBST) vector terminal emulation**, bringing historic storage-tube PLATO access to life alongside gas-plasma and CRT displays.
 
 - **Tektronix 4014 Storage Tube**: Fully modeled Direct View Bistable Storage Tube with dual-layer dielectric simulation, line-drawing transient flare, serial line pacing, and flash erase.
 - **Vector Telemetry HUD**: A dedicated heads-up display displaying real-time vector queue saturation, pacing rates, and render performance.
@@ -45,7 +45,7 @@ Version 5.0 introduces high-fidelity **Tektronix 4014 (DVBST) vector terminal em
 
 # Authentic Tektronix 4014 (DVBST) Emulation
 
-The defining milestone of PlatoLives 5.0 is the physical emulation of the **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**.
+The defining milestone of PlatoLives 5.2 is the physical emulation of the **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**.
 
 During the late 1960s and 1970s, before plasma panels became standard and raster CRTs gained sufficient memory buffers, Tektronix storage-tube terminals were widely used in engineering departments and research facilities to access PLATO. Recreating this experience requires modeling an entirely different display physics paradigm.
 ```

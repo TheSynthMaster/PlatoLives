@@ -1,4 +1,5 @@
 #include "plato/plato_optical.h"
+#include "plato/plato_tek_font.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -49,6 +50,8 @@ struct PLATOPlasmaState {
     /* Motore Fisico Tektronix 4014 (DVBST) */
     float *tek_flare;       /* Energia transitoria del raggio (Transient Flare) */
     float *tek_stored;      /* Carica bistabile del dielettrico (Stored State) */
+    int8_t *tek_grain;      /* Grana dielettrica fissa non-ripetuta 2048x2048 (4MB) */
+    uint32_t tek_frame_num; /* Contatore temporale per shot noise dinamico */
     double tek_erase_time;  /* Timestamp inizio scarica dielettrica (Erase Flash) */
     double tek_erase_grace_until; /* Deadline Grace Period anti-strobe (1.0s di soppressione) */
     double tek_pacer_last_sec;    /* Timestamp ultimo accredito bit Pacer Tektronix */
@@ -83,7 +86,8 @@ static void plasmaFreeState(struct PLATOPlasmaState *ps) {
     if (!ps) return;
     free(ps->gain); free(ps->energy); free(ps->source); free(ps->tmp);
     free(ps->local); free(ps->wide); free(ps->crisp); free(ps->logical);
-    free(ps->tek_flare); free(ps->tek_stored);
+    free(ps->tek_flare); free(ps->tek_stored); free(ps->tek_grain);
+    ps->tek_grain = NULL;
     ps->tek_flare = ps->tek_stored = NULL;
     ps->gain = ps->energy = ps->source = ps->tmp = ps->local = ps->wide = NULL;
     ps->crisp = ps->logical = NULL;
@@ -106,12 +110,26 @@ static bool plasmaAllocState(struct PLATOPlasmaState *ps) {
     ps->logical = (uint32_t *)calloc(logicalPixels, sizeof(uint32_t));
     ps->tek_flare = (float *)calloc(PLASMA_PIXELS, sizeof(float));
     ps->tek_stored = (float *)calloc(PLASMA_PIXELS, sizeof(float));
+    ps->tek_grain = (int8_t *)malloc((size_t)PLASMA_PIXELS * sizeof(int8_t));
+    if (ps->tek_grain) {
+        /* Generazione di 4.194.304 campioni unici con distribuzione pseudo-gaussiana centrata */
+        uint32_t seed = 0x12345678u;
+        for (size_t i = 0; i < (size_t)PLASMA_PIXELS; i++) {
+            seed = seed * 1664525u + 1013904223u;
+            uint32_t s1 = seed;
+            seed = seed * 1664525u + 1013904223u;
+            uint32_t s2 = seed;
+            int32_t v = (int32_t)((s1 >> 24) + (s2 >> 24)) - 255; /* [-255, 255] */
+            ps->tek_grain[i] = (int8_t)(v >> 1); /* [-127, 127] */
+        }
+    }
+    ps->tek_frame_num = 0;
     ps->tek_erase_time = 0.0;
     ps->tek_erase_grace_until = 0.0;
     ps->tek_pacer_last_sec = 0.0;
     ps->tek_pacer_credit_bits = 0.0;
     if (!ps->gain || !ps->energy || !ps->source || !ps->tmp ||
-        !ps->local || !ps->wide || !ps->crisp || !ps->logical || !ps->tek_flare || !ps->tek_stored) {
+        !ps->local || !ps->wide || !ps->crisp || !ps->logical || !ps->tek_flare || !ps->tek_stored || !ps->tek_grain) {
         plasmaFreeState(ps);
         return false;
     }
@@ -827,7 +845,7 @@ static void plato_tek_splat_line(float *flare, float *stored, int width, int hei
     float cy = y0;
     const float sigma = 1.0f;
     const float inv_two_sig_sq = 1.0f / (2.0f * sigma * sigma);
-    const float intensity = 0.45f;
+    const float intensity = 0.50f;
     const int r = 2;
 
     for (int i = 0; i <= steps; i++) {
@@ -915,6 +933,135 @@ static void plato_tek_resync_box_from_fb(float *flare, float *stored, int width,
     }
 }
 
+
+/* ========================================================================= */
+/* TEKTRONIX 4014 DUAL-FONT: HIGH-FREQUENCY BEAM WIGGLER & STROKE RENDERER   */
+/* ========================================================================= */
+
+/* Preservato per eventuale rendering vettoriale alternativo */
+#if 0
+static void plato_tek_splat_stroke_line(float *flare, float *stored, int width, int height,
+                                        float x0, float y0, float x1, float y1) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float dist = sqrtf(dx * dx + dy * dy);
+
+    if (dist < 0.5f) {
+        /* Punto isolato con Dwell spot elevato (es. punti di 'i', 'j', due punti) */
+        plato_tek_splat_point(flare, stored, width, height, x0, y0, 1.45f, 1.6f, 0.90f);
+        return;
+    }
+
+    /* Dwell spot ai vertici */
+    plato_tek_splat_point(flare, stored, width, height, x0, y0, 1.15f, 1.6f, 0.85f); /* Dwell spot realistico */
+    plato_tek_splat_point(flare, stored, width, height, x1, y1, 1.15f, 1.6f, 0.85f); /* Dwell spot realistico */
+
+    /*
+     * Beam Wiggler: modellazione dell'oscillatore analogico verticale a radiofrequenza (~40 kHz).
+     * Il target bistabile integra spazialmente l'oscillazione: il kernel gaussiano risulta
+     * asimmetrico con sigma_y > sigma_x, fondendo i punti della matrice in un solido nastro continuo.
+     */
+    float step = 0.75f;
+    int steps = (int)ceilf(dist / step);
+    float inv_steps = 1.0f / (float)steps;
+    float x_step = dx * inv_steps;
+    float y_step = dy * inv_steps;
+
+    float cx = x0;
+    float cy = y0;
+    const float sigma_x = 1.0f;
+    const float sigma_y = 1.35f;
+    const float inv_2_sigx_sq = 1.0f / (2.0f * sigma_x * sigma_x);
+    const float inv_2_sigy_sq = 1.0f / (2.0f * sigma_y * sigma_y);
+    const float intensity = 0.50f;
+    const int rx = 2;
+    const int ry = 3;
+
+    for (int i = 0; i <= steps; i++) {
+        int px_min = (int)(cx - rx); if (px_min < 0) px_min = 0;
+        int px_max = (int)(cx + rx); if (px_max >= width) px_max = width - 1;
+        int py_min = (int)(cy - ry); if (py_min < 0) py_min = 0;
+        int py_max = (int)(cy + ry); if (py_max >= height) py_max = height - 1;
+
+        for (int py = py_min; py <= py_max; py++) {
+            float d_y = (float)py - cy;
+            float wy = expf(-d_y * d_y * inv_2_sigy_sq);
+            float *row_f = flare + py * width;
+            float *row_s = stored + py * width;
+
+            for (int px = px_min; px <= px_max; px++) {
+                float d_x = (float)px - cx;
+                float wx = expf(-d_x * d_x * inv_2_sigx_sq);
+                float val = intensity * wx * wy;
+
+                row_f[px] += val;
+                float s_val = row_s[px] + val * 0.70f;
+                row_s[px] = (s_val > 1.0f) ? 1.0f : s_val;
+            }
+        }
+        cx += x_step;
+        cy += y_step;
+    }
+}
+#endif
+
+/*
+ * Parametri di deposizione fascio e fosfori DVBST per Tektronix Dot-Matrix:
+ * - INTENSITY: densita del picco centrale dello spot unblanked.
+ * - SIGMA: ampiezza della gaussiana per la diffusione e fusione dello spot nel dielettrico.
+ * - STORED_RATIO: efficienza di carica del target bistabile.
+ * - WIGGLE: ampiezza jitter analogico sub-pixel per naturalezza CRT.
+ */
+#define TEK_DOT_INTENSITY    1.10f
+#define TEK_DOT_SIGMA        1.80f
+#define TEK_DOT_STORED_RATIO 0.95f
+#define TEK_DOT_WIGGLE       0.10f
+
+static void plato_tek_splat_stroke_char(float *flare, float *stored, int width, int height,
+                                        uint8_t ch, float x, float y, int scale) {
+    const uint8_t *rows = plato_tek_font_get_bitmap(ch);
+    if (!rows) return;
+
+    if (scale <= 1) scale = 1;
+    float y_base = y + ((scale > 1) ? (float)(scale - 1) * 5.0f : 0.0f);
+
+    /* Origine continuous screen space */
+    float top_y = (((float)(PLATO_HEIGHT - 1) - y_base - 15.0f * (float)scale) * (float)PLASMA_SCALE) + 2.0f;
+    float y_scale = (float)scale * (float)PLASMA_SCALE;
+    float scale_f = (float)scale;
+
+    for (int row = 0; row < 10; row++) {
+        uint8_t b = rows[row];
+        if (b == 0) continue;
+
+        float row_plato = 3.0f + (float)row * 1.15f;
+        float base_cy = top_y + row_plato * y_scale;
+
+        /* Colonne 0..4 mappate sui bit 5..1 */
+        for (int col = 0; col < 5; col++) {
+            int bit_pos = 5 - col;
+            if (b & (1 << bit_pos)) {
+                float col_plato = 1.25f + (float)col * 1.10f;
+                float base_cx = (x + col_plato * scale_f) * (float)PLASMA_SCALE + 2.0f;
+
+                /* Jitter analogico (Beam Wiggle): hash deterministico per stabilita su frame statici */
+                uint32_t h = ((uint32_t)(ch * 101) ^ ((uint32_t)row * 13) ^ ((uint32_t)col * 31) ^ (uint32_t)x);
+                h ^= h >> 13;
+                h *= 0x5bd1e995;
+                h ^= h >> 15;
+                float jx = (((float)(h & 0xFF) / 255.0f) - 0.5f) * (TEK_DOT_WIGGLE * (float)PLASMA_SCALE);
+                float jy = (((float)((h >> 8) & 0xFF) / 255.0f) - 0.5f) * (TEK_DOT_WIGGLE * (float)PLASMA_SCALE);
+
+                float cx = base_cx + jx;
+                float cy = base_cy + jy;
+
+                plato_tek_splat_point(flare, stored, width, height, cx, cy,
+                                      TEK_DOT_INTENSITY, TEK_DOT_SIGMA, TEK_DOT_STORED_RATIO);
+            }
+        }
+    }
+}
+
 static void plato_tek_splat_char(float *flare, float *stored, int width, int height,
                                  const plato_font_t *font, plato_charset_t charset, uint8_t ch,
                                  float x, float y, int scale, plato_screen_mode_t mode,
@@ -955,7 +1102,7 @@ static void plato_tek_splat_char(float *flare, float *stored, int width, int hei
     }
 }
 
-static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_baud) {
+static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_baud, bool erase_flash_en) {
     if (!opt || !opt->term || !opt->state) return;
     struct PLATOPlasmaState *p = opt->state;
 
@@ -963,7 +1110,7 @@ static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_
        Mentre il tubo e' in fase di scarica dielettrica (flash + cutoff, ~67ms),
        i circuiti di deflessione sono interdetti. Nessun nuovo vettore deve essere
        estratto o disegnato su tek_stored, altrimenti verrebbe cancellato dal cutoff! */
-    if (p->tek_erase_time != 0.0) {
+    if (erase_flash_en && p->tek_erase_time != 0.0) {
         return;
     }
 
@@ -1074,48 +1221,46 @@ static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_
             }
         } else if (ev.type == VEC_EVENT_CHAR) {
             plato_screen_mode_t mode = (plato_screen_mode_t)ev.mode;
-            if (mode == PLATO_SCREEN_REWRITE || mode == PLATO_SCREEN_ERASE) {
-                int scale = ev.scale > 1 ? (int)ev.scale : 1;
-                int x0 = (int)ev.x0;
-                int x1 = x0 + PLATO_CHAR_WIDTH * scale - 1;
-                int y0 = (int)ev.y0 + (scale > 1 ? (scale - 1) * 5 : 0);
-                int y1 = y0 + PLATO_CHAR_HEIGHT * scale - 1;
+            int scale = ev.scale > 1 ? (int)ev.scale : 1;
+            int x0 = (int)ev.x0;
+            int x1 = x0 + PLATO_CHAR_WIDTH * scale - 1;
+            int y0 = (int)ev.y0 + (scale > 1 ? (scale - 1) * 5 : 0);
+            int y1 = y0 + PLATO_CHAR_HEIGHT * scale - 1;
 
-                while (opt->term->vector_queue.tail != opt->term->vector_queue.head) {
-                    plato_vector_event_t *next =
-                        &opt->term->vector_queue.events[opt->term->vector_queue.tail];
-                    int next_scale = next->scale > 1 ? (int)next->scale : 1;
-                    int next_x0 = (int)next->x0;
-                    int next_x1 = next_x0 + PLATO_CHAR_WIDTH * next_scale - 1;
-                    int next_y0 = (int)next->y0 + (next_scale > 1 ? (next_scale - 1) * 5 : 0);
-                    int next_y1 = next_y0 + PLATO_CHAR_HEIGHT * next_scale - 1;
+            /* In ERASE o REWRITE, cancelliamo prima il riquadro della cella su tek_stored */
+            if (mode == PLATO_SCREEN_ERASE || mode == PLATO_SCREEN_REWRITE) {
+                float bx0 = (float)x0 * (float)PLASMA_SCALE;
+                float bx1 = (float)(x1 + 1) * (float)PLASMA_SCALE;
+                float by0 = ((float)(PLATO_HEIGHT - 1) - (float)y1) * (float)PLASMA_SCALE;
+                float by1 = ((float)(PLATO_HEIGHT - 1) - (float)y0 + 1.0f) * (float)PLASMA_SCALE;
 
-                    if (next->type != VEC_EVENT_CHAR ||
-                        next->mode != ev.mode ||
-                        next_scale != scale ||
-                        next_y0 != y0 ||
-                        next_y1 != y1 ||
-                        next_x0 > x1 + 1 ||
-                        next_x1 < x0 - 1) {
-                        break;
+                int px0 = (int)floorf(bx0); if (px0 < 0) px0 = 0;
+                int px1 = (int)ceilf(bx1);  if (px1 >= PLASMA_WIDTH) px1 = PLASMA_WIDTH - 1;
+                int py0 = (int)floorf(by0); if (py0 < 0) py0 = 0;
+                int py1 = (int)ceilf(by1);  if (py1 >= PLASMA_HEIGHT) py1 = PLASMA_HEIGHT - 1;
+
+                for (int py = py0; py <= py1; py++) {
+                    float *row_s = p->tek_stored + py * PLASMA_WIDTH;
+                    for (int px = px0; px <= px1; px++) {
+                        row_s[px] = 0.0f;
                     }
-
-                    if (next_x0 < x0) x0 = next_x0;
-                    if (next_x1 > x1) x1 = next_x1;
-                    opt->term->vector_queue.tail =
-                        (opt->term->vector_queue.tail + 1) % MAX_VECTOR_EVENTS;
                 }
+            }
 
-                plato_tek_resync_box_from_fb(p->tek_flare, p->tek_stored,
-                                             PLASMA_WIDTH, PLASMA_HEIGHT,
-                                             &opt->term->fb, x0, y0, x1, y1);
-            } else {
-                plato_tek_splat_char(p->tek_flare, p->tek_stored,
-                                     PLASMA_WIDTH, PLASMA_HEIGHT,
-                                     &opt->term->font,
-                                     (plato_charset_t)ev.charset, ev.ch,
-                                     ev.x0, ev.y0, (int)ev.scale, mode,
-                                     &opt->term->fb);
+            /* Se non e' una cancellazione pura, tracciamo il carattere! */
+            if (mode != PLATO_SCREEN_ERASE) {
+                if ((plato_charset_t)ev.charset == PLATO_CHARSET_M0 && ev.ch >= 0x20 && ev.ch <= 0x7E) {
+                    plato_tek_splat_stroke_char(p->tek_flare, p->tek_stored,
+                                                PLASMA_WIDTH, PLASMA_HEIGHT,
+                                                ev.ch, ev.x0, ev.y0, scale);
+                } else {
+                    plato_tek_splat_char(p->tek_flare, p->tek_stored,
+                                         PLASMA_WIDTH, PLASMA_HEIGHT,
+                                         &opt->term->font,
+                                         (plato_charset_t)ev.charset, ev.ch,
+                                         ev.x0, ev.y0, scale, PLATO_SCREEN_WRITE,
+                                         &opt->term->fb);
+                }
             }
         } else if (ev.type == VEC_EVENT_ERASE) {
             if (now_sec >= p->tek_erase_grace_until) {
@@ -1136,46 +1281,41 @@ static void plato_tek_drain_queue(plato_optical_t *opt, double now_sec, int tek_
 /* TEKTRONIX 4014 DVBST RENDER ENGINE (Transient Flare + Stored + Erase Flash) */
 /* ========================================================================= */
 
-static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_sec, int tek_baud) {
+static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_sec, const plato_profile_t *prof) {
     if (!opt || !opt->state || !opt->term || !output) return;
     struct PLATOPlasmaState *p = opt->state;
     if (!p->tek_flare || !p->tek_stored) return;
+
+    int tek_baud = prof ? prof->tek_baud_rate : 0;
+    bool erase_flash_en = prof ? prof->tek_erase_flash : true;
+    bool accurate_bg_en = prof ? prof->tek_accurate_bg : true;
 
     float dt = p->lastTime > 0.0 ? (float)(now_sec - p->lastTime) : (1.0f / 60.0f);
     p->lastTime = now_sec;
     dt = plasmaClamp(dt, 0.0005f, 0.1f);
 
     /* 1. Assorbi i vettori dalla coda vettoriale con pacing Tektronix */
-    plato_tek_drain_queue(opt, now_sec, tek_baud);
+    plato_tek_drain_queue(opt, now_sec, tek_baud, erase_flash_en);
 
-    /* 2. Fisica dell'Erase Flash Asimmetrico (DVBST Target Prep + Negative Cutoff)
-          Durata totale: 67ms (~2 frame @ 30fps).
-          - Fase 1 (0 -> 28ms): Inondazione positiva. Lo sfondo sale a saturazione MA tek_stored
-            rimane intatto, venendo annegato nella luce (Fotogramma 3 -> 2).
-          - Cutoff (t = 28ms): Polarita' target invertita, azzeramento dielettrico tek_stored.
-          - Fase 2 (28ms -> 67ms): Decadimento rapido del fosforo P31 verso il nero (Fotogramma 1). */
+    /* 2. Fisica dell'Erase Flash Asimmetrico (se abilitato da profilo/menu) */
     float erase_flash = 0.0f;
-    if (p->tek_erase_time != 0.0) {
+    if (erase_flash_en && p->tek_erase_time != 0.0) {
         double erase_start = (p->tek_erase_time > 0.0) ? p->tek_erase_time : -p->tek_erase_time;
         double elapsed = now_sec - erase_start;
-        const double kRiseTime = 0.028;  /* 28ms salita flood gun */
-        const double kTotalDur = 0.067;  /* 67ms spegnimento totale */
+        const double kRiseTime = 0.028;
+        const double kTotalDur = 0.067;
 
         if (elapsed < kRiseTime) {
-            /* Fase 1: Inondazione - il disegno e' presente e sovraccaricato */
             float u = (float)(elapsed / kRiseTime);
-            erase_flash = u * (2.0f - u); /* Salita rapida verso la saturazione */
+            erase_flash = u * (2.0f - u);
         } else if (elapsed < kTotalDur) {
-            /* Transizione Cutoff: scarica della griglia dielettrica (una sola volta) */
             if (p->tek_erase_time > 0.0) {
                 memset(p->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
-                p->tek_erase_time = -p->tek_erase_time; /* Sentinella: scarica avvenuta */
+                p->tek_erase_time = -p->tek_erase_time;
             }
-            /* Fase 2: Decadimento quadratico della luminescenza P31 */
             float v = (float)((elapsed - kRiseTime) / (kTotalDur - kRiseTime));
             erase_flash = (1.0f - v) * (1.0f - v);
         } else {
-            /* Ciclo completato: ripristino */
             if (p->tek_erase_time > 0.0) {
                 memset(p->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
             }
@@ -1183,40 +1323,51 @@ static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_s
         }
     }
 
-    /* 3. Decadimento del Transient Flare (Bagliore transitorio accecante, ~45ms) */
+    /* 3. Decadimento del Transient Flare */
     float flare_decay = expf(-dt / 0.045f);
+    p->tek_frame_num++;
+
+    float hum = 1.0f;
+    if (accurate_bg_en) {
+        hum = 1.0f + 0.035f * sinf((float)(now_sec * 60.0 * 6.283185307));
+    }
+    const float bg_base = 0.080f;
     bool has_activity = (erase_flash > 0.001f);
 
-    /* 4. Sintesi Cromatica P31 Phosphor HDR nello spazio 2048x2048 */
+    /* 4. Sintesi Cromatica P31 Phosphor HDR */
     for (size_t i = 0; i < (size_t)PLASMA_PIXELS; i++) {
         float f = p->tek_flare[i];
         float s = p->tek_stored[i];
 
         f *= flare_decay;
         if (f < 0.001f) f = 0.0f;
-        else has_activity = true;
+        else if (!accurate_bg_en) has_activity = true;
         p->tek_flare[i] = f;
 
-        /* Flood Gun Ambient Glow: sottile emissione di fondo reale dello schermo DVBST */
-        /* Flood Gun Ambient Glow: calibrato su BLACK_INTENSITY = 0.08 da Tek4010 di René Richarz */
-        float bg_glow = 0.080f;
+        /* A. Grana dielettrica fissa non-ripetuta (+/- 7.0%) */
+        float g_static = p->tek_grain ? ((float)p->tek_grain[i] * (1.0f / 127.0f)) : 0.0f;
+
+        /* B. Shot noise termionico dinamico (+/- 26.0%), solo in modalita' accurata */
+        float shot = 0.0f;
+        if (accurate_bg_en) {
+            uint32_t h = (uint32_t)i + (p->tek_frame_num * 2654435761u);
+            h = (h ^ (h >> 16)) * 0x45d9f3bu;
+            h = (h ^ (h >> 16)) * 0x45d9f3bu;
+            h ^= h >> 16;
+            shot = ((float)((int8_t)(h & 0xFF))) * (0.260f / 128.0f);
+        }
+
+        float bg_glow = bg_base * hum * (1.0f + g_static * 0.070f + shot);
 
         if (f <= 0.0001f && s <= 0.0001f && erase_flash <= 0.0001f) {
-            /* Nero caldo fluorescente P31 delle flood guns a riposo */
             output[i] = plasmaRGBA(bg_glow * 0.3f, bg_glow * 1.0f, bg_glow * 0.4f);
             continue;
         }
 
-        /* Stored state bistabile: brillantezza piena al 92% (invece di 60%) */
-        float stored_lum = (s > 1.0f ? 1.0f : s) * 0.92f;
-
-        /* Modello Iper-Saturazione Termoluminescente (White-Hot Core)
-           flare_base: alone fluorescente P31 lineare (Emerald Bloom)
-           core_burn: sovraccarico del fosforo che satura RGB a bianco (Decadimento quadratico rapido) */
+        float stored_lum = (s > 1.0f ? 1.0f : s) * 0.92f * (1.0f + g_static * 0.080f);
         float flare_base = f * 2.20f;
         float core_burn  = f * f * 2.00f;
 
-        /* P31 Phosphor Spectrum radioso: Verde smeraldo profondo, Bloom verde brillante, Core BIANCO incandescente */
         float r = bg_glow * 0.3f + stored_lum * 0.16f + flare_base * 0.30f + core_burn + erase_flash * 0.35f;
         float g = bg_glow * 1.0f + stored_lum * 0.96f + flare_base * 1.00f + core_burn + erase_flash * 0.98f;
         float b = bg_glow * 0.4f + stored_lum * 0.30f + flare_base * 0.10f + core_burn + erase_flash * 0.40f;
@@ -1224,8 +1375,14 @@ static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_s
         output[i] = plasmaRGBA(r, g, b);
     }
 
-    if (has_activity || opt->term->vector_queue.tail != opt->term->vector_queue.head) {
-        opt->state->animateUntil = now_sec + 0.080;
+    if (accurate_bg_en) {
+        /* I flood guns del DVBST sono sempre accesi: refresh continuo a 60 FPS */
+        opt->state->animateUntil = now_sec + 0.050;
+    } else {
+        /* Modalita' a basso consumo: va in sonno dopo 80ms se non ci sono vettori o flash attivi */
+        if (has_activity || opt->term->vector_queue.tail != opt->term->vector_queue.head) {
+            opt->state->animateUntil = now_sec + 0.080;
+        }
     }
     opt->last_was_full = true;
 }
@@ -1390,9 +1547,33 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
         if (!opt->state->tilesInitialized) {
             memset(opt->state->tek_flare, 0, (size_t)PLASMA_PIXELS * sizeof(float));
             memset(opt->state->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
+
+            /* 1. Ricostruzione caratteri visibili da text_grid con font vettoriale 4014 */
+            bool has_m0_char[PLATO_ROWS][PLATO_COLS] = { {false} };
+            for (int r = 0; r < PLATO_ROWS; r++) {
+                int py = (31 - r) * PLATO_CHAR_HEIGHT;
+                for (int c = 0; c < PLATO_COLS; c++) {
+                    uint8_t ch = term->text_grid[r][c].ch;
+                    uint8_t cs = term->text_grid[r][c].charset;
+                    if (cs == (uint8_t)PLATO_CHARSET_M0 && ch > 0x20 && ch <= 0x7E) {
+                        has_m0_char[r][c] = true;
+                        int px = c * PLATO_CHAR_WIDTH;
+                        plato_tek_splat_stroke_char(opt->state->tek_flare, opt->state->tek_stored,
+                                                    PLASMA_WIDTH, PLASMA_HEIGHT,
+                                                    ch, (float)px, (float)py, 1);
+                    }
+                }
+            }
+
+            /* 2. Ricostruzione grafica vettoriale / elementi da fb (escludendo le celle M0 gia' tracciate) */
             for (int y = 0; y < PLATO_HEIGHT; y++) {
+                int r = 31 - (y / PLATO_CHAR_HEIGHT);
                 int ry = (PLATO_HEIGHT - 1) - y;
                 for (int x = 0; x < PLATO_WIDTH; x++) {
+                    int c = x / PLATO_CHAR_WIDTH;
+                    if (r >= 0 && r < PLATO_ROWS && c >= 0 && c < PLATO_COLS && has_m0_char[r][c]) {
+                        continue; /* Salta la bitmap PLATO 8x16 in fb: il carattere e' gia' vettoriale! */
+                    }
                     if (plato_fb_get_pixel(&term->fb, x, y)) {
                         float cx = (float)x * (float)PLASMA_SCALE + 2.0f;
                         float cy = (float)ry * (float)PLASMA_SCALE + 2.0f;
@@ -1403,7 +1584,7 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
             }
             opt->state->tilesInitialized = true;
         }
-        tektronixRender(opt, out_bgra, now_sec, prof->tek_baud_rate);
+        tektronixRender(opt, out_bgra, now_sec, prof);
     } else {
         plasmaRender(opt, out_bgra, now_sec);
         if (prof->display_mode == 2) {

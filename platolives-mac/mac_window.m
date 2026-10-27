@@ -114,6 +114,12 @@ static void plato_mac_beep(void *context) {
     NSInteger tekBaud = p[@"tekBaudRate"] ? [p[@"tekBaudRate"] integerValue] : 2400;
     [self.view setTekBaudRate:tekBaud];
 
+    BOOL eraseFlash = p[@"tekEraseFlash"] ? [p[@"tekEraseFlash"] boolValue] : YES;
+    [self.view setTekEraseFlash:eraseFlash];
+
+    BOOL accurateBg = p[@"tekAccurateBg"] ? [p[@"tekAccurateBg"] boolValue] : YES;
+    [self.view setTekAccurateBg:accurateBg];
+
     NSInteger ms = [p[@"persistenceMs"] integerValue];
     if (ms <= 0) ms = 100;
     [self.view setPlasmaDecayDuration:(NSTimeInterval)ms / 1000.0];
@@ -448,6 +454,9 @@ static void plato_mac_beep(void *context) {
             @"crtPersistenceMs": @20,
             @"crtDistortion": @2,
             @"phosphorColor": @0,
+            @"tekBaudRate": @2400,
+            @"tekEraseFlash": @YES,
+            @"tekAccurateBg": @YES,
             @"fullScreen": @YES,
             @"isDefault": @YES
         } mutableCopy];
@@ -521,6 +530,8 @@ static void plato_mac_beep(void *context) {
 // Controlli Real Tektronix 4014
 @property (nonatomic, strong) NSTextField *tekBaudLbl;
 @property (nonatomic, strong) NSPopUpButton *tekBaudPopup;
+@property (nonatomic, strong) NSButton *tekEraseFlashCheckbox;
+@property (nonatomic, strong) NSButton *tekAccurateBgCheckbox;
 
 @property (nonatomic, strong) NSButton *fullscreenCheckbox;
 @property (nonatomic, strong) NSButton *defaultCheckbox;
@@ -708,6 +719,14 @@ static void plato_mac_beep(void *context) {
     [_tekBaudPopup addItemsWithTitles:@[@"Instant (Uncapped)", @"110 Baud", @"150 Baud", @"300 Baud", @"600 Baud", @"1200 Baud", @"2400 Baud", @"4800 Baud", @"9600 Baud"]];
     [content addSubview:_tekBaudPopup];
 
+    _tekEraseFlashCheckbox = [NSButton checkboxWithTitle:@"Tektronix Erase Flash" target:nil action:nil];
+    [_tekEraseFlashCheckbox setFrame:NSMakeRect(fx, 701, fw, 18)];
+    [content addSubview:_tekEraseFlashCheckbox];
+
+    _tekAccurateBgCheckbox = [NSButton checkboxWithTitle:@"Tektronix Accurate Background" target:nil action:nil];
+    [_tekAccurateBgCheckbox setFrame:NSMakeRect(fx, 665, fw, 18)];
+    [content addSubview:_tekAccurateBgCheckbox];
+
     _fullscreenCheckbox = [NSButton checkboxWithTitle:@"Launch in Full Screen" target:nil action:nil];
     [_fullscreenCheckbox setFrame:NSMakeRect(fx, 632, 240, 18)];
     [content addSubview:_fullscreenCheckbox];
@@ -784,6 +803,10 @@ static void plato_mac_beep(void *context) {
     BOOL isTek = (mIdx == 5);
     [_tekBaudLbl setHidden:!isTek];
     [_tekBaudPopup setHidden:!isTek];
+    [_tekEraseFlashCheckbox setHidden:!isTek];
+    [_tekAccurateBgCheckbox setHidden:!isTek];
+    [_overrideColorLbl setHidden:isTek];
+    [_overrideColorPopup setHidden:isTek];
 }
 
 - (void)onModeChanged:(id)sender {
@@ -847,6 +870,13 @@ static void plato_mac_beep(void *context) {
     else if (ms == 2000) decayIdx = 4;
     else if (ms == 5000) decayIdx = 5;
     [self.decayPopup selectItemAtIndex:decayIdx];
+
+    // Tektronix settings
+    BOOL eraseFlash = p[@"tekEraseFlash"] ? [p[@"tekEraseFlash"] boolValue] : YES;
+    [self.tekEraseFlashCheckbox setState:eraseFlash ? NSControlStateValueOn : NSControlStateValueOff];
+
+    BOOL accurateBg = p[@"tekAccurateBg"] ? [p[@"tekAccurateBg"] boolValue] : YES;
+    [self.tekAccurateBgCheckbox setState:accurateBg ? NSControlStateValueOn : NSControlStateValueOff];
 
     // Tektronix baud rate
     NSInteger tekBaud = p[@"tekBaudRate"] ? [p[@"tekBaudRate"] integerValue] : 2400;
@@ -936,6 +966,8 @@ static void plato_mac_beep(void *context) {
     else if (tbIdx == 7) tbVal = 4800;
     else if (tbIdx == 8) tbVal = 9600;
     p[@"tekBaudRate"] = @(tbVal);
+    p[@"tekEraseFlash"] = @([self.tekEraseFlashCheckbox state] == NSControlStateValueOn);
+    p[@"tekAccurateBg"] = @([self.tekAccurateBgCheckbox state] == NSControlStateValueOn);
 
     p[@"plasmaDistortion"] = @([self.plasmaDistortionPopup indexOfSelectedItem]);
 
@@ -1000,6 +1032,9 @@ static void plato_mac_beep(void *context) {
             @"crtBeamLevel": @1,
             @"crtPersistenceMs": @20,
             @"crtDistortion": @2,
+            @"tekBaudRate": @2400,
+            @"tekEraseFlash": @YES,
+            @"tekAccurateBg": @YES,
             @"fullScreen": @YES,
             @"startupScriptEnabled": @NO,
             @"startupScript": [NSString stringWithUTF8String:PLATO_DEFAULT_AUTOLOGIN_SCRIPT],
@@ -1328,6 +1363,8 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSMenu *crtDistortionMenu;
 @property (nonatomic, strong) NSMenu *overrideColorMenu;
 @property (nonatomic, strong) NSMenu *tekBaudMenu;
+@property (nonatomic, strong) NSMenuItem *tekEraseFlashMenuItem;
+@property (nonatomic, strong) NSMenuItem *tekAccurateBgMenuItem;
 - (void)updateTekBaudMenu:(NSInteger)baud;
 - (void)selectTekBaudRateFromMenu:(id)sender;
 @property (nonatomic, strong) NSMenuItem *keyboardReferenceMenuItem;
@@ -1648,6 +1685,14 @@ static void plato_mac_beep(void *context) {
 
     [tekBaudItem setSubmenu:self.tekBaudMenu];
     [viewMenu addItem:tekBaudItem];
+
+    self.tekEraseFlashMenuItem = [[NSMenuItem alloc] initWithTitle:@"Tektronix Erase Flash" action:@selector(toggleTekEraseFlash:) keyEquivalent:@""];
+    [self.tekEraseFlashMenuItem setTarget:self];
+    [viewMenu addItem:self.tekEraseFlashMenuItem];
+
+    self.tekAccurateBgMenuItem = [[NSMenuItem alloc] initWithTitle:@"Tektronix Accurate Background" action:@selector(toggleTekAccurateBg:) keyEquivalent:@""];
+    [self.tekAccurateBgMenuItem setTarget:self];
+    [viewMenu addItem:self.tekAccurateBgMenuItem];
 
     [viewMenu addItem:[NSMenuItem separatorItem]];
 
@@ -2312,6 +2357,22 @@ static void plato_mac_beep(void *context) {
     [self requestDisplayMode:5 sender:sender];
 }
 
+- (void)toggleTekEraseFlash:(id)sender {
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    if (!tc) return;
+    BOOL val = ![tc.view tekEraseFlash];
+    [tc.view setTekEraseFlash:val];
+    [self updateTekBaudMenu:[tc.view tekBaudRate]];
+}
+
+- (void)toggleTekAccurateBg:(id)sender {
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    if (!tc) return;
+    BOOL val = ![tc.view tekAccurateBg];
+    [tc.view setTekAccurateBg:val];
+    [self updateTekBaudMenu:[tc.view tekBaudRate]];
+}
+
 - (void)selectTekBaudRateFromMenu:(id)sender {
     NSInteger tag = [sender tag];
     NSInteger baud = 0;
@@ -2361,6 +2422,14 @@ static void plato_mac_beep(void *context) {
 }
 
 - (void)updateTekBaudMenu:(NSInteger)baud {
+    PLATOTerminalWindowController *tc = [self activeTerminalController];
+    if (tc && [tc.view respondsToSelector:@selector(tekEraseFlash)]) {
+        BOOL isTek = ([tc.view currentDisplayMode] == 5);
+        [self.tekEraseFlashMenuItem setHidden:!isTek];
+        [self.tekAccurateBgMenuItem setHidden:!isTek];
+        [self.tekEraseFlashMenuItem setState:[tc.view tekEraseFlash] ? NSControlStateValueOn : NSControlStateValueOff];
+        [self.tekAccurateBgMenuItem setState:[tc.view tekAccurateBg] ? NSControlStateValueOn : NSControlStateValueOff];
+    }
     NSInteger targetTag = 2500;
 
     if (baud == 110) targetTag = 2501;
@@ -2725,6 +2794,13 @@ static void plato_mac_beep(void *context) {
         if (!active || !active.view || [active.view currentDisplayMode] == 5) {
             return NO;
         }
+    }
+    if (item.action == @selector(toggleTekEraseFlash:) || item.action == @selector(toggleTekAccurateBg:)) {
+        PLATOTerminalWindowController *active = [self activeTerminalController];
+        if (!active || !active.view || [active.view currentDisplayMode] != 5) {
+            return NO;
+        }
+        return YES;
     }
     return YES;
 }

@@ -51,8 +51,23 @@ static int g_list_scroll = 0;
 
 /* Stato Editor Script Multi-linea */
 static int g_script_cursor = 0;
+static int g_script_sel_start = 0;
+static int g_script_sel_end = 0;
+static bool g_script_text_dragging = false;
 static int g_script_scroll_line = 0;
 static bool g_sb_dragging = false;
+
+static void script_delete_selection(void) {
+    if (g_script_sel_start == g_script_sel_end) return;
+    int a = g_script_sel_start < g_script_sel_end ? g_script_sel_start : g_script_sel_end;
+    int b = g_script_sel_start < g_script_sel_end ? g_script_sel_end : g_script_sel_start;
+    size_t len = strlen(g_edit_script.body);
+    if (b > (int)len) b = (int)len;
+    if (a < 0) a = 0;
+    memmove(&g_edit_script.body[a], &g_edit_script.body[b], len - b + 1);
+    g_script_cursor = a;
+    g_script_sel_start = g_script_sel_end = a;
+}
 static int g_sb_drag_start_y = 0;
 static int g_sb_drag_start_scroll = 0;
 
@@ -334,8 +349,19 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
     } else if (ev->type == SDL_MOUSEBUTTONUP && ev->button.windowID == win_id) {
         if (ev->button.button == SDL_BUTTON_LEFT) {
             g_sb_dragging = false;
+            g_script_text_dragging = false;
         }
     } else if (ev->type == SDL_MOUSEMOTION && ev->motion.windowID == win_id) {
+        if (g_script_text_dragging && (ev->motion.state & SDL_BUTTON_LMASK)) {
+            int rel_y = ev->motion.y - SCRIPT_BOX_Y - 4;
+            int clicked_line = g_script_scroll_line + (rel_y / SCRIPT_LINE_HEIGHT);
+            int rel_x = ev->motion.x - SCRIPT_BOX_X - 8;
+            int clicked_col = (rel_x > 0) ? (int)((float)rel_x / 8.5f) : 0;
+            g_script_cursor = find_pos_at_line_col(g_edit_script.body, clicked_line, clicked_col);
+            g_script_sel_end = g_script_cursor;
+            ensure_cursor_visible();
+            return;
+        }
         if (g_sb_dragging && (ev->motion.state & SDL_BUTTON_LMASK)) {
             int total_lines = get_total_script_lines(g_edit_script.body);
             int max_scroll = total_lines - SCRIPT_VISIBLE_LINES;
@@ -412,10 +438,43 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
         SDL_Keymod mod = SDL_GetModState();
         bool ctrl = (mod & KMOD_CTRL) != 0;
         bool gui  = (mod & KMOD_GUI) != 0;
+        bool shift = (mod & KMOD_SHIFT) != 0;
 
+        /* Seleziona Tutto (Ctrl+A / Cmd+A) */
+        if ((ctrl || gui) && ev->key.keysym.sym == SDLK_a && g_active_field == SCR_FIELD_BODY) {
+            g_script_sel_start = 0;
+            g_script_sel_end = (int)strlen(g_edit_script.body);
+            g_script_cursor = g_script_sel_end;
+            ensure_cursor_visible();
+            return;
+        }
+
+        /* Copia (Ctrl+C) e Taglia (Ctrl+X) */
+        if ((ctrl || gui) && (ev->key.keysym.sym == SDLK_c || ev->key.keysym.sym == SDLK_x) && g_active_field == SCR_FIELD_BODY) {
+            if (g_script_sel_start != g_script_sel_end) {
+                int a = g_script_sel_start < g_script_sel_end ? g_script_sel_start : g_script_sel_end;
+                int b = g_script_sel_start < g_script_sel_end ? g_script_sel_end : g_script_sel_start;
+                char tmp[sizeof(g_edit_script.body)];
+                int clen = b - a;
+                if (clen > (int)sizeof(tmp) - 1) clen = (int)sizeof(tmp) - 1;
+                memcpy(tmp, &g_edit_script.body[a], clen);
+                tmp[clen] = 0;
+                SDL_SetClipboardText(tmp);
+                if (ev->key.keysym.sym == SDLK_x) {
+                    script_delete_selection();
+                    ensure_cursor_visible();
+                }
+            } else {
+                SDL_SetClipboardText(g_edit_script.body);
+            }
+            return;
+        }
+
+        /* Incolla (Ctrl+V / Cmd+V) */
         if ((ctrl || gui) && ev->key.keysym.sym == SDLK_v && g_active_field == SCR_FIELD_BODY) {
             char *cb_text = SDL_GetClipboardText();
             if (cb_text) {
+                script_delete_selection();
                 size_t cb_len = strlen(cb_text);
                 size_t cur_len = strlen(g_edit_script.body);
                 if (cur_len + cb_len < sizeof(g_edit_script.body) - 1) {
@@ -424,6 +483,7 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
                             cur_len - g_script_cursor + 1);
                     memcpy(&g_edit_script.body[g_script_cursor], cb_text, cb_len);
                     g_script_cursor += (int)cb_len;
+                    g_script_sel_start = g_script_sel_end = g_script_cursor;
                     ensure_cursor_visible();
                 }
                 SDL_free(cb_text);
@@ -439,35 +499,43 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
             if (ev->key.keysym.sym == SDLK_UP) {
                 if (cur_line > 0) {
                     g_script_cursor = find_pos_at_line_col(g_edit_script.body, cur_line - 1, cur_col);
+                    if (shift) g_script_sel_end = g_script_cursor;
+                    else g_script_sel_start = g_script_sel_end = g_script_cursor;
                     ensure_cursor_visible();
                 }
                 return;
             } else if (ev->key.keysym.sym == SDLK_DOWN) {
                 if (cur_line < total - 1) {
                     g_script_cursor = find_pos_at_line_col(g_edit_script.body, cur_line + 1, cur_col);
+                    if (shift) g_script_sel_end = g_script_cursor;
+                    else g_script_sel_start = g_script_sel_end = g_script_cursor;
                     ensure_cursor_visible();
                 }
                 return;
             } else if (ev->key.keysym.sym == SDLK_LEFT) {
                 if (g_script_cursor > 0) {
                     g_script_cursor--;
+                    if (shift) g_script_sel_end = g_script_cursor;
+                    else g_script_sel_start = g_script_sel_end = g_script_cursor;
                     ensure_cursor_visible();
                 }
                 return;
             } else if (ev->key.keysym.sym == SDLK_RIGHT) {
                 if (g_script_cursor < (int)strlen(g_edit_script.body)) {
                     g_script_cursor++;
+                    if (shift) g_script_sel_end = g_script_cursor;
+                    else g_script_sel_start = g_script_sel_end = g_script_cursor;
                     ensure_cursor_visible();
                 }
                 return;
-            } else if (ev->key.keysym.sym == SDLK_PAGEUP) {
+            } else if (ev->key.keysym.sym == SDLK_PAGEUP || ev->key.keysym.sym == SDLK_KP_9) {
                 g_script_scroll_line -= SCRIPT_VISIBLE_LINES;
                 if (g_script_scroll_line < 0) g_script_scroll_line = 0;
                 int n_line = cur_line - SCRIPT_VISIBLE_LINES;
                 if (n_line < 0) n_line = 0;
                 g_script_cursor = find_pos_at_line_col(g_edit_script.body, n_line, cur_col);
                 return;
-            } else if (ev->key.keysym.sym == SDLK_PAGEDOWN) {
+            } else if (ev->key.keysym.sym == SDLK_PAGEDOWN || ev->key.keysym.sym == SDLK_KP_3) {
                 int max_scroll = total - SCRIPT_VISIBLE_LINES;
                 if (max_scroll < 0) max_scroll = 0;
                 g_script_scroll_line += SCRIPT_VISIBLE_LINES;
@@ -476,24 +544,28 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
                 if (n_line >= total) n_line = total - 1;
                 g_script_cursor = find_pos_at_line_col(g_edit_script.body, n_line, cur_col);
                 return;
-            } else if (ev->key.keysym.sym == SDLK_HOME) {
+            } else if (ev->key.keysym.sym == SDLK_HOME || ev->key.keysym.sym == SDLK_KP_7) {
                 while (g_script_cursor > 0 && g_edit_script.body[g_script_cursor - 1] != '\n') {
                     g_script_cursor--;
                 }
                 ensure_cursor_visible();
                 return;
-            } else if (ev->key.keysym.sym == SDLK_END) {
+            } else if (ev->key.keysym.sym == SDLK_END || ev->key.keysym.sym == SDLK_KP_1) {
                 while (g_edit_script.body[g_script_cursor] && g_edit_script.body[g_script_cursor] != '\n') {
                     g_script_cursor++;
                 }
                 ensure_cursor_visible();
                 return;
             } else if (ev->key.keysym.sym == SDLK_DELETE) {
-                size_t len = strlen(g_edit_script.body);
-                if (g_script_cursor < (int)len) {
-                    memmove(&g_edit_script.body[g_script_cursor],
-                            &g_edit_script.body[g_script_cursor + 1],
-                            len - g_script_cursor);
+                if (g_script_sel_start != g_script_sel_end) {
+                    script_delete_selection();
+                } else {
+                    size_t len = strlen(g_edit_script.body);
+                    if (g_script_cursor < (int)len) {
+                        memmove(&g_edit_script.body[g_script_cursor],
+                                &g_edit_script.body[g_script_cursor + 1],
+                                len - g_script_cursor);
+                    }
                 }
                 return;
             }
@@ -516,12 +588,16 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
                 size_t len = strlen(buf);
                 if (len > 0) { buf[len - 1] = '\0'; g_edit_script.command_delay_ms = atoi(buf); }
             } else if (g_active_field == SCR_FIELD_BODY) {
-                if (g_script_cursor > 0) {
+                if (g_script_sel_start != g_script_sel_end) {
+                    script_delete_selection();
+                    ensure_cursor_visible();
+                } else if (g_script_cursor > 0) {
                     size_t len = strlen(g_edit_script.body);
                     memmove(&g_edit_script.body[g_script_cursor - 1],
                             &g_edit_script.body[g_script_cursor],
                             len - g_script_cursor + 1);
                     g_script_cursor--;
+                    g_script_sel_start = g_script_sel_end = g_script_cursor;
                     ensure_cursor_visible();
                 }
             }
@@ -546,6 +622,8 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
                              (g_active_field == SCR_FIELD_CMD_DEL) ? SCR_FIELD_BODY : SCR_FIELD_NAME;
         }
     } else if (ev->type == SDL_TEXTINPUT && ev->text.windowID == win_id) {
+        SDL_Keymod mod = SDL_GetModState();
+        if ((mod & KMOD_CTRL) || (mod & KMOD_GUI)) return;
         const char *txt = ev->text.text;
         if (g_active_field == SCR_FIELD_NAME) {
             size_t len = strlen(g_edit_script.name);
@@ -609,7 +687,7 @@ void linux_scripts_handle_event(const SDL_Event *ev) {
             ns.char_delay_ms = 250;
             ns.next_delay_ms = 500;
             ns.command_delay_ms = 0;
-            snprintf(ns.body, sizeof(ns.body), "# New Plato Script\nkey NEXT\nexit\n");
+            snprintf(ns.body, sizeof(ns.body), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
             plato_scripts_add(g_script_list, &ns);
             sync_from_script((int)g_script_list->count - 1);
             trigger_flash_btn(SCR_BTN_NEW);
@@ -874,6 +952,18 @@ void linux_scripts_render(void) {
                 if (buf[0] == '#') { cr = 140; cg = 100; cb = 30; }
                 else if (buf[0] == '@') { cr = 255; cg = 220; cb = 60; }
 
+                /* Disegna evidenziazione visiva della selezione */
+                int line_start_idx = (int)(line_start - text);
+                int line_end_idx = line_start_idx + len;
+                int s_min = g_script_sel_start < g_script_sel_end ? g_script_sel_start : g_script_sel_end;
+                int s_max = g_script_sel_start < g_script_sel_end ? g_script_sel_end : g_script_sel_start;
+                if (s_min != s_max && s_min < line_end_idx && s_max > line_start_idx) {
+                    int o_start = s_min > line_start_idx ? s_min : line_start_idx;
+                    int o_end = s_max < line_end_idx ? s_max : line_end_idx;
+                    float sel_x1 = (float)(SCRIPT_BOX_X + 10) + get_string_width_f(line_start, o_start - line_start_idx);
+                    float sel_w = get_string_width_f(line_start + (o_start - line_start_idx), o_end - o_start);
+                    draw_scr_rect(g_scr_ren, (int)sel_x1, (int)(ly - 14), (int)sel_w + 1, 17, th.hover_bg.r, th.hover_bg.g, th.hover_bg.b, false, 0, 0, 0);
+                }
                 draw_scr_text(g_scr_ren, (float)(SCRIPT_BOX_X + 10), ly, buf, th.normal.r, th.normal.g, th.normal.b);
 
                 /* Cursore lampeggiante / visibile */

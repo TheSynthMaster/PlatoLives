@@ -81,6 +81,7 @@ zig cc -target aarch64-linux-gnu -std=c11 -O2 -s \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
+    src/plato_tek_font.c \
     src/z80emu.c \
     src/plato_microtutor.c \
     -lSDL2 -lm -lpthread \
@@ -118,6 +119,7 @@ zig cc -target x86_64-linux-gnu -std=c11 -O2 -s \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
+    src/plato_tek_font.c \
     src/z80emu.c \
     src/plato_microtutor.c \
     -lSDL2 -lm -lpthread \
@@ -131,7 +133,7 @@ zig cc -target aarch64-linux-musl -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/plato_protocol.c src/plato_terminal.c src/plato_transport.c \
     src/plato_graphics.c src/plato_font.c src/plato_framebuffer.c \
     src/plato_ringbuf.c src/plato_keyboard.c src/plato_keymap.c src/plato_profile.c \
-    src/plato_script.c src/plato_optical.c src/z80emu.c src/plato_microtutor.c \
+    src/plato_script.c src/plato_optical.c src/plato_tek_font.c src/z80emu.c src/plato_microtutor.c \
     -pthread -static -o build/PlatoLives-console-linux-arm64
 
 zig cc -target x86_64-linux-musl -std=c11 -O2 -s -Iinclude -Iinclude/plato \
@@ -139,7 +141,7 @@ zig cc -target x86_64-linux-musl -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/plato_protocol.c src/plato_terminal.c src/plato_transport.c \
     src/plato_graphics.c src/plato_font.c src/plato_framebuffer.c \
     src/plato_ringbuf.c src/plato_keyboard.c src/plato_keymap.c src/plato_profile.c \
-    src/plato_script.c src/plato_optical.c src/z80emu.c src/plato_microtutor.c \
+    src/plato_script.c src/plato_optical.c src/plato_tek_font.c src/z80emu.c src/plato_microtutor.c \
     -pthread -static -o build/PlatoLives-console-linux-x86_64
 
 # 5. CROSS-COMPILAZIONE WINDOWS GUI x86_64 (Direct3D 11 + Win32)
@@ -168,6 +170,7 @@ zig cc -target x86_64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
+    src/plato_tek_font.c \
     src/z80emu.c \
     src/plato_microtutor.c \
     src/console_runner.c \
@@ -201,6 +204,7 @@ zig cc -target aarch64-windows-gnu -std=c11 -O2 -s -Iinclude -Iinclude/plato \
     src/plato_profile.c \
     src/plato_script.c \
     src/plato_optical.c \
+    src/plato_tek_font.c \
     src/z80emu.c \
     src/plato_microtutor.c \
     src/console_runner.c \

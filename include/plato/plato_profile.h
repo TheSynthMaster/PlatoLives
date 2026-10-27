@@ -21,6 +21,8 @@ typedef struct {
     int crt_distortion;      /* 0: None, 1: Barrel, 2: Cylindrical */
     int phosphor_color;      /* 0: Default (Orange/White), 1: Green P31, 2: Amber P40 */
     int tek_baud_rate;       /* 0: Instant; otherwise 110, 150, 300, 600, 1200, 2400, 4800 or 9600 bps */
+    bool tek_erase_flash;    /* true (default): Flash ottico 67ms; false: clear immediato silenzioso */
+    bool tek_accurate_bg;    /* true (default): Shot noise 60FPS; false: solo grana fissa (CPU saving) */
     bool full_screen;
     bool is_default;
     bool startup_script_enabled;

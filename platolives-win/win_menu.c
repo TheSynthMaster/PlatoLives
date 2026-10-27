@@ -139,6 +139,8 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_4800,    L"4800 Baud");
     AppendMenuW(hTekSpeed, MF_STRING, IDM_VIEW_TEK_SPEED_9600,    L"9600 Baud");
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hTekSpeed, L"Tektronix Connection Speed");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_TEK_ERASE_FLASH, L"Tektronix Erase Flash");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_TEK_ACCURATE_BG, L"Tektronix Accurate Background");
 
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
 
@@ -222,6 +224,11 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     else if (p->display_mode == 5) mode_id = IDM_VIEW_MODE_REAL_TEKTRONIX;
 
     CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_TEKTRONIX, mode_id, MF_BYCOMMAND);
+
+    CheckMenuItem(menu, IDM_VIEW_TEK_ERASE_FLASH, p->tek_erase_flash ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+    CheckMenuItem(menu, IDM_VIEW_TEK_ACCURATE_BG, p->tek_accurate_bg ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+    EnableMenuItem(menu, IDM_VIEW_TEK_ERASE_FLASH, p->display_mode == 5 ? (MF_BYCOMMAND | MF_ENABLED) : (MF_BYCOMMAND | MF_GRAYED));
+    EnableMenuItem(menu, IDM_VIEW_TEK_ACCURATE_BG, p->display_mode == 5 ? (MF_BYCOMMAND | MF_ENABLED) : (MF_BYCOMMAND | MF_GRAYED));
 
     /* Sottomenu Ottici in View (Indice 2 nella menubar) */
     HMENU hView = GetSubMenu(menu, 2);

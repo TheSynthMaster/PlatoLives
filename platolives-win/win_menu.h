@@ -84,6 +84,8 @@
 #define IDM_VIEW_KEYBOARD_REF           1380
 #define IDM_VIEW_FULLSCREEN             1391
 #define IDM_VIEW_FPS_HUD                1392
+#define IDM_VIEW_TEK_ERASE_FLASH        1393
+#define IDM_VIEW_TEK_ACCURATE_BG        1394
 
 /* Menu Tools */
 #define IDM_TOOLS_SAVE_SCREEN_TEXT      1401

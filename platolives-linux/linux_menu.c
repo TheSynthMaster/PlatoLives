@@ -313,6 +313,8 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Real Tektronix 4014 (DVBST)", NULL, ACT_VIEW_REAL_TEKTRONIX, TYPE_ITEM, 0, true, p->display_mode == 5, false};
         it[n++] = (gui_menu_item_t){"Tektronix Connection Speed", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_TEK_SPEED, false, false, (p->display_mode != 5)};
+        it[n++] = (gui_menu_item_t){"Tektronix Erase Flash", NULL, ACT_VIEW_TEK_ERASE_FLASH, TYPE_ITEM, 0, true, p->tek_erase_flash, (p->display_mode != 5)};
+        it[n++] = (gui_menu_item_t){"Tektronix Accurate Background", NULL, ACT_VIEW_TEK_ACCURATE_BG, TYPE_ITEM, 0, true, p->tek_accurate_bg, (p->display_mode != 5)};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Full Screen", "F11", ACT_VIEW_FULLSCREEN, TYPE_ITEM, 0, false, ctx->fullscreen, false};
         it[n++] = (gui_menu_item_t){"Show Performance HUD (FPS/CPU)", "F12", ACT_VIEW_FPS_HUD, TYPE_ITEM, 0, false, linux_hud_is_open(), false};

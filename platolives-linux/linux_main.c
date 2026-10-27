@@ -1052,6 +1052,14 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_COLOR_AMBER:   app->profile.phosphor_color = 2; goto sync_optical_palette;
         case ACT_VIEW_COLOR_WHITE:   app->profile.phosphor_color = 3; goto sync_optical_palette;
 
+        case ACT_VIEW_TEK_ERASE_FLASH:
+            app->profile.tek_erase_flash = !app->profile.tek_erase_flash;
+            break;
+
+        case ACT_VIEW_TEK_ACCURATE_BG:
+            app->profile.tek_accurate_bg = !app->profile.tek_accurate_bg;
+            break;
+
         /* Tektronix Baud Rate Selectors */
         case ACT_VIEW_TEK_SPEED_INSTANT:
         case ACT_VIEW_TEK_SPEED_110:
@@ -1732,12 +1740,17 @@ int main(int argc, char *argv[]) {
             linux_conn_handle_event(&event);
             linux_hud_handle_event(&event);
 
-            /* Filtro eventi per finestra secondaria: non toccare la finestra principale se l'evento è per Keyref */
+            /* Filtro eventi per finestra secondaria: isolamento totale per evitare leakage verso il terminale */
             uint32_t main_win_id = SDL_GetWindowID(app.window);
             if (event.type == SDL_WINDOWEVENT && event.window.windowID != main_win_id) continue;
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.windowID != main_win_id) continue;
+            if (event.type == SDL_MOUSEBUTTONUP && event.button.windowID != main_win_id) continue;
             if (event.type == SDL_MOUSEMOTION && event.motion.windowID != main_win_id) continue;
+            if (event.type == SDL_MOUSEWHEEL && event.wheel.windowID != main_win_id) continue;
             if (event.type == SDL_KEYDOWN && event.key.windowID != main_win_id) continue;
+            if (event.type == SDL_KEYUP && event.key.windowID != main_win_id) continue;
+            if (event.type == SDL_TEXTINPUT && event.text.windowID != main_win_id) continue;
+            if (event.type == SDL_TEXTEDITING && event.edit.windowID != main_win_id) continue;
 
             if (event.type == SDL_QUIT) {
                 app.running = false;

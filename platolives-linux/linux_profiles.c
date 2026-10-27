@@ -50,8 +50,23 @@ typedef enum {
 
 static prof_field_t g_active_field = FIELD_NONE;
 static int g_script_cursor = 0;
+static int g_script_sel_start = 0;
+static int g_script_sel_end = 0;
+static bool g_script_text_dragging = false;
 static int g_script_scroll_line = 0;
 static bool g_sb_dragging = false;
+
+static void profile_delete_selection(void) {
+    if (g_script_sel_start == g_script_sel_end) return;
+    int a = g_script_sel_start < g_script_sel_end ? g_script_sel_start : g_script_sel_end;
+    int b = g_script_sel_start < g_script_sel_end ? g_script_sel_end : g_script_sel_start;
+    size_t len = strlen(g_edit_profile.startup_script);
+    if (b > (int)len) b = (int)len;
+    if (a < 0) a = 0;
+    memmove(&g_edit_profile.startup_script[a], &g_edit_profile.startup_script[b], len - b + 1);
+    g_script_cursor = a;
+    g_script_sel_start = g_script_sel_end = a;
+}
 static int g_sb_drag_start_y = 0;
 static int g_sb_drag_start_scroll = 0;
 
@@ -285,19 +300,41 @@ static int find_pos_at_line_col(const char *str, int target_line, int target_col
 
 void linux_profiles_handle_event(const SDL_Event *ev) {
     if (!ev || !g_prof_win) return;
+    uint32_t win_id = SDL_GetWindowID(g_prof_win);
 
-    if (ev->type == SDL_WINDOWEVENT && ev->window.windowID == SDL_GetWindowID(g_prof_win)) {
+    if (ev->type == SDL_WINDOWEVENT && ev->window.windowID == win_id) {
         if (ev->window.event == SDL_WINDOWEVENT_CLOSE) {
             linux_profiles_destroy();
             return;
         }
     }
 
+    /* Consumo esclusivo: ignora eventi non destinati a questa finestra modale */
+    if (ev->type == SDL_MOUSEBUTTONDOWN && ev->button.windowID != win_id) return;
+    if (ev->type == SDL_MOUSEBUTTONUP && ev->button.windowID != win_id) return;
+    if (ev->type == SDL_MOUSEMOTION && ev->motion.windowID != win_id) return;
+    if (ev->type == SDL_MOUSEWHEEL && ev->wheel.windowID != win_id) return;
+    if (ev->type == SDL_KEYDOWN && ev->key.windowID != win_id) return;
+    if (ev->type == SDL_KEYUP && ev->key.windowID != win_id) return;
+    if (ev->type == SDL_TEXTINPUT && ev->text.windowID != win_id) return;
+
     if (ev->type == SDL_MOUSEBUTTONUP) {
-        if (ev->button.button == SDL_BUTTON_LEFT) g_sb_dragging = false;
+        if (ev->button.button == SDL_BUTTON_LEFT) {
+            g_sb_dragging = false;
+            g_script_text_dragging = false;
+        }
     }
 
     if (ev->type == SDL_MOUSEMOTION) {
+        if (g_script_text_dragging && (ev->motion.state & SDL_BUTTON_LMASK)) {
+            int rel_y = ev->motion.y - SCRIPT_BOX_Y - 4;
+            int clicked_line = g_script_scroll_line + (rel_y / SCRIPT_LINE_HEIGHT);
+            int rel_x = ev->motion.x - SCRIPT_BOX_X - 8;
+            int clicked_col = (rel_x > 0) ? (int)((float)rel_x / 8.5f) : 0;
+            g_script_cursor = find_pos_at_line_col(g_edit_profile.startup_script, clicked_line, clicked_col);
+            g_script_sel_end = g_script_cursor;
+            return;
+        }
         if (g_sb_dragging) {
             int total_lines = get_total_script_lines(g_edit_profile.startup_script);
             int max_scroll = total_lines - SCRIPT_VISIBLE_LINES;
@@ -348,6 +385,8 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             np.phosphor_color = 0;
             np.crt_distortion = 0;
             np.tek_baud_rate = 2400;
+            np.tek_erase_flash = true;
+            np.tek_accurate_bg = true;
             np.startup_script_enabled = false;
             snprintf(np.startup_script, sizeof(np.startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
             plato_profiles_add(g_list, &np);
@@ -454,6 +493,15 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
                 }
                 tx += 69;
             }
+            /* Tektronix Erase Flash & Accurate BG at Y=234 */
+            if (pt_in_rect(mx, my, 340, 234, 150, 22)) {
+                g_edit_profile.tek_erase_flash = !g_edit_profile.tek_erase_flash;
+                return;
+            }
+            if (pt_in_rect(mx, my, 510, 234, 210, 22)) {
+                g_edit_profile.tek_accurate_bg = !g_edit_profile.tek_accurate_bg;
+                return;
+            }
         }
 
         /* Checkboxes a Y=292 */
@@ -473,6 +521,10 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             int rel_x = mx - SCRIPT_BOX_X - 8;
             int clicked_col = (rel_x > 0) ? (int)((float)rel_x / 8.5f) : 0;
             g_script_cursor = find_pos_at_line_col(g_edit_profile.startup_script, clicked_line, clicked_col);
+            SDL_Keymod mod = SDL_GetModState();
+            if (!(mod & KMOD_SHIFT)) g_script_sel_start = g_script_cursor;
+            g_script_sel_end = g_script_cursor;
+            g_script_text_dragging = true;
             return;
         }
 
@@ -505,6 +557,8 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
     }
 
     if (ev->type == SDL_TEXTINPUT) {
+        SDL_Keymod mod = SDL_GetModState();
+        if ((mod & KMOD_CTRL) || (mod & KMOD_GUI)) return;
         if (g_active_field == FIELD_NAME) {
             strncat(g_edit_profile.name, ev->text.text, sizeof(g_edit_profile.name) - strlen(g_edit_profile.name) - 1);
         } else if (g_active_field == FIELD_HOST) {
@@ -532,6 +586,83 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             linux_profiles_destroy();
             return;
         }
+
+        SDL_Keymod mod = SDL_GetModState();
+        bool ctrl = (mod & KMOD_CTRL) != 0;
+        bool gui  = (mod & KMOD_GUI) != 0;
+
+        bool shift = (mod & KMOD_SHIFT) != 0;
+
+        /* Seleziona Tutto (Ctrl+A / Cmd+A) */
+        if ((ctrl || gui) && k == SDLK_a && g_active_field == FIELD_SCRIPT) {
+            g_script_sel_start = 0;
+            g_script_sel_end = (int)strlen(g_edit_profile.startup_script);
+            g_script_cursor = g_script_sel_end;
+            return;
+        }
+
+        /* Copia (Ctrl+C) e Taglia (Ctrl+X) */
+        if ((ctrl || gui) && (k == SDLK_c || k == SDLK_x)) {
+            if (g_active_field == FIELD_SCRIPT) {
+                if (g_script_sel_start != g_script_sel_end) {
+                    int a = g_script_sel_start < g_script_sel_end ? g_script_sel_start : g_script_sel_end;
+                    int b = g_script_sel_start < g_script_sel_end ? g_script_sel_end : g_script_sel_start;
+                    char tmp[sizeof(g_edit_profile.startup_script)];
+                    int clen = b - a;
+                    if (clen > (int)sizeof(tmp) - 1) clen = (int)sizeof(tmp) - 1;
+                    memcpy(tmp, &g_edit_profile.startup_script[a], clen);
+                    tmp[clen] = 0;
+                    SDL_SetClipboardText(tmp);
+                    if (k == SDLK_x) profile_delete_selection();
+                } else {
+                    SDL_SetClipboardText(g_edit_profile.startup_script);
+                }
+                return;
+            } else if (g_active_field == FIELD_NAME) {
+                SDL_SetClipboardText(g_edit_profile.name);
+                return;
+            } else if (g_active_field == FIELD_HOST) {
+                SDL_SetClipboardText(g_edit_profile.host);
+                return;
+            }
+        }
+
+        /* Incolla (Ctrl+V / Cmd+V) */
+        if ((ctrl || gui) && k == SDLK_v) {
+            if (g_active_field == FIELD_SCRIPT) {
+                char *cb_text = SDL_GetClipboardText();
+                if (cb_text) {
+                    profile_delete_selection();
+                    size_t cb_len = strlen(cb_text);
+                    size_t cur_len = strlen(g_edit_profile.startup_script);
+                    if (cur_len + cb_len < sizeof(g_edit_profile.startup_script) - 1) {
+                        memmove(&g_edit_profile.startup_script[g_script_cursor + cb_len],
+                                &g_edit_profile.startup_script[g_script_cursor],
+                                cur_len - g_script_cursor + 1);
+                        memcpy(&g_edit_profile.startup_script[g_script_cursor], cb_text, cb_len);
+                        g_script_cursor += (int)cb_len;
+                        g_script_sel_start = g_script_sel_end = g_script_cursor;
+                    }
+                    SDL_free(cb_text);
+                }
+                return;
+            } else if (g_active_field == FIELD_NAME) {
+                char *cb = SDL_GetClipboardText();
+                if (cb) {
+                    strncat(g_edit_profile.name, cb, sizeof(g_edit_profile.name) - strlen(g_edit_profile.name) - 1);
+                    SDL_free(cb);
+                }
+                return;
+            } else if (g_active_field == FIELD_HOST) {
+                char *cb = SDL_GetClipboardText();
+                if (cb) {
+                    strncat(g_edit_profile.host, cb, sizeof(g_edit_profile.host) - strlen(g_edit_profile.host) - 1);
+                    SDL_free(cb);
+                }
+                return;
+            }
+        }
+
         if (g_active_field == FIELD_NAME && k == SDLK_BACKSPACE) {
             size_t l = strlen(g_edit_profile.name);
             if (l > 0) g_edit_profile.name[l - 1] = '\0';
@@ -541,13 +672,34 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
         } else if (g_active_field == FIELD_PORT && k == SDLK_BACKSPACE) {
             g_edit_profile.port /= 10;
         } else if (g_active_field == FIELD_SCRIPT) {
-            if (k == SDLK_BACKSPACE && g_script_cursor > 0) {
-                size_t l = strlen(g_edit_profile.startup_script);
-                memmove(&g_edit_profile.startup_script[g_script_cursor - 1],
-                        &g_edit_profile.startup_script[g_script_cursor],
-                        l - g_script_cursor + 1);
-                g_script_cursor--;
+            int cur_line = 0, cur_col = 0;
+            get_cursor_line_col(g_edit_profile.startup_script, g_script_cursor, &cur_line, &cur_col);
+            int total = get_total_script_lines(g_edit_profile.startup_script);
+
+            if (k == SDLK_BACKSPACE) {
+                if (g_script_sel_start != g_script_sel_end) {
+                    profile_delete_selection();
+                } else if (g_script_cursor > 0) {
+                    size_t l = strlen(g_edit_profile.startup_script);
+                    memmove(&g_edit_profile.startup_script[g_script_cursor - 1],
+                            &g_edit_profile.startup_script[g_script_cursor],
+                            l - g_script_cursor + 1);
+                    g_script_cursor--;
+                    g_script_sel_start = g_script_sel_end = g_script_cursor;
+                }
+            } else if (k == SDLK_DELETE) {
+                if (g_script_sel_start != g_script_sel_end) {
+                    profile_delete_selection();
+                } else {
+                    size_t l = strlen(g_edit_profile.startup_script);
+                    if (g_script_cursor < (int)l) {
+                        memmove(&g_edit_profile.startup_script[g_script_cursor],
+                                &g_edit_profile.startup_script[g_script_cursor + 1],
+                                l - g_script_cursor);
+                    }
+                }
             } else if (k == SDLK_RETURN) {
+                profile_delete_selection();
                 size_t l = strlen(g_edit_profile.startup_script);
                 if (l + 1 < sizeof(g_edit_profile.startup_script) - 1) {
                     memmove(&g_edit_profile.startup_script[g_script_cursor + 1],
@@ -555,11 +707,66 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
                             l - g_script_cursor + 1);
                     g_edit_profile.startup_script[g_script_cursor] = '\n';
                     g_script_cursor++;
+                    g_script_sel_start = g_script_sel_end = g_script_cursor;
                 }
             } else if (k == SDLK_LEFT && g_script_cursor > 0) {
                 g_script_cursor--;
+                if (shift) g_script_sel_end = g_script_cursor;
+                else g_script_sel_start = g_script_sel_end = g_script_cursor;
             } else if (k == SDLK_RIGHT && (size_t)g_script_cursor < strlen(g_edit_profile.startup_script)) {
                 g_script_cursor++;
+                if (shift) g_script_sel_end = g_script_cursor;
+                else g_script_sel_start = g_script_sel_end = g_script_cursor;
+            } else if (k == SDLK_UP) {
+                if (cur_line > 0) {
+                    g_script_cursor = find_pos_at_line_col(g_edit_profile.startup_script, cur_line - 1, cur_col);
+                    if (shift) g_script_sel_end = g_script_cursor;
+                    else g_script_sel_start = g_script_sel_end = g_script_cursor;
+                }
+            } else if (k == SDLK_DOWN) {
+                if (cur_line < total - 1) {
+                    g_script_cursor = find_pos_at_line_col(g_edit_profile.startup_script, cur_line + 1, cur_col);
+                    if (shift) g_script_sel_end = g_script_cursor;
+                    else g_script_sel_start = g_script_sel_end = g_script_cursor;
+                }
+            } else if (k == SDLK_PAGEUP || k == SDLK_KP_9) {
+                g_script_scroll_line -= SCRIPT_VISIBLE_LINES;
+                if (g_script_scroll_line < 0) g_script_scroll_line = 0;
+                int n_line = cur_line - SCRIPT_VISIBLE_LINES;
+                if (n_line < 0) n_line = 0;
+                g_script_cursor = find_pos_at_line_col(g_edit_profile.startup_script, n_line, cur_col);
+                if (shift) g_script_sel_end = g_script_cursor;
+                else g_script_sel_start = g_script_sel_end = g_script_cursor;
+            } else if (k == SDLK_PAGEDOWN || k == SDLK_KP_3) {
+                int max_scroll = total - SCRIPT_VISIBLE_LINES;
+                if (max_scroll < 0) max_scroll = 0;
+                g_script_scroll_line += SCRIPT_VISIBLE_LINES;
+                if (g_script_scroll_line > max_scroll) g_script_scroll_line = max_scroll;
+                int n_line = cur_line + SCRIPT_VISIBLE_LINES;
+                if (n_line >= total) n_line = total - 1;
+                g_script_cursor = find_pos_at_line_col(g_edit_profile.startup_script, n_line, cur_col);
+                if (shift) g_script_sel_end = g_script_cursor;
+                else g_script_sel_start = g_script_sel_end = g_script_cursor;
+            } else if (k == SDLK_HOME || k == SDLK_KP_7) {
+                while (g_script_cursor > 0 && g_edit_profile.startup_script[g_script_cursor - 1] != '\n') {
+                    g_script_cursor--;
+                }
+                if (shift) g_script_sel_end = g_script_cursor;
+                else g_script_sel_start = g_script_sel_end = g_script_cursor;
+            } else if (k == SDLK_END || k == SDLK_KP_1) {
+                while (g_edit_profile.startup_script[g_script_cursor] && g_edit_profile.startup_script[g_script_cursor] != '\n') {
+                    g_script_cursor++;
+                }
+                if (shift) g_script_sel_end = g_script_cursor;
+                else g_script_sel_start = g_script_sel_end = g_script_cursor;
+            }
+
+            /* Mantiene il cursore visibile nello scroll dell'editor del profilo */
+            get_cursor_line_col(g_edit_profile.startup_script, g_script_cursor, &cur_line, &cur_col);
+            if (cur_line < g_script_scroll_line) {
+                g_script_scroll_line = cur_line;
+            } else if (cur_line >= g_script_scroll_line + SCRIPT_VISIBLE_LINES) {
+                g_script_scroll_line = cur_line - SCRIPT_VISIBLE_LINES + 1;
             }
         }
     }
@@ -608,16 +815,16 @@ void linux_profiles_render(void) {
     char port_buf[16]; snprintf(port_buf, sizeof(port_buf), "%d", g_edit_profile.port);
     draw_prof_text(g_prof_ren, 346.0f, 146.0f, port_buf, th.bright.r, th.bright.g, th.bright.b);
 
-    /* Phosphor Color a fianco di Port (Y=128, X=540) */
-    bool ph_disabled = (g_edit_profile.display_mode == 5); /* Disabilitato esclusivamente su Tektronix 4014 P31 */
-    draw_prof_text(g_prof_ren, 465.0f, 147.0f, "Phosphor:", ph_disabled ? th.disabled.r : th.dim.r, ph_disabled ? th.disabled.g : th.dim.g, ph_disabled ? th.disabled.b : th.dim.b);
-    const char *ph_labels[] = { "Default", "Green P31", "Amber P40", "White P4" };
-    int ph_x = 540;
-    for (int i = 0; i < 4; i++) {
-        bool is_sel = (!ph_disabled && g_edit_profile.phosphor_color == i);
-        if (g_edit_profile.display_mode == 5 && i == 1) is_sel = true;
-        draw_prof_button(g_prof_ren, ph_x, 128, 85, 26, ph_labels[i], is_sel);
-        ph_x += 90;
+    /* Phosphor Color a fianco di Port (Y=128, X=540) - nascosto su Tektronix 4014 P31 */
+    if (g_edit_profile.display_mode != 5) {
+        draw_prof_text(g_prof_ren, 465.0f, 147.0f, "Phosphor:", th.dim.r, th.dim.g, th.dim.b);
+        const char *ph_labels[] = { "Default", "Green P31", "Amber P40", "White P4" };
+        int ph_x = 540;
+        for (int i = 0; i < 4; i++) {
+            bool is_sel = (g_edit_profile.phosphor_color == i);
+            draw_prof_button(g_prof_ren, ph_x, 128, 85, 26, ph_labels[i], is_sel);
+            ph_x += 90;
+        }
     }
 
     /* 6 Display Modes: width 98, gap 6 (step 104) -> 340..958 */
@@ -679,6 +886,15 @@ void linux_profiles_render(void) {
             draw_prof_button(g_prof_ren, tx, 196, 64, 24, tek_labels[i], (g_edit_profile.tek_baud_rate == g_tek_baud_vals[i]));
             tx += 69;
         }
+
+        /* Checkboxes Tektronix a Y=234 */
+        draw_prof_rect(g_prof_ren, 340, 234, 18, 18, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
+        if (g_edit_profile.tek_erase_flash) draw_prof_text(g_prof_ren, 344.0f, 249.0f, "X", th.bright.r, th.bright.g, th.bright.b);
+        draw_prof_text(g_prof_ren, 366.0f, 249.0f, "Erase Flash", th.normal.r, th.normal.g, th.normal.b);
+
+        draw_prof_rect(g_prof_ren, 510, 234, 18, 18, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
+        if (g_edit_profile.tek_accurate_bg) draw_prof_text(g_prof_ren, 514.0f, 249.0f, "X", th.bright.r, th.bright.g, th.bright.b);
+        draw_prof_text(g_prof_ren, 536.0f, 249.0f, "Accurate Background", th.normal.r, th.normal.g, th.normal.b);
     }
 
     /* Checkboxes a Y=292 */
@@ -721,6 +937,17 @@ void linux_profiles_render(void) {
             line_buf[copy_len] = '\0';
 
             int line_y = SCRIPT_BOX_Y + 18 + drawn_lines * SCRIPT_LINE_HEIGHT;
+            int line_start_idx = (int)(line_start - g_edit_profile.startup_script);
+            int line_end_idx = line_start_idx + line_len;
+            int s_min = g_script_sel_start < g_script_sel_end ? g_script_sel_start : g_script_sel_end;
+            int s_max = g_script_sel_start < g_script_sel_end ? g_script_sel_end : g_script_sel_start;
+            if (s_min != s_max && s_min < line_end_idx && s_max > line_start_idx) {
+                int o_start = s_min > line_start_idx ? s_min : line_start_idx;
+                int o_end = s_max < line_end_idx ? s_max : line_end_idx;
+                float sel_x1 = (float)(SCRIPT_BOX_X + 8) + get_string_width_f(line_start, o_start - line_start_idx);
+                float sel_w = get_string_width_f(line_start + (o_start - line_start_idx), o_end - o_start);
+                draw_prof_rect(g_prof_ren, (int)sel_x1, line_y - 14, (int)sel_w + 1, 16, th.hover_bg.r, th.hover_bg.g, th.hover_bg.b, false, 0, 0, 0);
+            }
             draw_prof_text(g_prof_ren, (float)(SCRIPT_BOX_X + 8), (float)line_y, line_buf, th.normal.r, th.normal.g, th.normal.b);
 
             if (g_active_field == FIELD_SCRIPT && current_line_num == cur_line_pos) {

@@ -91,7 +91,7 @@ static void scr_refresh_list(scr_dlg_ctx_t *ctx) {
     scr_populate_fields(ctx, ctx->current_index);
 }
 
-static void scr_save_current(scr_dlg_ctx_t *ctx) {
+static void scr_sync_current(scr_dlg_ctx_t *ctx) {
     if (ctx->current_index < 0 || (size_t)ctx->current_index >= ctx->list->count) return;
     plato_script_t *s = &ctx->list->scripts[ctx->current_index];
 
@@ -119,6 +119,10 @@ static void scr_save_current(scr_dlg_ctx_t *ctx) {
         s->body[o++] = raw_body[i];
     }
     s->body[o] = 0;
+    }
+
+static void scr_save_current(scr_dlg_ctx_t *ctx) {
+    scr_sync_current(ctx);
     plato_scripts_save(ctx->list, NULL);
 }
 
@@ -283,7 +287,7 @@ static LRESULT CALLBACK ScriptsDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             int wmEvent = HIWORD(wParam);
 
             if (wmId == IDC_SCR_LIST && wmEvent == LBN_SELCHANGE) {
-                scr_save_current(ctx);
+                scr_sync_current(ctx);
                 int sel = (int)SendMessage(ctx->hList, LB_GETCURSEL, 0, 0);
                 if (sel != LB_ERR) scr_populate_fields(ctx, sel);
                 return 0;
@@ -349,7 +353,7 @@ static LRESULT CALLBACK ScriptsDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
                 case IDC_SCR_BTN_CLOSE:
                 case IDCANCEL:
-                    scr_save_current(ctx);
+                    plato_scripts_load(ctx->list, NULL);
                     DestroyWindow(hwnd);
                     return 0;
             }
@@ -369,7 +373,7 @@ static LRESULT CALLBACK ScriptsDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         }
 
         case WM_CLOSE:
-            scr_save_current(ctx);
+            plato_scripts_load(ctx->list, NULL);
             DestroyWindow(hwnd);
             return 0;
     }

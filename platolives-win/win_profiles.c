@@ -41,6 +41,8 @@
 #define IDC_COMBO_PHOSPHOR_COLOR 227
 #define IDC_LBL_TEK_BAUD         228
 #define IDC_COMBO_TEK_BAUD       229
+#define IDC_CHK_TEK_ERASE_FLASH  230
+#define IDC_CHK_TEK_ACCURATE_BG  231
 
 typedef struct {
     HWND hwnd;
@@ -54,6 +56,7 @@ typedef struct {
     HWND hLblCrtDecay, hComboCrtDecay;
     HWND hLblCrtDist, hComboCrtDist;
     HWND hLblTekBaud, hComboTekBaud;
+    HWND hChkTekEraseFlash, hChkTekAccurateBg;
     HWND hChkFullscreen, hChkDefault, hChkScript, hEditScript;
     HWND hBtnNew, hBtnDelete, hBtnDefault, hBtnConnect, hBtnSave, hBtnClose;
 
@@ -103,11 +106,17 @@ static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
 
     ShowWindow(ctx->hLblTekBaud, isTek ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hComboTekBaud, isTek ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hChkTekEraseFlash, isTek ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hChkTekAccurateBg, isTek ? SW_SHOW : SW_HIDE);
 
-    /* Phosphor Color disabilitato in Crisp Color (3) e Tektronix P31 Storage Tube (5) */
-    bool canOverride = (mode != 3 && mode != 5);
-    EnableWindow(ctx->hLblPhosphor, canOverride);
-    EnableWindow(ctx->hComboPhosphor, canOverride);
+    /* Phosphor Color nascosto in Tektronix (5) e disabilitato in Crisp Color (3) */
+    ShowWindow(ctx->hLblPhosphor, isTek ? SW_HIDE : SW_SHOW);
+    ShowWindow(ctx->hComboPhosphor, isTek ? SW_HIDE : SW_SHOW);
+    if (!isTek) {
+        bool canOverride = (mode != 3);
+        EnableWindow(ctx->hLblPhosphor, canOverride);
+        EnableWindow(ctx->hComboPhosphor, canOverride);
+    }
 }
 
 static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
@@ -144,6 +153,8 @@ static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
         }
     }
     SendMessage(ctx->hComboTekBaud, CB_SETCURSEL, (WPARAM)tb_idx, 0);
+    SendMessage(ctx->hChkTekEraseFlash, BM_SETCHECK, p->tek_erase_flash ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(ctx->hChkTekAccurateBg, BM_SETCHECK, p->tek_accurate_bg ? BST_CHECKED : BST_UNCHECKED, 0);
 
     SendMessage(ctx->hChkFullscreen, BM_SETCHECK, p->full_screen ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(ctx->hChkDefault, BM_SETCHECK, p->is_default ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -212,6 +223,8 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
 
     int tb_idx = (int)SendMessage(ctx->hComboTekBaud, CB_GETCURSEL, 0, 0);
     p->tek_baud_rate = (tb_idx >= 0 && tb_idx < 9) ? g_tek_baud_values[tb_idx] : 2400;
+    p->tek_erase_flash = (SendMessage(ctx->hChkTekEraseFlash, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    p->tek_accurate_bg = (SendMessage(ctx->hChkTekAccurateBg, BM_GETCHECK, 0, 0) == BST_CHECKED);
 
     p->full_screen = (SendMessage(ctx->hChkFullscreen, BM_GETCHECK, 0, 0) == BST_CHECKED);
     p->startup_script_enabled = (SendMessage(ctx->hChkScript, BM_GETCHECK, 0, 0) == BST_CHECKED);
@@ -230,7 +243,10 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
         p->startup_script[d_idx_out++] = raw_script[i];
     }
     p->startup_script[d_idx_out] = 0;
+}
 
+static void dlg_commit_save(dlg_ctx_t *ctx) {
+    dlg_save_current(ctx);
     plato_profiles_save(ctx->list);
 }
 
@@ -345,7 +361,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
             switch (wmId) {
                 case IDC_BTN_CONNECT:
-                    dlg_save_current(ctx);
+                    dlg_commit_save(ctx);
                     if (ctx->connect_cb && ctx->current_index >= 0 && (size_t)ctx->current_index < ctx->list->count) {
                         ctx->connect_cb(&ctx->list->profiles[ctx->current_index], ctx->user_data);
                     }
@@ -353,7 +369,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     return 0;
 
                 case IDC_BTN_SAVE:
-                    dlg_save_current(ctx);
+                    dlg_commit_save(ctx);
                     dlg_refresh_list(ctx);
                     MessageBoxW(hwnd, L"Profile settings saved.", L"PlatoLives", MB_OK | MB_ICONINFORMATION);
                     return 0;
@@ -372,6 +388,8 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     np.crt_distortion = 2;
                     np.phosphor_color = 0;
                     np.tek_baud_rate = 2400;
+                    np.tek_erase_flash = true;
+                    np.tek_accurate_bg = true;
                     snprintf(np.startup_script, sizeof(np.startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
                     plato_profiles_add(ctx->list, &np);
                     ctx->current_index = (int)(ctx->list->count - 1);
@@ -397,7 +415,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
                 case IDC_BTN_CLOSE:
                 case IDCANCEL:
-                    dlg_save_current(ctx);
+                    plato_profiles_load(ctx->list);
                     DestroyWindow(hwnd);
                     return 0;
             }
@@ -417,7 +435,7 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         }
 
         case WM_CLOSE:
-            dlg_save_current(ctx);
+            plato_profiles_load(ctx->list);
             DestroyWindow(hwnd);
             return 0;
     }
@@ -597,6 +615,9 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"2400 Baud");
     SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"4800 Baud");
     SendMessageW(g_dlg.hComboTekBaud, CB_ADDSTRING, 0, (LPARAM)L"9600 Baud");
+
+    g_dlg.hChkTekEraseFlash = CreateWindowW(L"BUTTON", L"Tektronix Erase Flash", WS_CHILD | BS_AUTOCHECKBOX, rx + 420, 156, 220, 18, hwnd, (HMENU)IDC_CHK_TEK_ERASE_FLASH, wc.hInstance, NULL);
+    g_dlg.hChkTekAccurateBg = CreateWindowW(L"BUTTON", L"Tektronix Accurate Background", WS_CHILD | BS_AUTOCHECKBOX, rx + 420, 178, 260, 18, hwnd, (HMENU)IDC_CHK_TEK_ACCURATE_BG, wc.hInstance, NULL);
 
     /* Checkbox Opzioni */
     g_dlg.hChkFullscreen = CreateWindowW(L"BUTTON", L"Launch in Full Screen", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 206, 240, 18, hwnd, (HMENU)IDC_CHK_FULLSCREEN, wc.hInstance, NULL);

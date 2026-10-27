@@ -159,6 +159,9 @@ static void* network_worker(void *arg) {
         opticalProfile.crt_beam_level = 1;
         opticalProfile.crt_persistence_ms = 20;
         opticalProfile.crt_distortion = 2;
+        opticalProfile.tek_baud_rate = 2400;
+        opticalProfile.tek_erase_flash = true;
+        opticalProfile.tek_accurate_bg = true;
         isAnimating = NO;
 
         terminal = (plato_terminal_t *)calloc(1, sizeof(plato_terminal_t));
@@ -655,6 +658,26 @@ static void* network_worker(void *arg) {
 
 - (NSInteger)tekBaudRate {
     return opticalProfile.tek_baud_rate;
+}
+
+- (BOOL)tekEraseFlash { return opticalProfile.tek_erase_flash; }
+- (void)setTekEraseFlash:(BOOL)enabled {
+    opticalProfile.tek_erase_flash = enabled;
+    if (optical) {
+        plato_optical_invalidate(optical);
+    }
+    [self setNeedsDisplay:YES];
+}
+
+- (BOOL)tekAccurateBg { return opticalProfile.tek_accurate_bg; }
+- (void)setTekAccurateBg:(BOOL)enabled {
+    opticalProfile.tek_accurate_bg = enabled;
+    if (optical) {
+        plato_optical_invalidate(optical);
+    }
+    isAnimating = YES;
+    [self refreshDisplay];
+    [self setNeedsDisplay:YES];
 }
 
 - (void)setDisplayRealColorCRT {

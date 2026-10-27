@@ -1,20 +1,9 @@
-# PlatoLives v5.0.1 Release Notes
+# PlatoLives v5.2.0 Release Notes
 
-### Tektronix 4014 DVBST Engine Recalibration & Fixes
-- **Empirical Erase Flash Timing**:
-  - Flash duration recalibrated to exactly 66.7 ms (2 video frames @ 30 fps), aligning with physical high-speed CRT tube recordings and correcting the previous theoretical 400 ms hold-off timing assumption.
-- **Asymmetric Secondary Emission Flash Model**:
-  - Two-stage physical cycle:
-    1. **Target Prep / Flood-in (0–28 ms)**: Positive target charge acceleration where previous screen contents remain visible, gradually submerged into a full-screen emerald saturation bloom.
-    2. **Negative Dielectric Cutoff & P31 Phosphor Decay (28–67 ms)**: Rapid target discharge followed by quadratic $(1 - t)^2$ phosphor falloff down to the ambient floor.
-- **Hardware Erase Hold-Off (Race Condition Elimination)**:
-  - Vector queue consumption is now strictly inhibited during active erase cycles, replicating physical beam hold-off and deflector unblanking lockout.
-  - Prevents subsequent draw commands (e.g. Othello board grid lines and text glyphs) from being cleared by deferred dielectric discharge.
-- **Calibrated Flood Gun Ambient Luminescence**:
-  - Background glow floor (`bg_glow`) tuned to 0.080 (8.0% P31 luminescence) based on René Richarz's Tek4010 historical reference, capturing the subtle green phosphorescent haze of real DVBST tubes under continuous flood electron bombardment.
+### Highlights & Architecture Updates
 
-### Multi-Target Distribution
-- macOS DMG package (Universal Apple Silicon / Intel) with LICENSE and README
-- Windows x86_64 and ARM64 Direct3D 11 executables
-- Linux Desktop GUI binaries (ARM64 and x86_64) & Self-Installing Tarball
-- Linux Console CLI static musl executables (ARM64 and x86_64)
+*
+  - Full ASCII 0x20..0x7E character set integration directly from the authentic Heathkit H-19 ROM (444-29, 2716 EPROM, CRC32: 0xd595ac1d).
+  - True 2-pixel descenders on baseline row 7 for 'g', 'j', 'p', 'q', 'y' and punctuation.
+  - Physical DVBST cathode-ray beam simulation: Gaussian spot bloom (sigma 1.80f), dielectric core saturation (intensity 1.10f), and analog deflection wiggle.
+  - Bug fixing
