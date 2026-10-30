@@ -1030,7 +1030,7 @@ static void win_on_connection_done(bool success, void *user_data) {
     win_app_t *app = (win_app_t *)user_data;
     if (!app) return;
 
-    const plato_profile_t *p = &app->profile_list.profiles[app->current_profile_idx];
+    const plato_profile_t *p = &app->active_profile;
     if (success) {
         printf("[Network] Connesso con successo al profilo '%s'!\n", p->name);
         char title[256];
