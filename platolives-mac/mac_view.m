@@ -165,7 +165,7 @@ static void* network_worker(void *arg) {
         isAnimating = NO;
 
         terminal = (plato_terminal_t *)calloc(1, sizeof(plato_terminal_t));
-        plato_terminal_reset(terminal);
+        plato_terminal_init(terminal);
         plato_keyboard_state_init(&keyboardState);
 
         colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
@@ -235,7 +235,7 @@ static void* network_worker(void *arg) {
     plato_ringbuf_destroy(&ringbuf);
     if (rgbaBuffer) { free(rgbaBuffer); rgbaBuffer = NULL; }
     if (optical) { plato_optical_destroy(optical); optical = NULL; }
-    if (terminal) { free(terminal); terminal = NULL; }
+    if (terminal) { if (terminal->fb_pdp) { free(terminal->fb_pdp); terminal->fb_pdp = NULL; } free(terminal); terminal = NULL; }
     if (colorSpace) { CGColorSpaceRelease(colorSpace); colorSpace = NULL; }
 }
 
@@ -515,7 +515,7 @@ static void* network_worker(void *arg) {
 
 - (void)setTerminal:(plato_terminal_t *)term {
     if (term != terminal) {
-        if (terminal) free(terminal);
+        if (terminal) { if (terminal->fb_pdp) free(terminal->fb_pdp); free(terminal); }
         terminal = term;
     }
     if (terminal) terminal->transport = self->transport;
@@ -572,6 +572,8 @@ static void* network_worker(void *arg) {
             uint32_t col = 0xFFFF6E00u; /* Default Orange Plasma */
             if (opticalProfile.display_mode == 5) {
                 col = 0xFF33FF33u;      /* Real Tektronix: Sempre Verde P31 */
+            } else if (opticalProfile.display_mode == 6 && opticalProfile.phosphor_color == 0) {
+                col = 0xFF00D4AAu;      /* DEC PDP-1: Radar Turquoise P7 */
             } else if (opticalProfile.phosphor_color == 1) {
                 col = 0xFF33FF33u;      /* Green P31 */
             } else if (opticalProfile.phosphor_color == 2) {
@@ -650,6 +652,44 @@ static void* network_worker(void *arg) {
     if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
+}
+
+- (void)setDisplayRealPDP1 {
+    opticalProfile.display_mode = 6; /* Real DEC PDP-1 Type 30 (1964) */
+    if (terminal) plato_terminal_set_color_mode(terminal, false);
+    if (optical) plato_optical_invalidate(optical);
+    [self updateLayerFilters];
+    [self refreshDisplay];
+}
+
+- (void)setPDP1Font:(NSInteger)font {
+    opticalProfile.pdp1_font = (int)font;
+    if (optical) plato_optical_invalidate(optical);
+    [self refreshDisplay];
+}
+
+- (NSInteger)pdp1Font {
+    return opticalProfile.pdp1_font;
+}
+
+- (void)setPDP1RefreshRate:(NSInteger)rate {
+    opticalProfile.pdp1_refresh_rate = (int)rate;
+    if (optical) plato_optical_invalidate(optical);
+    [self refreshDisplay];
+}
+
+- (NSInteger)pdp1RefreshRate {
+    return (opticalProfile.pdp1_refresh_rate > 0) ? opticalProfile.pdp1_refresh_rate : 45;
+}
+
+- (void)setPDP1Preset:(NSInteger)preset {
+    opticalProfile.pdp1_preset = (int)preset;
+    if (optical) plato_optical_invalidate(optical);
+    [self refreshDisplay];
+}
+
+- (NSInteger)pdp1Preset {
+    return opticalProfile.pdp1_preset;
 }
 
 - (void)setTekBaudRate:(NSInteger)baud {
@@ -1022,6 +1062,14 @@ static void* network_worker(void *arg) {
             double q_pct = ((double)q_count / (double)MAX_VECTOR_EVENTS) * 100.0;
             fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nSPEED   %@\nQUEUE   %d%% (%u/%d)\nCPU     %5.1f%%",
                        userInfo, fpsTotal, baudStr, (int)(q_pct + 0.5), (unsigned int)q_count, (int)MAX_VECTOR_EVENTS, cpuUsagePercent];
+        } else if (opticalProfile.display_mode == 6) {
+            NSString *fontName = (opticalProfile.pdp1_font == 1) ? @"1964 CHAR" : @"1961 CODE";
+            NSString *presetName = @"HISTORIC";
+            if (opticalProfile.pdp1_preset == 1) presetName = @"FAST 5S";
+            else if (opticalProfile.pdp1_preset == 2) presetName = @"MODERN 2S";
+            int hz = (opticalProfile.pdp1_refresh_rate > 0) ? opticalProfile.pdp1_refresh_rate : 45;
+            fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nMODE    %@\nFONT    %@\nREFRESH %d HZ\nCPU     %5.1f%%",
+                       userInfo, fpsTotal, presetName, fontName, hz, cpuUsagePercent];
         } else if (opticalProfile.display_mode == 1 || opticalProfile.display_mode == 3) {
             /* Modalita' Crisp Mono / Crisp Color */
             fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nCPU     %5.1f%%",
@@ -1039,7 +1087,11 @@ static void* network_worker(void *arg) {
         NSColor *borderColor = nil;
         NSColor *bgColor = nil;
 
-        if (displayMode == 5 || phosphor == 1) {
+        if (displayMode == 6 && phosphor == 0) {
+            textColor   = [NSColor colorWithCalibratedRed:0.0/255.0   green:212.0/255.0 blue:170.0/255.0 alpha:0.98];
+            borderColor = [NSColor colorWithCalibratedRed:0.0/255.0   green:80.0/255.0  blue:65.0/255.0  alpha:1.00];
+            bgColor     = [NSColor colorWithCalibratedRed:0.0/255.0   green:15.0/255.0  blue:12.0/255.0  alpha:200.0/255.0];
+        } else if (displayMode == 5 || phosphor == 1) {
             /* Tektronix 4014 (Mode 5) o Verde Smeraldo P31 */
             textColor   = [NSColor colorWithCalibratedRed:51.0/255.0  green:255.0/255.0 blue:51.0/255.0  alpha:0.98];
             borderColor = [NSColor colorWithCalibratedRed:10.0/255.0  green:64.0/255.0  blue:10.0/255.0  alpha:1.00];

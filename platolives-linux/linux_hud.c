@@ -13,7 +13,7 @@
 #include "fonts/roboto_font_data.h"
 
 #define HUD_WIN_W 380
-#define HUD_WIN_H 210
+#define HUD_WIN_H 230
 
 static SDL_Window *g_hud_win = NULL;
 static SDL_Renderer *g_hud_ren = NULL;
@@ -139,6 +139,7 @@ static const char *get_display_mode_name(int mode) {
         case 3: return "Crisp Color";
         case 4: return "Real Color CRT";
         case 5: return "Real Tektronix 4014";
+        case 6: return "DEC PDP-1 Type 30 (1964)";
         default: return "Unknown";
     }
 }
@@ -181,7 +182,39 @@ void linux_hud_render(void) {
     y += dy;
 
     int mode = g_hud_data.display_mode;
-    if (mode == 5) {
+    if (mode == 6) {
+        /* DEC PDP-1 Type 30: MODE, FONT, REFRESH, CPU */
+        const char *preset_name = "HISTORIC";
+        if (g_hud_data.pdp1_preset == 1) preset_name = "FAST 5S";
+        else if (g_hud_data.pdp1_preset == 2) preset_name = "MODERN 2S";
+
+        const char *font_name = (g_hud_data.pdp1_font == 1) ? "1964 CHAR" : "1961 CODE";
+        int hz = (g_hud_data.pdp1_refresh_rate > 0) ? g_hud_data.pdp1_refresh_rate : 45;
+
+        snprintf(label, sizeof(label), "MODE    ");
+        snprintf(val, sizeof(val), "%s", preset_name);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "FONT    ");
+        snprintf(val, sizeof(val), "%s", font_name);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "REFRESH ");
+        snprintf(val, sizeof(val), "%d HZ", hz);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "CPU     ");
+        snprintf(val, sizeof(val), "%5.1f%%", g_hud_data.cpu_percent);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
+    } else if (mode == 5) {
         /* Tektronix 4014: SPEED, QUEUE, CPU */
         snprintf(label, sizeof(label), "SPEED   ");
         if (g_hud_data.tek_baud > 0) snprintf(val, sizeof(val), "%d BAUD", g_hud_data.tek_baud);

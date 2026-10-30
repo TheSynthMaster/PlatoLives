@@ -161,12 +161,14 @@ static void draw_prof_rect(SDL_Renderer *ren, int x, int y, int w, int h,
 
 static void draw_prof_button(SDL_Renderer *ren, int x, int y, int w, int h, const char *label, bool active) {
     linux_theme_colors_t th = linux_theme_current();
+    float tw = get_string_width_f(label, (int)strlen(label));
+    float tx = (w > tw) ? (float)x + ((float)w - tw) * 0.5f : (float)(x + 4);
     if (active) {
         draw_prof_rect(ren, x, y, w, h, th.hover_bg.r, th.hover_bg.g, th.hover_bg.b, true, th.bright.r, th.bright.g, th.bright.b);
-        draw_prof_text(ren, (float)(x + 8), (float)(y + h - 8), label, th.bright.r, th.bright.g, th.bright.b);
+        draw_prof_text(ren, tx, (float)(y + h - 8), label, th.bright.r, th.bright.g, th.bright.b);
     } else {
         draw_prof_rect(ren, x, y, w, h, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
-        draw_prof_text(ren, (float)(x + 8), (float)(y + h - 8), label, th.normal.r, th.normal.g, th.normal.b);
+        draw_prof_text(ren, tx, (float)(y + h - 8), label, th.normal.r, th.normal.g, th.normal.b);
     }
 }
 
@@ -384,6 +386,9 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             np.crt_persistence_ms = 20;
             np.phosphor_color = 0;
             np.crt_distortion = 0;
+            np.pdp1_font = 0;
+            np.pdp1_refresh_rate = 45;
+            np.pdp1_preset = 0;
             np.tek_baud_rate = 2400;
             np.tek_erase_flash = true;
             np.tek_accurate_bg = true;
@@ -422,17 +427,20 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             }
         }
 
-        /* 6 Display Modes: width 98, step 104, X=340..958 */
+        /* 7 Display Modes: width 84, step 89, X=340..958 */
         int mode_x = 340;
-        for (int m = 0; m < 6; m++) {
-            if (pt_in_rect(mx, my, mode_x, 162, 98, 26)) {
+        for (int m = 0; m < 7; m++) {
+            if (pt_in_rect(mx, my, mode_x, 162, 84, 26)) {
                 g_edit_profile.display_mode = m;
                 if (m == 5 && g_edit_profile.tek_baud_rate <= 0) {
                     g_edit_profile.tek_baud_rate = 2400; /* Auto-proposta 2400 Baud */
                 }
+                if (m == 6 && g_edit_profile.pdp1_refresh_rate <= 0) {
+                    g_edit_profile.pdp1_refresh_rate = 45; /* Auto-proposta 45 Hz */
+                }
                 return;
             }
-            mode_x += 104;
+            mode_x += 89;
         }
 
         int mode = g_edit_profile.display_mode;
@@ -501,6 +509,37 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             if (pt_in_rect(mx, my, 510, 234, 210, 22)) {
                 g_edit_profile.tek_accurate_bg = !g_edit_profile.tek_accurate_bg;
                 return;
+            }
+        } else if (mode == 6) {
+            /* PDP-1 Font at Y=196 */
+            if (pt_in_rect(mx, my, 340, 196, 150, 24)) {
+                g_edit_profile.pdp1_font = 0;
+                return;
+            }
+            if (pt_in_rect(mx, my, 500, 196, 150, 24)) {
+                g_edit_profile.pdp1_font = 1;
+                return;
+            }
+
+            /* PDP-1 Refresh Rate at Y=226 */
+            const int pdp1_hz_vals[] = { 60, 45, 30, 15, 10, 5 };
+            int rx = 340;
+            for (int i = 0; i < 6; i++) {
+                if (pt_in_rect(mx, my, rx, 226, 66, 24)) {
+                    g_edit_profile.pdp1_refresh_rate = pdp1_hz_vals[i];
+                    return;
+                }
+                rx += 72;
+            }
+
+            /* PDP-1 Preset at Y=256 */
+            int pr_x = 340;
+            for (int i = 0; i < 3; i++) {
+                if (pt_in_rect(mx, my, pr_x, 256, 140, 24)) {
+                    g_edit_profile.pdp1_preset = i;
+                    return;
+                }
+                pr_x += 150;
             }
         }
 
@@ -827,13 +866,13 @@ void linux_profiles_render(void) {
         }
     }
 
-    /* 6 Display Modes: width 98, gap 6 (step 104) -> 340..958 */
+    /* 7 Display Modes: width 84, gap 5 (step 89) -> 340..958 */
     draw_prof_text(g_prof_ren, 260.0f, 181.0f, "Mode:", th.dim.r, th.dim.g, th.dim.b);
-    const char *modes[] = { "Real Plasma", "Crisp Mono", "Split Mono", "Crisp Color", "Real CRT", "Real Tektronix" };
+    const char *modes[] = { "Real Plasma", "Crisp Mono", "Split Mono", "Crisp Color", "Real CRT", "Tek 4014", "DEC PDP-1" };
     int mode_x = 340;
-    for (int m = 0; m < 6; m++) {
-        draw_prof_button(g_prof_ren, mode_x, 162, 98, 26, modes[m], (g_edit_profile.display_mode == m));
-        mode_x += 104;
+    for (int m = 0; m < 7; m++) {
+        draw_prof_button(g_prof_ren, mode_x, 162, 84, 26, modes[m], (g_edit_profile.display_mode == m));
+        mode_x += 89;
     }
 
     /* Parametri Condizionali Plasma / CRT / Tektronix */
@@ -895,6 +934,28 @@ void linux_profiles_render(void) {
         draw_prof_rect(g_prof_ren, 510, 234, 18, 18, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
         if (g_edit_profile.tek_accurate_bg) draw_prof_text(g_prof_ren, 514.0f, 249.0f, "X", th.bright.r, th.bright.g, th.bright.b);
         draw_prof_text(g_prof_ren, 536.0f, 249.0f, "Accurate Background", th.normal.r, th.normal.g, th.normal.b);
+    } else if (mode == 6) {
+        draw_prof_text(g_prof_ren, 260.0f, 214.0f, "Font:", th.dim.r, th.dim.g, th.dim.b);
+        draw_prof_button(g_prof_ren, 340, 196, 150, 24, "1961 Codeword", (g_edit_profile.pdp1_font == 0));
+        draw_prof_button(g_prof_ren, 500, 196, 150, 24, "1964 Character", (g_edit_profile.pdp1_font == 1));
+
+        draw_prof_text(g_prof_ren, 260.0f, 244.0f, "Refresh:", th.dim.r, th.dim.g, th.dim.b);
+        const int pdp1_hz_vals[] = { 60, 45, 30, 15, 10, 5 };
+        const char *hz_labels[] = { "60 Hz", "45 Hz", "30 Hz", "15 Hz", "10 Hz", "5 Hz" };
+        int cur_hz = (g_edit_profile.pdp1_refresh_rate > 0) ? g_edit_profile.pdp1_refresh_rate : 45;
+        int rx = 340;
+        for (int i = 0; i < 6; i++) {
+            draw_prof_button(g_prof_ren, rx, 226, 66, 24, hz_labels[i], (cur_hz == pdp1_hz_vals[i]));
+            rx += 72;
+        }
+
+        draw_prof_text(g_prof_ren, 260.0f, 274.0f, "Preset:", th.dim.r, th.dim.g, th.dim.b);
+        const char *pr_labels[] = { "Historic (15s)", "Fast Decay (5s)", "Modern (2s)" };
+        int pr_x = 340;
+        for (int i = 0; i < 3; i++) {
+            draw_prof_button(g_prof_ren, pr_x, 256, 140, 24, pr_labels[i], (g_edit_profile.pdp1_preset == i));
+            pr_x += 150;
+        }
     }
 
     /* Checkboxes a Y=292 */

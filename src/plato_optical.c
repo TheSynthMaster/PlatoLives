@@ -1,4 +1,5 @@
 #include "plato/plato_optical.h"
+#include "plato/plato_pdp1.h"
 #include "plato/plato_tek_font.h"
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,10 @@ struct PLATOPlasmaState {
     int plasmaDistortion;
     int phosphorColor;
 
+    /* Motore Fisico DEC PDP-1 Type 30 Precision CRT (1964) */
+    pdp1_context_t *pdp1_ctx;
+    int pdp1_font_mode;
+
     /* Motore Fisico Tektronix 4014 (DVBST) */
     float *tek_flare;       /* Energia transitoria del raggio (Transient Flare) */
     float *tek_stored;      /* Carica bistabile del dielettrico (Stored State) */
@@ -88,6 +93,10 @@ static void plasmaFreeState(struct PLATOPlasmaState *ps) {
     free(ps->local); free(ps->wide); free(ps->crisp); free(ps->logical);
     free(ps->tek_flare); free(ps->tek_stored); free(ps->tek_grain);
     ps->tek_grain = NULL;
+    if (ps->pdp1_ctx) {
+        pdp1_destroy(ps->pdp1_ctx);
+        ps->pdp1_ctx = NULL;
+    }
     ps->tek_flare = ps->tek_stored = NULL;
     ps->gain = ps->energy = ps->source = ps->tmp = ps->local = ps->wide = NULL;
     ps->crisp = ps->logical = NULL;
@@ -126,6 +135,8 @@ static bool plasmaAllocState(struct PLATOPlasmaState *ps) {
     ps->tek_frame_num = 0;
     ps->tek_erase_time = 0.0;
     ps->tek_erase_grace_until = 0.0;
+    ps->pdp1_ctx = pdp1_create();
+    ps->pdp1_font_mode = 0;
     ps->tek_pacer_last_sec = 0.0;
     ps->tek_pacer_credit_bits = 0.0;
     if (!ps->gain || !ps->energy || !ps->source || !ps->tmp ||
@@ -1387,6 +1398,150 @@ static void tektronixRender(plato_optical_t *opt, uint32_t *output, double now_s
     opt->last_was_full = true;
 }
 
+/* ========================================================================= */
+/* DEC PDP-1 TYPE 30 PRECISION CRT RENDER ENGINE (Point-Plotting P7 Phosphor) */
+/* ========================================================================= */
+
+static void pdp1Render(plato_optical_t *opt, uint32_t *output, double now_sec, const plato_profile_t *prof, bool was_dirty) {
+    if (!opt || !opt->state || !opt->state->pdp1_ctx || !opt->term || !output) return;
+    struct PLATOPlasmaState *p = opt->state;
+    pdp1_context_t *pdp = p->pdp1_ctx;
+
+    float dt = p->lastTime > 0.0 ? (float)(now_sec - p->lastTime) : (1.0f / 60.0f);
+    p->lastTime = now_sec;
+    dt = plasmaClamp(dt, 0.0005f, 0.1f);
+
+    /* Svuota sempre la vector_queue per evitare memory leak o desincronizzazione */
+    opt->term->vector_queue.tail = opt->term->vector_queue.head;
+
+    /* 1. Sincronizzazione Display Buffer PDP-1 da PLATO (Direct Core Memory Transfer) */
+    opt->term->pdp1_font = prof->pdp1_font;
+    pdp1_set_font_mode(pdp, (prof->pdp1_font == 1) ? PDP1_FONT_MODE_1964_CHARACTER : PDP1_FONT_MODE_1961_CODEWORD);
+    int p_rate = (prof->pdp1_refresh_rate > 0) ? prof->pdp1_refresh_rate : 45;
+    pdp1_set_refresh_rate(pdp, p_rate);
+    pdp1_set_preset(pdp, (pdp1_preset_t)prof->pdp1_preset);
+
+    /* 1. Decadimento fisico naturale continuo P7 (Avviene PRIMA dell'impatto dei nuovi pixel) */
+    pdp1_simulate_step(pdp, dt);
+
+    /* 2. VIRTUAL DISPLAY PROCESSOR: Loop di Refresh a 45 Hz (Sweep Catodico da memoria display) */
+    pdp->refresh_accumulator += dt;
+    float refresh_interval = 1.0f / (float)pdp->refresh_rate;
+    while (pdp->refresh_accumulator >= refresh_interval) {
+        pdp->refresh_accumulator -= refresh_interval;
+        if (pdp->refresh_accumulator > refresh_interval) pdp->refresh_accumulator = 0.0f;
+        pdp1_refresh_sweep(pdp, 5);
+    }
+
+    /* 3. Sincronizzazione Display Buffer PDP-1 da PLATO (STRIKE con flash intatto per questo frame) */
+    if (opt->term->fb_pdp_dirty || was_dirty || !p->tilesInitialized) {
+        if (opt->term->fb_pdp) {
+            const uint64_t *new64 = (const uint64_t *)opt->term->fb_pdp;
+            const uint64_t *old64 = (const uint64_t *)pdp->display_plane;
+            size_t num_words = PDP1_TOTAL_PIXELS / sizeof(uint64_t);
+
+            for (size_t w = 0; w < num_words; ++w) {
+                uint64_t nw = new64[w];
+                uint64_t ow = old64[w];
+                if (nw != ow || !p->tilesInitialized) {
+                    size_t base_idx = w * sizeof(uint64_t);
+                    for (size_t b = 0; b < sizeof(uint64_t); ++b) {
+                        uint8_t np = opt->term->fb_pdp[base_idx + b];
+                        uint8_t op = pdp->display_plane[base_idx + b];
+                        if (np && (!op || !p->tilesInitialized)) {
+                            int px = (int)((base_idx + b) % PDP1_SCREEN_WIDTH);
+                            int py = (int)((base_idx + b) / PDP1_SCREEN_WIDTH);
+                            pdp1_strike_point(pdp, px, py, 5);
+                        }
+                    }
+                }
+            }
+            memcpy(pdp->display_plane, opt->term->fb_pdp, PDP1_TOTAL_PIXELS);
+        } else {
+            pdp1_display_plane_clear(pdp);
+        }
+
+        p->tilesInitialized = true;
+        opt->term->fb.dirty = false;
+        opt->term->fb_pdp_dirty = false;
+        pdp1_refresh_sweep(pdp, 5); /* Sweep immediato primo frame */
+    }
+
+    /* 4. Colorimetria e Override */
+    pdp1_rgb_t flash_color;
+    pdp1_rgb_t sustain_color;
+    if (!pdp->phosphor_override) {
+        flash_color = (pdp1_rgb_t){PDP1_P7_FLASH_R, PDP1_P7_FLASH_G, PDP1_P7_FLASH_B};
+        sustain_color = (pdp1_rgb_t){PDP1_P7_SUSTAIN_R, PDP1_P7_SUSTAIN_G, PDP1_P7_SUSTAIN_B};
+    } else {
+        sustain_color = pdp->override_color;
+        flash_color.r = 0.40f * sustain_color.r + 0.60f;
+        flash_color.g = 0.40f * sustain_color.g + 0.60f;
+        flash_color.b = 0.40f * sustain_color.b + 0.60f;
+    }
+
+    /* 5. Rasterizzazione Output Finale */
+    for (int y = 0; y < PDP1_SCREEN_HEIGHT; ++y) {
+        int src_row = y * PDP1_SCREEN_WIDTH;
+        int dst_y0 = y * 2;
+        uint32_t *out_row0 = output + dst_y0 * PLASMA_WIDTH;
+        uint32_t *out_row1 = output + (dst_y0 + 1) * PLASMA_WIDTH;
+
+        for (int x = 0; x < PDP1_SCREEN_WIDTH; ++x) {
+            int idx = src_row + x;
+            float f = pdp->flash_accum[idx];
+            float s = pdp->sustain_accum[idx];
+
+            uint32_t col;
+            if (f <= 0.0001f && s <= 0.0001f) {
+                col = 0xFF000000;
+            } else if (pdp->phosphor_override) {
+                /* Modalita override personalizzata */
+                float r = f * flash_color.r + s * sustain_color.r;
+                float g = f * flash_color.g + s * sustain_color.g;
+                float b = f * flash_color.b + s * sustain_color.b;
+                int ir = (int)(r * 255.0f); if (ir > 255) ir = 255;
+                int ig = (int)(g * 255.0f); if (ig > 255) ig = 255;
+                int ib = (int)(b * 255.0f); if (ib > 255) ib = 255;
+                col = (uint32_t)(0xFF000000 | (ir << 16) | (ig << 8) | ib);
+            } else {
+                /* EVOLUZIONE SPETTRALE P7 AUTENTICA */
+                /* Curva percettiva lieve per mantenere visibile la scia di 15 secondi su schermi sRGB */
+                float s_vis = (s > 0.0001f) ? powf(s, 0.88f) : 0.0f;
+
+                /* 1. Sustain (Zn,Cd)S:Cu: Viraggio spettrale continuo calibrato sul tubo P7 del video:
+                      A s=1.0 (t=0s):   Verde lime elettrico (R=153, G=255, B=20).
+                      A s=0.52 (t=4.5s): Giallo-verde dorato puro dove R e G sono identici (R=103, G=104, B=1).
+                      A s<=0.3 (t>=8s): R > G! Autentico oliva muschioso e ambra caldo (R=67, G=51, B=0). */
+                float sus_r = s_vis * (0.82f - 0.22f * s);
+                float sus_g = s_vis * (0.40f + 0.60f * s);
+                float sus_b = s_vis * (0.08f * s * s * s);
+
+                /* 2. Prompt Flash ZnS:Ag: Bianco accecante al centro con corona azzurro-elettrica */
+                float white_mix = (f > 0.80f) ? 1.0f : (f / 0.80f);
+                float fl_r = f * (0.40f + 0.60f * white_mix);
+                float fl_g = f * (0.75f + 0.25f * white_mix);
+                float fl_b = f * 1.00f;
+
+                float tot_r = sus_r + fl_r;
+                float tot_g = sus_g + fl_g;
+                float tot_b = sus_b + fl_b;
+
+                int ir = (int)(tot_r * 255.0f); if (ir > 255) ir = 255;
+                int ig = (int)(tot_g * 255.0f); if (ig > 255) ig = 255;
+                int ib = (int)(tot_b * 255.0f); if (ib > 255) ib = 255;
+                col = (uint32_t)(0xFF000000 | (ir << 16) | (ig << 8) | ib);
+            }
+            int out_x = x * 2;
+            out_row0[out_x] = col; out_row0[out_x + 1] = col;
+            out_row1[out_x] = col; out_row1[out_x + 1] = col;
+        }
+    }
+
+    opt->state->animateUntil = now_sec + 0.050;
+    opt->last_was_full = true;
+}
+
 static void crtRender(plato_optical_t *opt, uint32_t *output, double now_sec) {
     struct PLATOPlasmaState *p = opt->state;
     float deltaTime = p->lastTime > 0.0 ? (float)(now_sec - p->lastTime) : 1.0f / 60.0f;
@@ -1471,6 +1626,9 @@ void plato_optical_invalidate(plato_optical_t *opt) {
     if (opt && opt->state) {
         opt->state->tilesInitialized = false;
         opt->state->lastTime = 0.0;
+        if (opt->state->pdp1_ctx) {
+            pdp1_clear(opt->state->pdp1_ctx);
+        }
         opt->state->tek_erase_time = 0.0;
         opt->state->tek_erase_grace_until = 0.0;
     }
@@ -1503,7 +1661,7 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
         opt->state->crtBeamLevel != prof->crt_beam_level ||
         opt->state->phosphorColor != prof->phosphor_color ||
         opt->state->decayDuration != new_decay_dur ||
-        opt->state->crtDecayDuration != new_crt_decay_dur) {
+        opt->state->crtDecayDuration != new_crt_decay_dur || opt->state->pdp1_font_mode != prof->pdp1_font) {
 
         opt->state->displayMode = prof->display_mode;
         opt->state->phosphorColor = prof->phosphor_color;
@@ -1515,11 +1673,13 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
         opt->state->crtDecayTau = (float)(new_crt_decay_dur / 10.0);
         opt->state->crtBeamLevel = prof->crt_beam_level;
         opt->state->crtDistortion = prof->crt_distortion;
+        opt->state->pdp1_font_mode = prof->pdp1_font;
 
         opt->state->tilesInitialized = false; /* Forza re-inizializzazione e ridisegno di tutti i tile */
         opt->state->lastTime = 0.0;
         double dur = (prof->display_mode == 4) ? new_crt_decay_dur : new_decay_dur;
         if (prof->display_mode == 5) dur = 0.50;
+        if (prof->display_mode == 6) dur = 1.00;
         if (dur < 0.10) dur = 0.10;
         opt->state->animateUntil = now_sec + dur;
     }
@@ -1531,7 +1691,7 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
     if (term->fb.dirty) {
         double dur = 0.0;
         if (prof->display_mode == 4) dur = opt->state->crtDecayDuration;
-        else if (prof->display_mode == 0 || prof->display_mode == 2) dur = opt->state->decayDuration;
+        else if (prof->display_mode == 0 || prof->display_mode == 2 || prof->display_mode == 6) dur = opt->state->decayDuration;
         else dur = 0.0; /* Crisp mono e Crisp color: nessun decadimento fosfori */
         opt->state->animateUntil = now_sec + dur;
         term->fb.dirty = false;
@@ -1549,14 +1709,12 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
             memset(opt->state->tek_stored, 0, (size_t)PLASMA_PIXELS * sizeof(float));
 
             /* 1. Ricostruzione caratteri visibili da text_grid con font vettoriale 4014 */
-            bool has_m0_char[PLATO_ROWS][PLATO_COLS] = { {false} };
             for (int r = 0; r < PLATO_ROWS; r++) {
                 int py = (31 - r) * PLATO_CHAR_HEIGHT;
                 for (int c = 0; c < PLATO_COLS; c++) {
                     uint8_t ch = term->text_grid[r][c].ch;
                     uint8_t cs = term->text_grid[r][c].charset;
                     if (cs == (uint8_t)PLATO_CHARSET_M0 && ch > 0x20 && ch <= 0x7E) {
-                        has_m0_char[r][c] = true;
                         int px = c * PLATO_CHAR_WIDTH;
                         plato_tek_splat_stroke_char(opt->state->tek_flare, opt->state->tek_stored,
                                                     PLASMA_WIDTH, PLASMA_HEIGHT,
@@ -1565,16 +1723,11 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
                 }
             }
 
-            /* 2. Ricostruzione grafica vettoriale / elementi da fb (escludendo le celle M0 gia' tracciate) */
+            /* 2. Ricostruzione grafica vettoriale / elementi da fb (esclude M0 marcato con pval=2) */
             for (int y = 0; y < PLATO_HEIGHT; y++) {
-                int r = 31 - (y / PLATO_CHAR_HEIGHT);
                 int ry = (PLATO_HEIGHT - 1) - y;
                 for (int x = 0; x < PLATO_WIDTH; x++) {
-                    int c = x / PLATO_CHAR_WIDTH;
-                    if (r >= 0 && r < PLATO_ROWS && c >= 0 && c < PLATO_COLS && has_m0_char[r][c]) {
-                        continue; /* Salta la bitmap PLATO 8x16 in fb: il carattere e' gia' vettoriale! */
-                    }
-                    if (plato_fb_get_pixel(&term->fb, x, y)) {
+                    if (term->fb.pixels[y][x] == 1) {
                         float cx = (float)x * (float)PLASMA_SCALE + 2.0f;
                         float cy = (float)ry * (float)PLASMA_SCALE + 2.0f;
                         plato_tek_splat_point(opt->state->tek_flare, opt->state->tek_stored,
@@ -1585,6 +1738,32 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
             opt->state->tilesInitialized = true;
         }
         tektronixRender(opt, out_bgra, now_sec, prof);
+    } else if (prof->display_mode == 6) {
+        if (!opt->state->tilesInitialized) {
+            pdp1_context_t *pdp = opt->state->pdp1_ctx;
+            if (pdp) {
+                pdp1_clear(pdp);
+                pdp1_set_font_mode(pdp, (prof->pdp1_font == 1) ? PDP1_FONT_MODE_1964_CHARACTER : PDP1_FONT_MODE_1961_CODEWORD);
+    int p_rate = (prof->pdp1_refresh_rate > 0) ? prof->pdp1_refresh_rate : 45;
+    pdp1_set_refresh_rate(pdp, p_rate);
+    pdp1_set_preset(pdp, (pdp1_preset_t)prof->pdp1_preset);
+
+                /* Phosphor Color: 0=Nativo P7, 1=P31 Green, 2=P40 Amber, 3=P4 White */
+                if (prof->phosphor_color == 0) {
+                    pdp1_set_phosphor_override(pdp, false, 0.0f, 0.0f, 0.0f);
+                } else if (prof->phosphor_color == 1) {
+                    pdp1_set_phosphor_override(pdp, true, 0.20f, 1.00f, 0.20f); /* P31 Green */
+                } else if (prof->phosphor_color == 2) {
+                    pdp1_set_phosphor_override(pdp, true, 1.00f, 0.68f, 0.00f); /* P40 Amber */
+                } else if (prof->phosphor_color == 3) {
+                    pdp1_set_phosphor_override(pdp, true, 0.92f, 0.92f, 0.92f); /* P4 White */
+                }
+
+                /* Lo Snapshot Projection e' ora implicito: il Virtual Refresh Controller
+                   rileva p->logical frame-per-frame e ricostruisce la matrice P7! */
+            }
+        }
+        pdp1Render(opt, out_bgra, now_sec, prof, was_dirty);
     } else {
         plasmaRender(opt, out_bgra, now_sec);
         if (prof->display_mode == 2) {

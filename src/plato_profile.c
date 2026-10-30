@@ -57,6 +57,9 @@ static void init_default_cyber1(plato_profile_list_t *list) {
     p->tek_baud_rate = 2400;    /* Default Tektronix Speed */
     p->tek_erase_flash = true;
     p->tek_accurate_bg = true;
+    p->pdp1_font = 0;
+    p->pdp1_refresh_rate = 45;
+    p->pdp1_preset = 0;
     p->full_screen = false;
     p->is_default = true;
     p->startup_script_enabled = false;
@@ -107,6 +110,9 @@ bool plato_profiles_load(plato_profile_list_t *list) {
                 cur->tek_baud_rate = 2400;
                 cur->tek_erase_flash = true;
                 cur->tek_accurate_bg = true;
+                cur->pdp1_font = 0;
+                cur->pdp1_refresh_rate = 45;
+                cur->pdp1_preset = 0;
             } else {
                 cur = NULL;
             }
@@ -138,6 +144,9 @@ bool plato_profiles_load(plato_profile_list_t *list) {
         }
         else if (strcmp(p, "tek_erase_flash") == 0) cur->tek_erase_flash = (atoi(val) != 0);
         else if (strcmp(p, "tek_accurate_bg") == 0) cur->tek_accurate_bg = (atoi(val) != 0);
+        else if (strcmp(p, "pdp1_font") == 0) cur->pdp1_font = (atoi(val) == 1) ? 1 : 0;
+        else if (strcmp(p, "pdp1_refresh_rate") == 0) { int r = atoi(val); cur->pdp1_refresh_rate = (r==60||r==45||r==30||r==15||r==10||r==5) ? r : 45; }
+        else if (strcmp(p, "pdp1_preset") == 0) { int pr = atoi(val); cur->pdp1_preset = (pr>=0 && pr<=2) ? pr : 0; }
         else if (strcmp(p, "full_screen") == 0) cur->full_screen = (atoi(val) != 0);
         else if (strcmp(p, "is_default") == 0) {
             cur->is_default = (atoi(val) != 0);
@@ -193,6 +202,9 @@ bool plato_profiles_save(const plato_profile_list_t *list) {
         fprintf(f, "tek_baud_rate=%d\n", p->tek_baud_rate);
         fprintf(f, "tek_erase_flash=%d\n", p->tek_erase_flash ? 1 : 0);
         fprintf(f, "tek_accurate_bg=%d\n", p->tek_accurate_bg ? 1 : 0);
+        fprintf(f, "pdp1_font=%d\n", p->pdp1_font);
+        fprintf(f, "pdp1_refresh_rate=%d\n", (p->pdp1_refresh_rate > 0) ? p->pdp1_refresh_rate : 45);
+        fprintf(f, "pdp1_preset=%d\n", p->pdp1_preset);
         fprintf(f, "full_screen=%d\n", p->full_screen ? 1 : 0);
         fprintf(f, "is_default=%d\n", p->is_default ? 1 : 0);
         fprintf(f, "startup_script_enabled=%d\n", p->startup_script_enabled ? 1 : 0);

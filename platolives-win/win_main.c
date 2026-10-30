@@ -501,6 +501,16 @@ static void win_render_hud_overlay(win_app_t *app, double now_sec, bool is_anima
         snprintf(hud_text, sizeof(hud_text),
                  "%sFPS     %5.1f\nSPEED   %s\nQUEUE   %d%% (%u/%d)\nCPU     %5.1f%%",
                  user_info, fps_total, baud_str, (int)(q_pct + 0.5), q_count, MAX_VECTOR_EVENTS, cpu_val);
+    } else if (mode == 6) {
+        char font_name[32];
+        strcpy(font_name, (app->active_profile.pdp1_font == 1) ? "1964 CHAR" : "1961 CODE");
+        char preset_name[32];
+        if (app->active_profile.pdp1_preset == 1) strcpy(preset_name, "FAST 5S");
+        else if (app->active_profile.pdp1_preset == 2) strcpy(preset_name, "MODERN 2S");
+        else strcpy(preset_name, "HISTORIC");
+        int hz = (app->active_profile.pdp1_refresh_rate > 0) ? app->active_profile.pdp1_refresh_rate : 45;
+        snprintf(hud_text, sizeof(hud_text), "%sFPS     %5.1f\nMODE    %s\nFONT    %s\nREFRESH %d HZ\nCPU     %5.1f%%",
+                 user_info, fps_total, preset_name, font_name, hz, cpu_val);
     } else if (mode == 1 || mode == 3) {
         snprintf(hud_text, sizeof(hud_text), "%sFPS     %5.1f\nCPU     %5.1f%%",
                  user_info, fps_total, cpu_val);
@@ -701,7 +711,7 @@ static void win_render_frame(win_app_t *app) {
     ID3D11DeviceContext_VSSetShader(app->context, app->vs, NULL, 0);
     ID3D11DeviceContext_PSSetShader(app->context, app->ps_crisp, NULL, 0);
     ID3D11DeviceContext_PSSetShaderResources(app->context, 0, 1, &app->srv);
-    int cur_mode = app->profile_list.profiles[app->current_profile_idx].display_mode;
+    int cur_mode = app->active_profile.display_mode;
     ID3D11SamplerState *cur_sampler = (cur_mode == 1 || cur_mode == 3) ? app->sampler_point : app->sampler_linear;
     ID3D11DeviceContext_PSSetSamplers(app->context, 0, 1, &cur_sampler);
 
@@ -1064,6 +1074,11 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data) {
     plato_terminal_set_palette(&app->terminal, (plato_palette_t)p->phosphor_color);
     plato_optical_invalidate(app->optical);
 
+    win_menu_update_state(app->menu, &app->active_profile,
+                         app->transport && app->transport->connected,
+                         app->diag_log, app->renderer_log, app->is_fullscreen,
+                         &app->profile_list, app->current_profile_idx);
+
     if (p->full_screen != app->is_fullscreen) {
         win_toggle_fullscreen(app);
     }
@@ -1209,12 +1224,8 @@ static void win_handle_lbuttondown(win_app_t *app, LPARAM lParam) {
 /* Gestione Tema Colori Dinamico (DWM, Menu, HUD) */
 win_theme_colors_t win_get_current_theme_colors(void) {
     win_theme_colors_t c;
-    int mode = g_app.display_mode;
-    int phosphor = 0;
-    if (g_app.current_profile_idx >= 0 && (size_t)g_app.current_profile_idx < g_app.profile_list.count) {
-        mode = g_app.profile_list.profiles[g_app.current_profile_idx].display_mode;
-        phosphor = g_app.profile_list.profiles[g_app.current_profile_idx].phosphor_color;
-    }
+    int mode = g_app.active_profile.display_mode;
+    int phosphor = g_app.active_profile.phosphor_color;
 
     if (mode == 5 || phosphor == 1) { /* Tektronix o Green P31 */
         c.normal    = RGB(51, 255, 51);
@@ -1246,6 +1257,16 @@ win_theme_colors_t win_get_current_theme_colors(void) {
         c.bg_box    = RGB(24, 18, 14);
         c.hover_bg  = RGB(40, 40, 40);
         c.border    = RGB(60, 60, 60);
+    } else if (mode == 6 && phosphor == 0) { /* DEC PDP-1 Type 30 (P7 Radar Turquoise / Electric Cyan) */
+        c.normal    = RGB(0, 212, 170);   /* Turchese Radar #00D4AA */
+        c.bright    = RGB(96, 225, 255);  /* Blu Elettrico Flash #60E1FF */
+        c.disabled  = RGB(0, 100, 80);
+        c.muted     = RGB(0, 150, 120);
+        c.dim       = RGB(0, 90, 75);
+        c.bg_dark   = RGB(10, 14, 16);
+        c.bg_box    = RGB(14, 20, 22);
+        c.hover_bg  = RGB(0, 45, 38);
+        c.border    = RGB(0, 70, 58);
     } else { /* Authentic Plasma */
         c.normal    = RGB(255, 110, 0);
         c.bright    = RGB(255, 160, 40);
@@ -1696,53 +1717,79 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
-            /* Menu Display Modes: 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT, 5: Real Tektronix */
-            if (cmdId >= IDM_VIEW_MODE_REAL_PLASMA && cmdId <= IDM_VIEW_MODE_REAL_TEKTRONIX) {
-                int new_mode = cur_p->display_mode;
+            /* Menu Display Modes: 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT, 5: Real Tektronix, 6: Real PDP-1 */
+            if (cmdId >= IDM_VIEW_MODE_REAL_PLASMA && cmdId <= IDM_VIEW_MODE_REAL_PDP1) {
+                int new_mode = g_app.active_profile.display_mode;
                 if (cmdId == IDM_VIEW_MODE_REAL_PLASMA) new_mode = 0;
                 else if (cmdId == IDM_VIEW_MODE_CRISP_MONO) new_mode = 1;
                 else if (cmdId == IDM_VIEW_MODE_SPLIT_MONO) new_mode = 2;
                 else if (cmdId == IDM_VIEW_MODE_CRISP_COLOR) new_mode = 3;
                 else if (cmdId == IDM_VIEW_MODE_REAL_CRT) new_mode = 4;
                 else if (cmdId == IDM_VIEW_MODE_REAL_TEKTRONIX) new_mode = 5;
+                else if (cmdId == IDM_VIEW_MODE_REAL_PDP1) new_mode = 6;
 
-                if (new_mode == cur_p->display_mode) {
+                if (new_mode == g_app.active_profile.display_mode) {
                     return 0;
                 }
 
-                bool cur_is_color = (cur_p->display_mode == 3 || cur_p->display_mode == 4);
+                bool cur_is_color = (g_app.active_profile.display_mode == 3 || g_app.active_profile.display_mode == 4);
                 bool new_is_color = (new_mode == 3 || new_mode == 4);
                 bool is_connected = (g_app.transport && g_app.transport->connected);
 
                 if (is_connected && (cur_is_color != new_is_color)) {
                     int resp = MessageBoxW(hwnd,
                         L"Switching between Monochrome and Color requires reconnecting to negotiate terminal capabilities with the PLATO mainframe.\n\nDo you want to reconnect now?",
-                        L"Reconnect Required for Display Mode Change",
+                        L"Reconnect Required for Display Change",
                         MB_YESNO | MB_ICONQUESTION);
                     if (resp != IDYES) {
                         return 0;
                     }
-                    cur_p->display_mode = new_mode;
-                    g_app.display_mode = new_mode;
                     g_app.active_profile.display_mode = new_mode;
-                    plato_profiles_save(&g_app.profile_list);
-                    win_connect_profile(cur_p, &g_app);
+                    g_app.display_mode = new_mode;
+                    win_connect_profile(&g_app.active_profile, &g_app);
                     plato_optical_invalidate(g_app.optical);
-                    win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                    win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                          g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                     win_refresh_window_theme(hwnd);
                     return 0;
                 }
 
-                cur_p->display_mode = new_mode;
-                g_app.display_mode = new_mode;
                 g_app.active_profile.display_mode = new_mode;
-                plato_profiles_save(&g_app.profile_list);
+                g_app.display_mode = new_mode;
                 plato_terminal_set_color_mode(&g_app.terminal, new_is_color);
                 plato_optical_invalidate(g_app.optical);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 win_refresh_window_theme(hwnd);
+                return 0;
+            }
+
+            if (cmdId == IDM_VIEW_PDP1_FONT_1961 || cmdId == IDM_VIEW_PDP1_FONT_1964) {
+                int font_idx = (cmdId == IDM_VIEW_PDP1_FONT_1964) ? 1 : 0;
+                g_app.active_profile.pdp1_font = font_idx;
+                plato_optical_invalidate(g_app.optical);
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                win_refresh_window_theme(hwnd);
+                return 0;
+            }
+
+            /* Menu PDP-1 Refresh Rate (On-The-Fly / No Save Profile) */
+            if (cmdId >= IDM_VIEW_PDP1_REFRESH_60 && cmdId <= IDM_VIEW_PDP1_REFRESH_5) {
+                const int rates[] = { 60, 45, 30, 15, 10, 5 };
+                g_app.active_profile.pdp1_refresh_rate = rates[cmdId - IDM_VIEW_PDP1_REFRESH_60];
+                plato_optical_invalidate(g_app.optical);
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                return 0;
+            }
+
+            /* Menu PDP-1 Display Mode / Presets (On-The-Fly / No Save Profile) */
+            if (cmdId >= IDM_VIEW_PDP1_PRESET_HISTORIC && cmdId <= IDM_VIEW_PDP1_PRESET_MODERN) {
+                g_app.active_profile.pdp1_preset = cmdId - IDM_VIEW_PDP1_PRESET_HISTORIC;
+                plato_optical_invalidate(g_app.optical);
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
 
@@ -1765,10 +1812,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             /* Menu Tektronix Connection Speed */
             if (cmdId >= IDM_VIEW_TEK_SPEED_INSTANT && cmdId <= IDM_VIEW_TEK_SPEED_9600) {
                 const int speeds[] = { 0, 110, 150, 300, 600, 1200, 2400, 4800, 9600 };
-                cur_p->tek_baud_rate = speeds[cmdId - IDM_VIEW_TEK_SPEED_INSTANT];
-                g_app.active_profile.tek_baud_rate = cur_p->tek_baud_rate;
-                plato_profiles_save(&g_app.profile_list);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                g_app.active_profile.tek_baud_rate = speeds[cmdId - IDM_VIEW_TEK_SPEED_INSTANT];
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
@@ -1776,28 +1821,25 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             /* Menu Plasma Decay */
             if (cmdId >= IDM_VIEW_PLASMA_DECAY_100 && cmdId <= IDM_VIEW_PLASMA_DECAY_5000) {
                 const int vals[] = { 100, 200, 500, 1000, 2000, 5000 };
-                cur_p->persistence_ms = vals[cmdId - IDM_VIEW_PLASMA_DECAY_100];
-                plato_profiles_save(&g_app.profile_list);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                g_app.active_profile.persistence_ms = vals[cmdId - IDM_VIEW_PLASMA_DECAY_100];
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
 
             /* Menu Plasma Distortion */
             if (cmdId >= IDM_VIEW_PLASMA_DIST_NONE && cmdId <= IDM_VIEW_PLASMA_DIST_CYL) {
-                cur_p->plasma_distortion = cmdId - IDM_VIEW_PLASMA_DIST_NONE;
-                g_app.distortion = cur_p->plasma_distortion;
-                plato_profiles_save(&g_app.profile_list);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                g_app.active_profile.plasma_distortion = cmdId - IDM_VIEW_PLASMA_DIST_NONE;
+                g_app.distortion = g_app.active_profile.plasma_distortion;
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
 
             /* Menu CRT Beam */
             if (cmdId >= IDM_VIEW_CRT_BEAM_STD && cmdId <= IDM_VIEW_CRT_BEAM_ULTRA) {
-                cur_p->crt_beam_level = cmdId - IDM_VIEW_CRT_BEAM_STD;
-                plato_profiles_save(&g_app.profile_list);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                g_app.active_profile.crt_beam_level = cmdId - IDM_VIEW_CRT_BEAM_STD;
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
@@ -1805,18 +1847,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             /* Menu CRT Decay */
             if (cmdId >= IDM_VIEW_CRT_DECAY_20 && cmdId <= IDM_VIEW_CRT_DECAY_5000) {
                 const int vals[] = { 20, 200, 500, 1000, 2000, 5000 };
-                cur_p->crt_persistence_ms = vals[cmdId - IDM_VIEW_CRT_DECAY_20];
-                plato_profiles_save(&g_app.profile_list);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                g_app.active_profile.crt_persistence_ms = vals[cmdId - IDM_VIEW_CRT_DECAY_20];
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
 
             /* Menu CRT Distortion */
             if (cmdId >= IDM_VIEW_CRT_DIST_NONE && cmdId <= IDM_VIEW_CRT_DIST_CYL) {
-                cur_p->crt_distortion = cmdId - IDM_VIEW_CRT_DIST_NONE;
-                plato_profiles_save(&g_app.profile_list);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                g_app.active_profile.crt_distortion = cmdId - IDM_VIEW_CRT_DIST_NONE;
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
@@ -1824,11 +1864,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             /* Menu Phosphor Color Override */
             if (cmdId >= IDM_VIEW_COLOR_DEFAULT && cmdId <= IDM_VIEW_COLOR_WHITE) {
                 int new_col = cmdId - IDM_VIEW_COLOR_DEFAULT;
-                cur_p->phosphor_color = new_col;
-                plato_profiles_save(&g_app.profile_list);
+                g_app.active_profile.phosphor_color = new_col;
                 plato_terminal_set_palette(&g_app.terminal, (plato_palette_t)new_col);
                 plato_optical_invalidate(g_app.optical);
-                win_menu_update_state(g_app.menu, cur_p, g_app.transport && g_app.transport->connected,
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 win_refresh_window_theme(hwnd);
                 return 0;
@@ -2157,6 +2196,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         for (size_t i = 0; i < g_app.profile_list.count; i++) {
             if (strcmp(g_app.profile_list.profiles[i].name, target_name) == 0) {
                 g_app.current_profile_idx = (int)i;
+                g_app.active_profile = g_app.profile_list.profiles[i];
                 break;
             }
         }
@@ -2179,6 +2219,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     win_apply_dark_theme(NULL);
     g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
+    win_menu_update_state(g_app.menu, &g_app.active_profile, false,
+                         g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen,
+                         &g_app.profile_list, g_app.current_profile_idx);
     win_setup_ownerdraw_menu(g_app.menu, true);
     win_update_arrow_menu_items(g_app.menu, plato_keyboard_get_arrow_mode(&g_app.keyboard_state));
     g_app.distortion = 2;

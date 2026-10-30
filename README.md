@@ -1,26 +1,24 @@
-# PlatoLives (v5.2)
+# PlatoLives (v5.5)
 
-## Latest Changes (v5.2)
+## Latest Changes (v5.5)
 
-- **Authentic Tektronix 4014 (DVBST) Emulation**: A dedicated vector storage-tube engine reproducing the optical, electrical, and mechanical behavior of the Direct View Bistable Storage Tube terminals used with PLATO. Features dual-layer dielectric charge simulation, writing-beam transient flare, configurable serial transmission speeds with progressive vector drawing, authentic full-screen flash erase, and P31 emerald green phosphors.
-- **Real-Time Vector HUD**: Telemetry overlay displaying vector queue saturation (`QUEUE xx%`), pacing speed, and hardware performance.
-- **WADX Keyboard Profile**: A fifth built-in keyboard layout adhering to the classic directional standard of early PLATO and TUTOR games (W=Up, A=Left, D=Right, X=Down).
-- **Network Automation in Scripting**: Built-in script interpreter extended with session commands (`disconnect`, `reconnect`, `connect <profile>`) and self-healing auto-login recovery.
-- **Connection Diagnostics and Responsive Modals**: Non-blocking connection lifecycle with immediate cancellation (`ESC`), retry on failure (`Enter`), and automated palette synchronization with the active terminal phosphor.
-- **Dynamic Theme Palette**: Interface menus and dialogue windows now dynamically adapt their chrominance and highlight colors to match the active phosphor profile.
+- **DEC PDP-1 Type 30 Display Emulation**: Introduces a point-plotting CRT display model with a 1024×1024 native coordinate space, 2× optical supersampling, and simulated P7 phosphor persistence and color shift.
+- **Historic PDP-1 Fonts**: Adds two character generators: the 1961 MIT Codeword font and the 1964 DEC Type 33 font.
+- **Configurable Display Response**: Offers selectable cathode refresh rates (60, 45, 30, 15, 10, and 5 Hz) and three optical presets: Historic (15s), Historic Fast Decay (5s), and Modern (2s).
+- **Cross-platform Support**: PDP-1 emulation is available on macOS, Windows (x86_64 and ARM64), and Linux desktop.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Windows%20(x86__64%20%26%20ARM64)%20%7C%20Linux%20(ARM64%20%26%20x86__64)-orange.svg)](#)
 [![Language](https://img.shields.io/badge/language-C11%20%7C%20Direct3D%2011%20%7C%20Cocoa%2FMetal%20%7C%20OpenGL%203.3-blue.svg)](#)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-red.svg)](LICENSE)
-[![Standard](https://img.shields.io/badge/standard-CDC%20IST--III%20%2F%20CERL%20X--20%20%2F%20CDC%20721%20%2F%20Tektronix%204014-brightgreen.svg)](#)
+[![Standard](https://img.shields.io/badge/standard-CDC%20IST--III%20%2F%20CERL%20X--20%20%2F%20CDC%20721%20%2F%20Tektronix%204014%20%2F%20DEC%20PDP--1-brightgreen.svg)](#)
 
 <img width="3658" height="1964" alt="PlatoLives Banner" src="https://github.com/user-attachments/assets/8b8e7e8c-1219-4be6-82f9-b20b1591509c" />
 
 **PlatoLives** is a modern native client for **PLATO**, the legendary computer-based education and social system that originated at the University of Illinois.
 
-It connects to PLATO systems such as **Cyber1/CYBIS** and **IRATA.ONLINE**, while preserving something often lost in modern PLATO clients: the feeling of actually sitting in front of a physical PLATO terminal.
+It connects to PLATO systems such as **Cyber1/CYBIS** and **IRATA.ONLINE**, while preserving something often lost in modern PLATO clients: the tactile, optical, and physical feeling of sitting in front of real vintage terminal hardware.
 
-The display can be rendered as an authentic **orange gas-plasma display**, a **color CRT**, or a **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**. Each mode models the physical properties of the original hardware—cell illumination, electron beam flare, dielectric storage charge, scanlines, phosphor persistence, and subtle glass curvature. The result is not simply a terminal window displaying PLATO graphics, but an authentic reproduction of the hardware that originally displayed them.
+The display can be rendered as an authentic **orange gas-plasma display**, a **color CRT**, a **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**, or a **DEC PDP-1 Type 30 Precision CRT Display**. Each mode models the physical properties of the original hardware—cell illumination, electron beam flare, cascade phosphors, dielectric storage charge, scanlines, and subtle glass curvature. The result is not simply a terminal window displaying PLATO graphics, but an authentic reproduction of the computing hardware that originally displayed them.
 
 At the same time, PlatoLives is a modern client. It supports copy and paste, scripting, automation, SSH/headless operation, modern Unicode text, customizable keyboard profiles, and native cross-platform execution on macOS, Windows (x86_64 & ARM64), and Linux.
 
@@ -30,104 +28,94 @@ In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to 
 
 ---
 
-# What's new in v5.2
+# What's new in v5.5
 
-Version 5.2 introduces high-fidelity **Tektronix 4014 (DVBST) vector terminal emulation**, bringing historic storage-tube PLATO access to life alongside gas-plasma and CRT displays.
+Version 5.5 introduces emulation of the **DEC PDP-1 Type 30 Precision CRT Display**, adding a point-plotting display model alongside the existing terminal display options.
 
-- **Tektronix 4014 Storage Tube**: Fully modeled Direct View Bistable Storage Tube with dual-layer dielectric simulation, line-drawing transient flare, serial line pacing, and flash erase.
-- **Vector Telemetry HUD**: A dedicated heads-up display displaying real-time vector queue saturation, pacing rates, and render performance.
-- **WADX Directional Profile**: Fifth built-in keyboard mapping matching early TUTOR conventions (W=Up, A=Left, D=Right, X=Down).
-- **Network Scripting Automation**: Added `disconnect`, `reconnect`, and `connect <profile>` script instructions for deterministic auto-login recovery and automated multi-server workflows.
-- **Connection Management & Dialogs**: Asynchronous non-blocking connection handling with immediate cancellation (`ESC`), detailed failure diagnostics, instant retry (`Enter`), and theme-aware styling.
-- **Dynamic Chromatic Theming**: UI chrome and dialogues adapt their palette in real time to the active display phosphor.
+- **PDP-1 Display Engine**: Models point plotting using a 1024×1024 native coordinate space, supersampled to a 2048×2048 optical canvas, with sub-pixel beam placement.
+- **P7 Phosphor Simulation**: Reproduces the blue/cyan prompt flash and its transition into a longer-lasting golden-amber glow.
+- **Historic Character Generators**: Includes the 1961 MIT Codeword font and the 1964 DEC Type 33 character generator.
+- **Display Controls**: Configurable refresh rates (60, 45, 30, 15, 10, and 5 Hz), plus Historic (15s), Historic Fast Decay (5s), and Modern (2s) response presets.
 
 ---
 
-# Authentic Tektronix 4014 (DVBST) Emulation
+# Authentic DEC PDP-1 Type 30 CRT Display Emulation
 
-The defining milestone of PlatoLives 5.2 is the physical emulation of the **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**.
-
-During the late 1960s and 1970s, before plasma panels became standard and raster CRTs gained sufficient memory buffers, Tektronix storage-tube terminals were widely used in engineering departments and research facilities to access PLATO. Recreating this experience requires modeling an entirely different display physics paradigm.
-```
-
-+-------------------------------------------------------------------------+  
-| TEKTRONIX 4014 PHYSICAL PIPELINE |  
-| |  
-| [PLATO Protocol] |  
-| │ |  
-| ▼ (Vector commands: Line, Point, Block, Char) |  
-| [Lock-Free Ring Buffer: 8192 Slots] ──► Telemetry (Queue Saturation %) |  
-| │ |  
-| ▼ |  
-| [Hardware Bit-Credit Pacer] (110 to 9600 bps or Instant) |  
-| │ |  
-| ▼ |  
-| [Sub-Pixel Continuous Vector Rasterizer] |  
-| │ |  
-| ├───────────────────────────────┐ |  
-| ▼ ▼ |  
-| tek_flare (Bloom & Decay) tek_stored (Bistable Target) |  
-| Transient beam write energy Continuous flood-gun maintenance |  
-| │ │ |  
-| └───────────────┬───────────────┘ |  
-| ▼ |  
-| P31 Emerald Green Phosphor |  
-| (Plus DVBST Full-Screen Flash Erase) |  
+The defining milestone of PlatoLives 5.5 is the physical emulation of the **DEC PDP-1 Type 30 Precision Display**, the display on which computer graphics history and the first video game (*Spacewar!*, 1962) were born.
 +-------------------------------------------------------------------------+
+| DEC PDP-1 TYPE 30 PHYSICAL PIPELINE |
+| |
+| [PLATO Point/Vector Stream] |
+| │ |
+| ▼ |
+| [1024×1024 Precision Coordinate Addressing (Type 30 DACs)] |
+| │ |
+| ▼ |
+| [Hardware Font Generator: 1961 Codeword / 1964 Type 33] |
+| │ |
+| ▼ |
+| [Dynamic Cathode Refresh Pacer] (60, 45, 30, 15, 10, 5 Hz) |
+| │ |
+| ▼ |
+| [2× Supersampled Optical Accumulator: 2048×2048 Canvas] |
+| │ |
+| ┌───────────────────────┴───────────────────────┐ |
+| ▼ ▼ |
+| Prompt Excitation Flash (ZnS:Ag) Long-Persistence Phosphorescence |
+| Blue/Cyan Transient Flare (τ = 350 ms) ZnS:Cu Golden-Amber Shift (P7)|
+| PSF Bloom (σ = 1.100f / 0.450f) Decay: 15s (Hist) / 5s / 2s |
+| └───────────────────────┬───────────────────────┘ |
+| ▼ |
+| P7 Radar Turquoise Spectrum (#00D4AA) |
+| (Plus Custom Phosphor Overrides) |
++-------------------------------------------------------------------------+
+code
+Code
+### Point-Plotting Precision CRT Architecture
 
-### The Direct View Bistable Storage Tube Model
+Unlike raster displays that sweep an electron beam line by line across a phosphor grid, the DEC Type 30 was a **point-plotting vector display**. The computer addressed points individually using two 10-bit digital-to-analog converters, projecting an electron beam onto a circular 16-inch cathode ray tube.
 
-Standard CRT displays use a focused electron beam that continuously scans raster lines 50 or 60 times a second; when the beam moves on, phosphors decay in milliseconds, requiring a continuous refresh buffer.
+PlatoLives faithfully models this architecture:
+- **Decoupled Framebuffers**: The terminal maintains an internal $512 \times 512$ PLATO logic coordinate system alongside an independent $1024 \times 1024$ PDP-1 physical landing buffer (`fb_pdp`), preventing ghosting and coordinate aliasing.
+- **$2\times$ Optical Supersampling**: To capture the microscopic optical blooming of individual CRT points, the rendering pipeline rasterizes into a continuous $2048 \times 2048$ high-resolution canvas before presenting to the GPU backbuffer.
+- **Point Spread Function (PSF) Bloom**: Beam intensity follows a Gaussian point spread profile. The *Historic* preset utilizes $\sigma = 1.100\text{f}$ for authentic CRT beam dispersion, while the *Modern* preset offers $\sigma = 0.450\text{f}$ for ultra-sharp dot isolation.
 
-The Tektronix DVBST operated completely differently:
-1. **Secondary Emission & Dielectric Storage**: The target inside the tube consists of a dielectric phosphor mesh. When the high-energy focused **writing electron beam** traces a vector across the screen, it knocks secondary electrons out of the dielectric, raising its electrical potential above a critical threshold.
-2. **Continuous Flood Guns**: Two low-velocity "flood guns" continuously spray electrons across the entire face of the tube. At unwritten points, the target repels these flood electrons. But where the writing beam has created a positive charge, the flood electrons are accelerated into the phosphor, maintaining the glowing image **indefinitely without raster refresh, memory buffers, or flicker**.
+### Physical P7 Cascade Phosphor & Chromatic Shift
 
-PlatoLives implements this bistable physics through a dual-buffer optical state:
-- **`tek_stored` (Dielectric Charge Layer)**: Represents the stable, binary charge stored on the target mesh. Once written, vectors remain pinned at their stored equilibrium potential until an electrical erase pulse resets the target.
-- **`tek_flare` (Transient Beam Energy Layer)**: Models the intense, localized optical blooming that occurs under the tip of the writing electron beam while moving across the phosphor. As vectors are traced, the flare illuminates brightly and decays smoothly, mirroring the characteristic green tail seen on real storage tubes.
+The PDP-1 Type 30 utilized a **P7 cascade phosphor**, originally designed for radar displays during World War II:
+1. **Prompt Excitation Layer ($\text{ZnS:Ag}$)**: When hit by the electron beam, the base layer instantly emits an intense, short-lived blue/cyan flash ($\tau = 350\text{ ms}$).
+2. **Persistent Phosphorescent Layer ($\text{ZnS:Cu}$)**: This prompt light excites a second phosphor layer that emits a long-lasting yellow-green/golden-amber glow, persisting for several seconds.
 
-### Hardware-Accurate Serial Transmission Pacer
+PlatoLives simulates both layers independently, reproducing the distinctive historical chromatic shift: plotted points ignite with a bright cyan-blue flare, transitioning smoothly into a warm golden-amber trail as they decay.
 
-Historical Tektronix terminals were serial devices connected via current-loop or RS-232 interfaces, ranging from 110 to 9600 baud. Complex vector drawings did not appear instantaneously; they were drawn progressively, line by line, across the dark green phosphor.
+### Hardware Font Generators: 1961 Codeword vs 1964 Type 33
 
-PlatoLives models this transmission pacing at the hardware level:
-- A high-resolution **bit-credit accumulator** paces the ingestion of vector commands based on the selected serial speed: **110, 150, 300, 600, 1200, 2400, 4800, or 9600 baud** (with an **Instant** option available for immediate drawing).
-- As bytes arrive, vector coordinates are drawn progressively in real time. Fast line segments, axes, mathematical curves, and character vectors are visible as they are traced onto the storage mesh.
+PlatoLives includes two distinct historical font implementations:
+- **1961 Codeword (Spacewar!)**: The original 5x7 stroke font crafted by Steve Russell, Martin Graetz, and Wayne Wiitanen at MIT.
+- **1964 Character Generator (Type 33)**: The hardware-driven character generator option introduced for production DEC PDP-1 terminals.
 
-### Lock-Free 8192-Slot Vector Event Queue
+### Configurable Refresh & Presets
 
-To ensure absolute decoupling between the network transport, protocol decoding, and physical vector rendering:
-- A dedicated, lock-free typed ring buffer (`plato_vector_queue_t`) holds up to **8192 vector events** (`VEC_EVENT_LINE`, `VEC_EVENT_POINT`, `VEC_EVENT_ERASE`, `VEC_EVENT_CHAR`, and `VEC_EVENT_BLOCK`).
-- Decoders push vector drawing commands into the ring buffer with sub-pixel floating-point coordinates.
-- The optical pacer consumes from the queue at the precise serial rate, enabling accurate telemetry.
-
-### DVBST Full-Screen Flash Erase & Grace Period
-
-Because storage tubes cannot selectively erase individual lines without clearing the entire dielectric target, erasing a Tektronix terminal was an unmistakable physical event:
-- An erase cycle applies a positive voltage pulse to the target mesh, causing the entire display to **flash brilliant emerald green** as secondary emission saturates the screen, followed by a brief dark settling phase.
-- PlatoLives reproduces the exact duration and optical intensity curve of the Tektronix erase flash.
-- To prevent distracting strobing during rapid screen updates, an internal **anti-strobe grace period filter** smooths consecutive clearing requests without compromising historical accuracy.
-
-### P31 Emerald Green Phosphor Calibration
-
-The Tektronix 4014 utilized **P31 phosphor**, prized for its balance of high visual efficiency, bright emerald-green hue (peak emission around 525 nm), and suitable secondary-emission characteristics. PlatoLives precisely calibrates this spectral signature across its rendering backends (Metal on macOS, Direct3D 11 on Windows, and OpenGL 3.3 Core on Linux).
+- **Dynamic Refresh Pacing**: 60 Hz, 45 Hz (historical default), 30 Hz, 15 Hz, 10 Hz, and 5 Hz.
+- **Presets**:
+  - `Historic (15s)`: Full 15-second natural P7 persistence and wide beam bloom.
+  - `Historic Fast Decay (5s)`: Balanced persistence for high-speed terminal interaction.
+  - `Modern (2s)`: Sharp, separated points with rapid settling.
 
 ---
 
 # What makes PlatoLives different?
 
-There are plenty of ways to connect to PLATO. PlatoLives is intended for people who want something closer to **using a PLATO terminal**, rather than simply accessing a PLATO server.
+There are plenty of ways to connect to PLATO. PlatoLives is intended for people who want something closer to **using a physical PLATO terminal**, rather than simply accessing a PLATO server.
 
-### Authentic Hardware Display Modes
+### Four Authentic Hardware Display Models
 
-PlatoLives provides three primary display models:
-
-1. **Real Plasma**: Recreates the iconic orange gas-plasma panels developed for PLATO IV at the University of Illinois, simulating the micro-cell ionization, neon glow, and bistable discharge of physical plasma panels.
+1. **Real Plasma**: Recreates the iconic orange gas-plasma panels developed for PLATO IV at the University of Illinois, simulating micro-cell ionization, neon glow, and bistable discharge.
 2. **Real Color CRT**: Recreates the CDC color terminals, featuring RGB phosphors, electron beam blooming, scanline structures, and configurable CRT profiles.
-3. **Real Tektronix 4014 (DVBST)**: The historical vector storage tube experience with progressive line tracing, P31 phosphors, and flash erase.
+3. **Real Tektronix 4014 (DVBST)**: Vector storage-tube experience with progressive line tracing, P31 phosphors, slow electron background noise, and full-screen flash erase.
+4. **Real DEC PDP-1 Type 30 (1964)**: Precision point-plotting CRT display featuring P7 cascade phosphors, chromatic decay shift, and historic MIT font generators.
 
-Each mode supports physical glass curvature simulation and optical touch compensation.
+Each mode supports glass curvature simulation, optical touch compensation, and phosphor overrides (P31 Green, P40 Amber, P4 White).
 
 ### Modern hardware, native applications
 
@@ -173,7 +161,7 @@ PlatoLives can load supported `.mte` floppy images and execute them locally, wit
 - run lessons completely offline
 - return to a normal online PLATO session cleanly
 
-The environment includes emulation of the original Z80 processor and floppy controller environment required by the interpreter. MicroTutor is automatically bypassed when operating in Tektronix 4014 mode, matching historical hardware limits.
+The environment includes emulation of the original Z80 processor and floppy controller environment required by the interpreter. MicroTutor is automatically bypassed when operating in Tektronix 4014 or DEC PDP-1 mode, matching historical hardware limits.
 
 ---
 
@@ -185,7 +173,6 @@ PLATO sessions often involve repetitive sequences: logging in, waiting for promp
 
 ### Network Automation Commands
 
-Version 5.0 extends the scripting engine with session control instructions:
 - `disconnect`: Gracefully closes active network transports, resets the protocol decoder, and clears the terminal.
 - `reconnect`: Atomically reconnects to the active host and port, providing immediate self-healing recovery if a session desynchronizes.
 - `connect <profile_name>`: Connects to a named connection profile from the Profile Manager.
@@ -213,7 +200,11 @@ Unified menu structure across macOS, Windows, and Linux:
 - **Connection**: Connect, Switch Profile, New Window, Reconnect, Disconnect, Profiles Manager, Close Window, Quit
 - **Keyboard**: Standard PLATO, WASD Gaming, WASX Avatar, WADX, Numpad Roguelike, Manage Keyboard Profiles..., Keyboard Reference (`Cmd+K` / `Ctrl+K`)
 - **Scripts**: Run, Manage Scripts, Scripting Reference
-- **View**: Real Plasma, Crisp Mono, Split Mono, Crisp Color, Real CRT, Real Tektronix 4014 (DVBST), Tektronix Connection Speed, Hide Menu Bar, Show Performance HUD (`F12`)
+- **View**:
+  - Real Plasma, Crisp Mono, Split Mono, Crisp Color, Real CRT
+  - Real Tektronix 4014 (DVBST), Tektronix Connection Speed, Erase Flash, Accurate Background
+  - Real DEC PDP-1 Type 30 (1964), PDP-1 Font Generator, PDP-1 Refresh Rate, PDP-1 Display Mode
+  - Full Screen (`F11`), Show Performance HUD (`F12`), Hide Menu Bar (`Ctrl+Shift+M`), Override Color
 - **Edit**: Copy Text, Copy Screen, Paste Text, Cancel Paste
 - **Micro Tutor**: Load and Boot from MTE..., Stop MicroTutor, Z80 Diagnostics
 - **Window (macOS)**: Tab management and window controls
@@ -231,7 +222,7 @@ Unified menu structure across macOS, Windows, and Linux:
 | **Windows 10/11 (ARM64)** | Win32 Native Desktop | Direct3D 11 (Native AArch64) |
 | **Linux ARM64 & x86_64** | Native Desktop GUI | OpenGL 3.3 Core + SDL2 |
 | **Linux Console (ARM64 & x86_64)** | ANSI TrueColor CLI | Headless / Terminal (Static musl) |
-| **Cyber1 / CYBIS** | Supported | Full IST-III, Color & Tektronix Protocols |
+| **Cyber1 / CYBIS** | Supported | Full IST-III, Color, Tektronix & PDP-1 Protocols |
 | **IRATA.ONLINE** | Supported | Standard ASCII / PLATO |
 | **MicroTutor Floppy Images** | Local Emulation | Integrated Z80 CPU & Disk Controller |
 
@@ -248,13 +239,9 @@ With Zig installed:
 ```bash
 brew install zig
 ./build_all.sh
-```
-
 Artifacts are output to build/:
-
-codeText
-
-```
+code
+Text
 PlatoLives.app
 PlatoLives-windows-x86_64.exe
 PlatoLives-windows-arm64.exe
@@ -263,15 +250,10 @@ PlatoLives-linux-gui-x86_64
 PlatoLives-console-linux-arm64
 PlatoLives-console-linux-x86_64
 build/linux_desktop_install/
-```
-
-### Native macOS build
-
+Native macOS build
 Requirements: macOS 13+, Xcode Command Line Tools, CMake 3.16+.
-
-codeBash
-
-```
+code
+Bash
 git clone git@github.com:TheSynthMaster/PlatoLives.git
 cd PlatoLives
 mkdir build
@@ -279,75 +261,56 @@ cd build
 cmake ..
 make -j$(sysctl -n hw.ncpu)
 ctest --output-on-failure
-```
-
-----------
-
-# Technical Details
-
-Component
-
-Details
-
-**Core**
-
-Portable C11
-
-**Display Modes**
-
-Real Gas-Plasma, Color CRT, Real Tektronix 4014 (DVBST)
-
-**Logical Display**
-
-512 × 512 PLATO vector and text grid
-
-**Vector Engine**
-
-Lock-free 8192-slot ring buffer with hardware bit-credit pacer
-
-**DVBST Physics**
-
-Dual-layer dielectric charge (tek_stored) and writing-beam flare (tek_flare)
-
-**Text Matrix**
-
-64 × 32 character matrix with downloadable font recognition
-
-**macOS Rendering**
-
-Cocoa / Core Animation / Metal
-
-**Windows Rendering**
-
-Win32 / Direct3D 11 (Native x86_64 and ARM64)
-
-**Linux Rendering**
-
-OpenGL 3.3 Core / SDL2 / stb_truetype
-
-**Input Engine**
-
-5 Built-in layouts (Standard, WASD, WASX, WADX, Numpad), custom remapping
-
-**Networking**
-
-Non-blocking BSD/WinSock2 TCP with immediate cancel and auto-retry
-
-**Automation**
-
-State-aware scripting interpreter with network session control
-
-**MicroTutor**
-
-Pure C11 Z80 CPU and floppy controller emulation
-
-**Versioning**
-
-Single Source of Truth via root VERSION file
-
-----------
-
-# License
-
-PlatoLives is released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license.  
+Technical Details
+Component	Details
+Core	Portable C11
+Display Modes	Real Gas-Plasma, Color CRT, Real Tektronix 4014 (DVBST), DEC PDP-1 Type 30 (1964)
+Logical Display	
+512
+×
+512
+512×512
+ PLATO vector and text grid
+PDP-1 Optical Canvas	
+1024
+×
+1024
+1024×1024
+ native point space supersampled to 
+2048
+×
+2048
+2048×2048
+ canvas
+PDP-1 Phosphor Model	P7 Cascade: 
+ZnS:Ag
+ZnS:Ag
+ prompt flash (
+τ
+=
+350
+ ms
+τ=350 ms
+) + 
+ZnS:Cu
+ZnS:Cu
+ yellow-amber phosphorescence
+Vector Engine	Lock-free 8192-slot ring buffer with hardware bit-credit pacer
+DVBST Physics	Dual-layer dielectric charge (tek_stored) and writing-beam flare (tek_flare)
+Text Matrix	
+64
+×
+32
+64×32
+ character matrix with downloadable font recognition
+macOS Rendering	Cocoa / Core Animation / Metal
+Windows Rendering	Win32 / Direct3D 11 (Native x86_64 and ARM64)
+Linux Rendering	OpenGL 3.3 Core / SDL2 / stb_truetype
+Input Engine	5 Built-in layouts (Standard, WASD, WASX, WADX, Numpad), custom remapping
+Networking	Non-blocking BSD/WinSock2 TCP with immediate cancel and auto-retry
+Automation	State-aware scripting interpreter with network session control
+MicroTutor	Pure C11 Z80 CPU and floppy controller emulation
+Versioning	Single Source of Truth via root VERSION file
+License
+PlatoLives is released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license.
 See LICENSE for the complete license text.

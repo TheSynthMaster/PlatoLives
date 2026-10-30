@@ -109,6 +109,15 @@ static void plato_mac_beep(void *context) {
     else if (mode == 3) [self.view setDisplayCrispColor];
     else if (mode == 4) [self.view setDisplayRealColorCRT];
     else if (mode == 5) [self.view setDisplayRealTektronix];
+    else if (mode == 6) {
+        [self.view setDisplayRealPDP1];
+        NSInteger pdpFont = p[@"pdp1Font"] ? [p[@"pdp1Font"] integerValue] : 0;
+        [self.view setPDP1Font:pdpFont];
+        NSInteger pdpRate = p[@"pdp1RefreshRate"] ? [p[@"pdp1RefreshRate"] integerValue] : 45;
+        [self.view setPDP1RefreshRate:pdpRate];
+        NSInteger pdpPreset = p[@"pdp1Preset"] ? [p[@"pdp1Preset"] integerValue] : 0;
+        [self.view setPDP1Preset:pdpPreset];
+    }
     else [self.view setDisplayRealPlasma];
 
     NSInteger tekBaud = p[@"tekBaudRate"] ? [p[@"tekBaudRate"] integerValue] : 2400;
@@ -234,7 +243,17 @@ static void plato_mac_beep(void *context) {
 @implementation PLATOThemeColors
 + (PLATOThemeColors *)colorsForMode:(NSInteger)mode phosphor:(NSInteger)phosphor {
     PLATOThemeColors *c = [[PLATOThemeColors alloc] init];
-    if (mode == 5 || phosphor == 1) { /* Tektronix o Green P31 */
+    if (mode == 6 && phosphor == 0) { /* DEC PDP-1 Type 30 (P7 Native Cascade Phosphor) */
+        c.normal    = [NSColor colorWithCalibratedRed:0.0/255.0 green:212.0/255.0 blue:170.0/255.0 alpha:1.0]; /* #00D4AA radar turquoise */
+        c.bright    = [NSColor colorWithCalibratedRed:96.0/255.0 green:225.0/255.0 blue:255.0/255.0 alpha:1.0]; /* #60E1FF electric blue flash */
+        c.disabled  = [NSColor colorWithCalibratedRed:0.0/255.0 green:80.0/255.0 blue:65.0/255.0 alpha:1.0];
+        c.muted     = [NSColor colorWithCalibratedRed:0.0/255.0 green:140.0/255.0 blue:115.0/255.0 alpha:1.0];
+        c.dim       = [NSColor colorWithCalibratedRed:0.0/255.0 green:95.0/255.0 blue:75.0/255.0 alpha:1.0];
+        c.bgDark    = [NSColor colorWithCalibratedRed:6.0/255.0 green:14.0/255.0 blue:14.0/255.0 alpha:1.0];
+        c.bgBox     = [NSColor colorWithCalibratedRed:10.0/255.0 green:22.0/255.0 blue:22.0/255.0 alpha:1.0];
+        c.hoverBg   = [NSColor colorWithCalibratedRed:0.0/255.0 green:45.0/255.0 blue:40.0/255.0 alpha:1.0];
+        c.border    = [NSColor colorWithCalibratedRed:0.0/255.0 green:70.0/255.0 blue:60.0/255.0 alpha:1.0];
+    } else if (mode == 5 || phosphor == 1) { /* Tektronix o Green P31 */
         c.normal    = [NSColor colorWithCalibratedRed:51.0/255.0 green:255.0/255.0 blue:51.0/255.0 alpha:1.0];
         c.bright    = [NSColor colorWithCalibratedRed:120.0/255.0 green:255.0/255.0 blue:120.0/255.0 alpha:1.0];
         c.disabled  = [NSColor colorWithCalibratedRed:25.0/255.0 green:110.0/255.0 blue:25.0/255.0 alpha:1.0];
@@ -457,6 +476,9 @@ static void plato_mac_beep(void *context) {
             @"tekBaudRate": @2400,
             @"tekEraseFlash": @YES,
             @"tekAccurateBg": @YES,
+            @"pdp1Font": @0,
+            @"pdp1RefreshRate": @45,
+            @"pdp1Preset": @0,
             @"fullScreen": @YES,
             @"isDefault": @YES
         } mutableCopy];
@@ -532,6 +554,12 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSPopUpButton *tekBaudPopup;
 @property (nonatomic, strong) NSButton *tekEraseFlashCheckbox;
 @property (nonatomic, strong) NSButton *tekAccurateBgCheckbox;
+@property (nonatomic, strong) NSTextField *pdp1FontLbl;
+@property (nonatomic, strong) NSPopUpButton *pdp1FontPopup;
+@property (nonatomic, strong) NSTextField *pdp1RefreshLbl;
+@property (nonatomic, strong) NSPopUpButton *pdp1RefreshPopup;
+@property (nonatomic, strong) NSTextField *pdp1PresetLbl;
+@property (nonatomic, strong) NSPopUpButton *pdp1PresetPopup;
 
 @property (nonatomic, strong) NSButton *fullscreenCheckbox;
 @property (nonatomic, strong) NSButton *defaultCheckbox;
@@ -657,7 +685,7 @@ static void plato_mac_beep(void *context) {
     [content addSubview:modeLbl];
     [_themeLabels addObject:modeLbl];
     _modePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 777, fw, 25) pullsDown:NO];
-    [_modePopup addItemsWithTitles:@[@"Real Plasma", @"Crisp Monochrome", @"Split Monochrome", @"Crisp Color", @"Real Color CRT", @"Real Tektronix 4014 (DVBST)"]];
+    [_modePopup addItemsWithTitles:@[@"Real Plasma", @"Crisp Monochrome", @"Split Monochrome", @"Crisp Color", @"Real Color CRT", @"Real Tektronix 4014 (DVBST)", @"DEC PDP-1 Type 30 (1964)"]];
     [_modePopup setTarget:self];
     [_modePopup setAction:@selector(onModeChanged:)];
     [content addSubview:_modePopup];
@@ -680,6 +708,37 @@ static void plato_mac_beep(void *context) {
     _plasmaDistortionPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 701, fw, 25) pullsDown:NO];
     [_plasmaDistortionPopup addItemsWithTitles:@[@"None (Flat)", @"Barrel (Curved Glass)", @"Cylindrical"]];
     [content addSubview:_plasmaDistortionPopup];
+
+    // --- Controlli DEC PDP-1 Type 30 ---
+    _pdp1FontLbl = [NSTextField labelWithString:@"PDP-1 Font:"];
+    [_pdp1FontLbl setFrame:NSMakeRect(rx, 742, 105, 18)];
+    [_pdp1FontLbl setTextColor:plasmaOrange];
+    [content addSubview:_pdp1FontLbl];
+    [_themeLabels addObject:_pdp1FontLbl];
+
+    _pdp1FontPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 739, fw, 25) pullsDown:NO];
+    [_pdp1FontPopup addItemsWithTitles:@[@"1961 Codeword (Spacewar!)", @"1964 Character (Type 33)"]];
+    [content addSubview:_pdp1FontPopup];
+
+    _pdp1RefreshLbl = [NSTextField labelWithString:@"PDP-1 Refresh:"];
+    [_pdp1RefreshLbl setFrame:NSMakeRect(rx, 704, 105, 18)];
+    [_pdp1RefreshLbl setTextColor:plasmaOrange];
+    [content addSubview:_pdp1RefreshLbl];
+    [_themeLabels addObject:_pdp1RefreshLbl];
+
+    _pdp1RefreshPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 701, fw, 25) pullsDown:NO];
+    [_pdp1RefreshPopup addItemsWithTitles:@[@"45 Hz (Authentic)", @"60 Hz", @"30 Hz", @"15 Hz", @"10 Hz", @"5 Hz"]];
+    [content addSubview:_pdp1RefreshPopup];
+
+    _pdp1PresetLbl = [NSTextField labelWithString:@"PDP-1 Mode:"];
+    [_pdp1PresetLbl setFrame:NSMakeRect(rx, 666, 105, 18)];
+    [_pdp1PresetLbl setTextColor:plasmaOrange];
+    [content addSubview:_pdp1PresetLbl];
+    [_themeLabels addObject:_pdp1PresetLbl];
+
+    _pdp1PresetPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 663, fw, 25) pullsDown:NO];
+    [_pdp1PresetPopup addItemsWithTitles:@[@"Historic (P7 15s decay, full bloom)", @"Historic Fast Decay (5s)", @"Modern (Sharp dots, 2s)"]];
+    [content addSubview:_pdp1PresetPopup];
 
     // --- Controlli Real Color CRT ---
     _crtBeamLbl = [NSTextField labelWithString:@"CRT Beam:"];
@@ -801,10 +860,20 @@ static void plato_mac_beep(void *context) {
     [_crtDistortionPopup setHidden:!isCRT];
 
     BOOL isTek = (mIdx == 5);
+    BOOL isPDP1 = (mIdx == 6);
     [_tekBaudLbl setHidden:!isTek];
     [_tekBaudPopup setHidden:!isTek];
     [_tekEraseFlashCheckbox setHidden:!isTek];
     [_tekAccurateBgCheckbox setHidden:!isTek];
+
+    [_pdp1FontLbl setHidden:!isPDP1];
+    [_pdp1FontPopup setHidden:!isPDP1];
+    [_pdp1RefreshLbl setHidden:!isPDP1];
+    [_pdp1RefreshPopup setHidden:!isPDP1];
+    [_pdp1PresetLbl setHidden:!isPDP1];
+    [_pdp1PresetPopup setHidden:!isPDP1];
+
+    /* Phosphor Color nascosto solo per Tektronix, visibile per PDP-1 */
     [_overrideColorLbl setHidden:isTek];
     [_overrideColorPopup setHidden:isTek];
 }
@@ -858,6 +927,7 @@ static void plato_mac_beep(void *context) {
     else if (mode == 3) pIdx = 3; // Crisp Color
     else if (mode == 4) pIdx = 4; // Real Color CRT
     else if (mode == 5) pIdx = 5; // Real Tektronix 4014
+    else if (mode == 6) pIdx = 6; // Real DEC PDP-1 Type 30
     else pIdx = 0;                // Real Plasma
     [self.modePopup selectItemAtIndex:pIdx];
 
@@ -870,6 +940,23 @@ static void plato_mac_beep(void *context) {
     else if (ms == 2000) decayIdx = 4;
     else if (ms == 5000) decayIdx = 5;
     [self.decayPopup selectItemAtIndex:decayIdx];
+
+    // PDP-1 font, refresh rate e preset
+    NSInteger pdpFont = p[@"pdp1Font"] ? [p[@"pdp1Font"] integerValue] : 0;
+    [self.pdp1FontPopup selectItemAtIndex:(pdpFont == 1 ? 1 : 0)];
+
+    NSInteger pdpRate = p[@"pdp1RefreshRate"] ? [p[@"pdp1RefreshRate"] integerValue] : 45;
+    NSInteger rIdx = 0;
+    if (pdpRate == 60) rIdx = 1;
+    else if (pdpRate == 30) rIdx = 2;
+    else if (pdpRate == 15) rIdx = 3;
+    else if (pdpRate == 10) rIdx = 4;
+    else if (pdpRate == 5) rIdx = 5;
+    [self.pdp1RefreshPopup selectItemAtIndex:rIdx];
+
+    NSInteger pdpPr = p[@"pdp1Preset"] ? [p[@"pdp1Preset"] integerValue] : 0;
+    if (pdpPr < 0 || pdpPr > 2) pdpPr = 0;
+    [self.pdp1PresetPopup selectItemAtIndex:pdpPr];
 
     // Tektronix settings
     BOOL eraseFlash = p[@"tekEraseFlash"] ? [p[@"tekEraseFlash"] boolValue] : YES;
@@ -943,6 +1030,7 @@ static void plato_mac_beep(void *context) {
     else if (mIdx == 3) modeVal = 3; // Crisp Color
     else if (mIdx == 4) modeVal = 4; // Real Color CRT
     else if (mIdx == 5) modeVal = 5; // Real Tektronix 4014
+    else if (mIdx == 6) modeVal = 6; // Real DEC PDP-1 Type 30
     else modeVal = 1;                // Real Plasma
     p[@"displayMode"] = @(modeVal);
 
@@ -984,6 +1072,16 @@ static void plato_mac_beep(void *context) {
 
     p[@"crtDistortion"] = @([self.crtDistortionPopup indexOfSelectedItem]);
     p[@"phosphorColor"] = @([self.overrideColorPopup indexOfSelectedItem]);
+
+    NSInteger pfIdx = [self.pdp1FontPopup indexOfSelectedItem];
+    p[@"pdp1Font"] = @(pfIdx == 1 ? 1 : 0);
+
+    const int pdpRates[] = { 45, 60, 30, 15, 10, 5 };
+    NSInteger selRateIdx = [self.pdp1RefreshPopup indexOfSelectedItem];
+    p[@"pdp1RefreshRate"] = @(pdpRates[(selRateIdx >= 0 && selRateIdx < 6) ? selRateIdx : 0]);
+
+    NSInteger selPr = [self.pdp1PresetPopup indexOfSelectedItem];
+    p[@"pdp1Preset"] = @((selPr >= 0 && selPr <= 2) ? selPr : 0);
 
     p[@"fullScreen"] = @([self.fullscreenCheckbox state] == NSControlStateValueOn);
     p[@"startupScriptEnabled"] = @([self.scriptCheckbox state] == NSControlStateValueOn);
@@ -1035,6 +1133,7 @@ static void plato_mac_beep(void *context) {
             @"tekBaudRate": @2400,
             @"tekEraseFlash": @YES,
             @"tekAccurateBg": @YES,
+            @"pdp1Font": @0,
             @"fullScreen": @YES,
             @"startupScriptEnabled": @NO,
             @"startupScript": [NSString stringWithUTF8String:PLATO_DEFAULT_AUTOLOGIN_SCRIPT],
@@ -1457,6 +1556,9 @@ static void plato_mac_beep(void *context) {
     [self updateCRTDecayMenuForDuration:[controller.view crtDecayDuration]];
     [self updateOverrideColorMenu:[controller.view phosphorColor]];
     [self updateTekBaudMenu:[controller.view tekBaudRate]];
+    [self updatePDP1FontMenu:[controller.view pdp1Font]];
+    [self updatePDP1RefreshMenu:[controller.view pdp1RefreshRate]];
+    [self updatePDP1PresetMenu:[controller.view pdp1Preset]];
 }
 
 - (void)applyKeyboardReferencePresentation {
@@ -1693,6 +1795,53 @@ static void plato_mac_beep(void *context) {
     self.tekAccurateBgMenuItem = [[NSMenuItem alloc] initWithTitle:@"Tektronix Accurate Background" action:@selector(toggleTekAccurateBg:) keyEquivalent:@""];
     [self.tekAccurateBgMenuItem setTarget:self];
     [viewMenu addItem:self.tekAccurateBgMenuItem];
+
+    [viewMenu addItem:[NSMenuItem separatorItem]];
+
+    // --- DEC PDP-1 TYPE 30 (STAND-ALONE PRECISION CRT ENGINE) ---
+    NSMenuItem *pdpItem = [[NSMenuItem alloc] initWithTitle:@"Real DEC PDP-1 Type 30 (1964)" action:@selector(setDisplayRealPDP1:) keyEquivalent:@""];
+    [pdpItem setTarget:self]; [pdpItem setTag:1007];
+    [viewMenu addItem:pdpItem];
+
+    NSMenuItem *pdpFontItem = [[NSMenuItem alloc] initWithTitle:@"PDP-1 Font Generator" action:nil keyEquivalent:@""];
+    self.pdp1FontMenu = [[NSMenu alloc] initWithTitle:@"PDP-1 Font Generator"];
+
+    NSMenuItem *f61 = [[NSMenuItem alloc] initWithTitle:@"1961 Codeword (Spacewar!)" action:@selector(selectPDP1Font1961:) keyEquivalent:@""];
+    [f61 setTarget:self]; [f61 setTag:2601]; [f61 setState:NSControlStateValueOn];
+    [self.pdp1FontMenu addItem:f61];
+
+    NSMenuItem *f64 = [[NSMenuItem alloc] initWithTitle:@"1964 Character (Type 33)" action:@selector(selectPDP1Font1964:) keyEquivalent:@""];
+    [f64 setTarget:self]; [f64 setTag:2602];
+    [self.pdp1FontMenu addItem:f64];
+
+    [pdpFontItem setSubmenu:self.pdp1FontMenu];
+    [viewMenu addItem:pdpFontItem];
+
+    NSMenuItem *pdpRefreshItem = [[NSMenuItem alloc] initWithTitle:@"PDP-1 Refresh Rate" action:nil keyEquivalent:@""];
+    self.pdp1RefreshMenu = [[NSMenu alloc] initWithTitle:@"PDP-1 Refresh Rate"];
+    const int rHzVals[] = { 60, 45, 30, 15, 10, 5 };
+    const int rTags[] = { 2701, 2702, 2703, 2704, 2705, 2706 };
+    for (int i = 0; i < 6; i++) {
+        NSString *t = [NSString stringWithFormat:@"%d Hz%@", rHzVals[i], (rHzVals[i] == 45 ? @" (Authentic)" : @"")];
+        NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:t action:@selector(selectPDP1Refresh:) keyEquivalent:@""];
+        [it setTarget:self]; [it setTag:rTags[i]];
+        if (rHzVals[i] == 45) [it setState:NSControlStateValueOn];
+        [self.pdp1RefreshMenu addItem:it];
+    }
+    [pdpRefreshItem setSubmenu:self.pdp1RefreshMenu];
+    [viewMenu addItem:pdpRefreshItem];
+
+    NSMenuItem *pdpPresetItem = [[NSMenuItem alloc] initWithTitle:@"PDP-1 Display Mode" action:nil keyEquivalent:@""];
+    self.pdp1PresetMenu = [[NSMenu alloc] initWithTitle:@"PDP-1 Display Mode"];
+    NSArray *prTitles = @[@"Historic (P7 15s decay, full bloom)", @"Historic Fast Decay (5s)", @"Modern (Sharp dots, 2s)"];
+    for (int i = 0; i < 3; i++) {
+        NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:prTitles[i] action:@selector(selectPDP1Preset:) keyEquivalent:@""];
+        [it setTarget:self]; [it setTag:2711 + i];
+        if (i == 0) [it setState:NSControlStateValueOn];
+        [self.pdp1PresetMenu addItem:it];
+    }
+    [pdpPresetItem setSubmenu:self.pdp1PresetMenu];
+    [viewMenu addItem:pdpPresetItem];
 
     [viewMenu addItem:[NSMenuItem separatorItem]];
 
@@ -2183,13 +2332,14 @@ static void plato_mac_beep(void *context) {
     else if (mode == 3) targetTag = 1004;
     else if (mode == 4) targetTag = 1005;
     else if (mode == 5) targetTag = 1006;
+    else if (mode == 6) targetTag = 1007;
 
     NSMenu *targetMenu = self.viewMenu;
     if (!targetMenu) {
         targetMenu = [[[NSApp mainMenu] itemWithTitle:@"View"] submenu];
     }
     if (targetMenu) {
-        for (NSInteger tag = 1001; tag <= 1006; tag++) {
+        for (NSInteger tag = 1001; tag <= 1007; tag++) {
             [[targetMenu itemWithTag:tag] setState:(tag == targetTag ? NSControlStateValueOn : NSControlStateValueOff)];
         }
     }
@@ -2198,7 +2348,17 @@ static void plato_mac_beep(void *context) {
         [self activeTerminalController];
 
     // Micro Tutor disabilitato sul terminale Tektronix 4014 (DVBST)
-    BOOL isTek = (mode == 5);
+    BOOL isTek = (mode == 5 || mode == 6);
+    BOOL isPDP1Mode = (mode == 6);
+    if (self.pdp1FontMenu) {
+        for (NSMenuItem *it in [self.pdp1FontMenu itemArray]) [it setEnabled:isPDP1Mode];
+    }
+    if (self.pdp1RefreshMenu) {
+        for (NSMenuItem *it in [self.pdp1RefreshMenu itemArray]) [it setEnabled:isPDP1Mode];
+    }
+    if (self.pdp1PresetMenu) {
+        for (NSMenuItem *it in [self.pdp1PresetMenu itemArray]) [it setEnabled:isPDP1Mode];
+    }
     NSMenuItem *mtItem = self.microTutorMenuItem;
     if (!mtItem) {
         mtItem = [[NSApp mainMenu] itemWithTitle:@"Micro Tutor"];
@@ -2217,12 +2377,18 @@ static void plato_mac_beep(void *context) {
         [active.view respondsToSelector:@selector(tekBaudRate)]) {
         [self updateTekBaudMenu:[active.view tekBaudRate]];
     }
+    if (active && active.view &&
+        [active.view respondsToSelector:@selector(pdp1Font)]) {
+        [self updatePDP1FontMenu:[active.view pdp1Font]];
+        [self updatePDP1RefreshMenu:[active.view pdp1RefreshRate]];
+        [self updatePDP1PresetMenu:[active.view pdp1Preset]];
+    }
 }
 
 - (void)selectDisplayMenuItem:(NSMenuItem *)selectedItem {
     if (!selectedItem) return;
     NSInteger tag = [selectedItem tag];
-    NSInteger m = (tag == 1001 ? 0 : (tag == 1003 ? 2 : (tag == 1004 ? 3 : (tag == 1005 ? 4 : (tag == 1006 ? 5 : 1)))));
+    NSInteger m = (tag == 1001 ? 0 : (tag == 1003 ? 2 : (tag == 1004 ? 3 : (tag == 1005 ? 4 : (tag == 1006 ? 5 : (tag == 1007 ? 6 : 1))))));
     [self updateDisplayModeMenu:m];
 }
 
@@ -2301,6 +2467,15 @@ static void plato_mac_beep(void *context) {
         else if (newMode == 3) [active.view setDisplayCrispColor];
         else if (newMode == 4) [active.view setDisplayRealColorCRT];
         else if (newMode == 5) [active.view setDisplayRealTektronix];
+    else if (newMode == 6) {
+        [active.view setDisplayRealPDP1];
+        NSInteger pdpFont = active.currentProfile[@"pdp1Font"] ? [active.currentProfile[@"pdp1Font"] integerValue] : 0;
+        [active.view setPDP1Font:pdpFont];
+        NSInteger pdpRate = active.currentProfile[@"pdp1RefreshRate"] ? [active.currentProfile[@"pdp1RefreshRate"] integerValue] : 45;
+        [active.view setPDP1RefreshRate:pdpRate];
+        NSInteger pdpPreset = active.currentProfile[@"pdp1Preset"] ? [active.currentProfile[@"pdp1Preset"] integerValue] : 0;
+        [active.view setPDP1Preset:pdpPreset];
+    }
 
         [self updateDisplayModeMenu:newMode];
 
@@ -2329,6 +2504,15 @@ static void plato_mac_beep(void *context) {
     else if (newMode == 3) [active.view setDisplayCrispColor];
         else if (newMode == 4) [active.view setDisplayRealColorCRT];
     else if (newMode == 5) [active.view setDisplayRealTektronix];
+    else if (newMode == 6) {
+        [active.view setDisplayRealPDP1];
+        NSInteger pdpFont = active.currentProfile[@"pdp1Font"] ? [active.currentProfile[@"pdp1Font"] integerValue] : 0;
+        [active.view setPDP1Font:pdpFont];
+        NSInteger pdpRate = active.currentProfile[@"pdp1RefreshRate"] ? [active.currentProfile[@"pdp1RefreshRate"] integerValue] : 45;
+        [active.view setPDP1RefreshRate:pdpRate];
+        NSInteger pdpPreset = active.currentProfile[@"pdp1Preset"] ? [active.currentProfile[@"pdp1Preset"] integerValue] : 0;
+        [active.view setPDP1Preset:pdpPreset];
+    }
 
     [self updateDisplayModeMenu:newMode];
     [self refreshAllModalWindowThemes];
@@ -2355,6 +2539,77 @@ static void plato_mac_beep(void *context) {
 
 - (void)setDisplayRealTektronix:(id)sender {
     [self requestDisplayMode:5 sender:sender];
+}
+
+- (void)setDisplayRealPDP1:(id)sender {
+    [self requestDisplayMode:6 sender:sender];
+}
+
+- (void)selectPDP1Font1961:(id)sender {
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setPDP1Font:0];
+        [self updatePDP1FontMenu:0];
+    }
+}
+
+- (void)selectPDP1Font1964:(id)sender {
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setPDP1Font:1];
+        [self updatePDP1FontMenu:1];
+    }
+}
+
+- (void)updatePDP1FontMenu:(NSInteger)font {
+    if (self.pdp1FontMenu) {
+        [[self.pdp1FontMenu itemWithTag:2601] setState:(font == 0 ? NSControlStateValueOn : NSControlStateValueOff)];
+        [[self.pdp1FontMenu itemWithTag:2602] setState:(font == 1 ? NSControlStateValueOn : NSControlStateValueOff)];
+    }
+}
+
+- (void)selectPDP1Refresh:(id)sender {
+    NSMenuItem *it = (NSMenuItem *)sender;
+    if (!it) return;
+    const int rHzVals[] = { 60, 45, 30, 15, 10, 5 };
+    NSInteger idx = [it tag] - 2701;
+    if (idx < 0 || idx >= 6) return;
+    int hz = rHzVals[idx];
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setPDP1RefreshRate:hz];
+        [self updatePDP1RefreshMenu:hz];
+    }
+}
+
+- (void)updatePDP1RefreshMenu:(NSInteger)rate {
+    if (self.pdp1RefreshMenu) {
+        const int rHzVals[] = { 60, 45, 30, 15, 10, 5 };
+        const int rTags[] = { 2701, 2702, 2703, 2704, 2705, 2706 };
+        for (int i = 0; i < 6; i++) {
+            [[self.pdp1RefreshMenu itemWithTag:rTags[i]] setState:(rHzVals[i] == rate ? NSControlStateValueOn : NSControlStateValueOff)];
+        }
+    }
+}
+
+- (void)selectPDP1Preset:(id)sender {
+    NSMenuItem *it = (NSMenuItem *)sender;
+    if (!it) return;
+    NSInteger pr = [it tag] - 2711;
+    if (pr < 0 || pr > 2) return;
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setPDP1Preset:pr];
+        [self updatePDP1PresetMenu:pr];
+    }
+}
+
+- (void)updatePDP1PresetMenu:(NSInteger)preset {
+    if (self.pdp1PresetMenu) {
+        for (int i = 0; i < 3; i++) {
+            [[self.pdp1PresetMenu itemWithTag:2711 + i] setState:(i == preset ? NSControlStateValueOn : NSControlStateValueOff)];
+        }
+    }
 }
 
 - (void)toggleTekEraseFlash:(id)sender {
@@ -2729,6 +2984,17 @@ static void plato_mac_beep(void *context) {
 }
 
 - (void)profilesControllerDidUpdateProfiles:(PLATOProfilesWindowController *)controller {
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.currentProfile && controller.profiles) {
+        NSString *activeId = active.currentProfile[@"id"];
+        for (NSDictionary *p in controller.profiles) {
+            if ([p[@"id"] isEqualToString:activeId]) {
+                [active applyProfile:p];
+                [self activeWindowDidChange:active];
+                break;
+            }
+        }
+    }
     [self rebuildConnectionMenu];
     [self rebuildScriptsMenu];
     [self rebuildKeyboardMenu];

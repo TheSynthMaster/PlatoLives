@@ -37,7 +37,18 @@ extern int g_linux_theme_phosphor;
 
 static inline linux_theme_colors_t linux_theme_get(int mode, int phosphor) {
     linux_theme_colors_t c;
-    if (mode == 5 || phosphor == 1) {
+    if (mode == 6 && phosphor == 0) {
+        /* Mode 6 (DEC PDP-1 Type 30): P7 Cascade Phosphor - Turchese Radar MIT */
+        c.normal    = (linux_color_t){  0, 212, 170, 255 }; /* #00D4AA */
+        c.bright    = (linux_color_t){ 60, 255, 210, 255 }; /* Electric cyan flash */
+        c.disabled  = (linux_color_t){  0,  80,  65, 255 };
+        c.muted     = (linux_color_t){  0, 140, 115, 255 };
+        c.dim       = (linux_color_t){  0,  95,  75, 255 };
+        c.bg_dark   = (linux_color_t){  0,  15,  12, 255 };
+        c.bg_box    = (linux_color_t){  0,  25,  20, 255 };
+        c.hover_bg  = (linux_color_t){  0,  45,  35, 255 };
+        c.border    = (linux_color_t){  0,  80,  65, 255 };
+    } else if (mode == 5 || phosphor == 1) {
         /* Mode 5 (Tektronix 4014) o Phosphor 1 (P31 Green): Verde Smeraldo Tektronix */
         c.normal    = (linux_color_t){ 51, 255,  51, 255 }; /* #33FF33 */
         c.bright    = (linux_color_t){120, 255, 120, 255 };
@@ -47,7 +58,7 @@ static inline linux_theme_colors_t linux_theme_get(int mode, int phosphor) {
         c.bg_dark   = (linux_color_t){ 14,  10,   6, 255 };
         c.bg_box    = (linux_color_t){ 20,  15,  10, 255 };
         c.hover_bg  = (linux_color_t){ 10,  45,  10, 255 };
-        c.border    = (linux_color_t){ 15,  60,  15, 255 }; /* #0A400A / emerald border */
+        c.border    = (linux_color_t){ 15,  60,  15, 255 };
     } else if (phosphor == 2) {
         /* Phosphor 2 (P40 Amber) */
         c.normal    = (linux_color_t){255, 176,   0, 255 }; /* #FFB000 */
@@ -69,7 +80,7 @@ static inline linux_theme_colors_t linux_theme_get(int mode, int phosphor) {
         c.bg_dark   = (linux_color_t){ 16,  12,  10, 255 };
         c.bg_box    = (linux_color_t){ 24,  18,  14, 255 };
         c.hover_bg  = (linux_color_t){ 40,  40,  40, 255 };
-        c.border    = (linux_color_t){ 60,  60,  60, 255 }; /* #3C3C3C */
+        c.border    = (linux_color_t){ 60,  60,  60, 255 };
     } else {
         /* Authentic Plasma: Mode 0 (Real Plasma), Mode 1 (Crisp Mono), Mode 2 (Split Mono) */
         c.normal    = (linux_color_t){255, 110,   0, 255 }; /* #FF6E00 / Neon Plasma */

@@ -415,6 +415,9 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
             telem.distortion = (app->profile.display_mode == 4 ? app->profile.crt_distortion : app->profile.plasma_distortion);
             telem.phosphor_color = app->profile.phosphor_color;
             telem.tek_baud = app->profile.tek_baud_rate;
+            telem.pdp1_font = app->profile.pdp1_font;
+            telem.pdp1_refresh_rate = app->profile.pdp1_refresh_rate;
+            telem.pdp1_preset = app->profile.pdp1_preset;
             int q_head = app->terminal.vector_queue.head;
             int q_tail = app->terminal.vector_queue.tail;
             telem.tek_queue_count = (q_head - q_tail + MAX_VECTOR_EVENTS) % MAX_VECTOR_EVENTS;
@@ -983,12 +986,17 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_REAL_PLASMA:
         case ACT_VIEW_CRISP_COLOR:
         case ACT_VIEW_REAL_CRT:
-        case ACT_VIEW_REAL_TEKTRONIX: {
+        case ACT_VIEW_REAL_TEKTRONIX:
+        case ACT_VIEW_REAL_PDP1: {
             int new_mode = (action == ACT_VIEW_CRISP_MONO) ? 1 :
                            (action == ACT_VIEW_SPLIT_MONO) ? 2 :
                            (action == ACT_VIEW_REAL_PLASMA) ? 0 :
                            (action == ACT_VIEW_CRISP_COLOR) ? 3 :
-                           (action == ACT_VIEW_REAL_CRT) ? 4 : 5;
+                           (action == ACT_VIEW_REAL_CRT) ? 4 :
+                           (action == ACT_VIEW_REAL_TEKTRONIX) ? 5 : 6;
+            if (new_mode == 6 && app->profile.pdp1_refresh_rate <= 0) {
+                app->profile.pdp1_refresh_rate = 45;
+            }
 
             int old_mode = app->profile.display_mode;
             bool cur_is_color = (old_mode == 3 || old_mode == 4);
@@ -1046,6 +1054,23 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_CRT_DIST_BARREL: app->profile.crt_distortion = 1; goto sync_optical_view;
         case ACT_VIEW_CRT_DIST_CYL: app->profile.crt_distortion = 2; goto sync_optical_view;
 
+        /* PDP-1 Font */
+        case ACT_VIEW_PDP1_FONT_1961: app->profile.pdp1_font = 0; goto sync_optical_view;
+        case ACT_VIEW_PDP1_FONT_1964: app->profile.pdp1_font = 1; goto sync_optical_view;
+
+        /* PDP-1 Refresh Rate */
+        case ACT_VIEW_PDP1_REFRESH_60: app->profile.pdp1_refresh_rate = 60; goto sync_optical_view;
+        case ACT_VIEW_PDP1_REFRESH_45: app->profile.pdp1_refresh_rate = 45; goto sync_optical_view;
+        case ACT_VIEW_PDP1_REFRESH_30: app->profile.pdp1_refresh_rate = 30; goto sync_optical_view;
+        case ACT_VIEW_PDP1_REFRESH_15: app->profile.pdp1_refresh_rate = 15; goto sync_optical_view;
+        case ACT_VIEW_PDP1_REFRESH_10: app->profile.pdp1_refresh_rate = 10; goto sync_optical_view;
+        case ACT_VIEW_PDP1_REFRESH_5:  app->profile.pdp1_refresh_rate = 5;  goto sync_optical_view;
+
+        /* PDP-1 Display Mode (Preset) */
+        case ACT_VIEW_PDP1_PRESET_HISTORIC: app->profile.pdp1_preset = 0; goto sync_optical_view;
+        case ACT_VIEW_PDP1_PRESET_FAST:     app->profile.pdp1_preset = 1; goto sync_optical_view;
+        case ACT_VIEW_PDP1_PRESET_MODERN:   app->profile.pdp1_preset = 2; goto sync_optical_view;
+
         /* Phosphor Color Override */
         case ACT_VIEW_COLOR_DEFAULT: app->profile.phosphor_color = 0; goto sync_optical_palette;
         case ACT_VIEW_COLOR_GREEN:   app->profile.phosphor_color = 1; goto sync_optical_palette;
@@ -1082,10 +1107,6 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
             else if (action == ACT_VIEW_TEK_SPEED_9600) baud = 9600;
 
             app->profile.tek_baud_rate = baud;
-            if (app->menu_ctx.current_profile_idx >= 0 && (size_t)app->menu_ctx.current_profile_idx < app->menu_ctx.profiles.count) {
-                app->menu_ctx.profiles.profiles[app->menu_ctx.current_profile_idx].tek_baud_rate = baud;
-                plato_profiles_save(&app->menu_ctx.profiles);
-            }
             break;
         }
 
@@ -1095,10 +1116,6 @@ sync_optical_view:
             linux_theme_set_current(app->profile.display_mode, app->profile.phosphor_color);
             plato_optical_invalidate(app->optical);
             app->terminal.fb.dirty = true;
-            if (app->menu_ctx.current_profile_idx >= 0 && (size_t)app->menu_ctx.current_profile_idx < app->menu_ctx.profiles.count) {
-                app->menu_ctx.profiles.profiles[app->menu_ctx.current_profile_idx] = app->profile;
-                plato_profiles_save(&app->menu_ctx.profiles);
-            }
             break;
 
         case ACT_VIEW_KEYBOARD_REF:
@@ -1184,7 +1201,7 @@ sync_optical_view:
             printf("[Paste] Cancel Paste richiesto.\n");
             break;
         case ACT_MT_BOOT_MTE: {
-            if (app->profile.display_mode == 5) break; /* Inibito in modalità Tektronix */
+            if (app->profile.display_mode == 5 || app->profile.display_mode == 6) break; /* Inibito in modalità Tektronix e PDP-1 */
             linux_mte_task_t *task = (linux_mte_task_t *)malloc(sizeof(linux_mte_task_t));
             if (task) {
                 task->app = app;

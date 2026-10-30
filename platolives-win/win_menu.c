@@ -141,6 +141,27 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hTekSpeed, L"Tektronix Connection Speed");
     AppendMenuW(hView, MF_STRING, IDM_VIEW_TEK_ERASE_FLASH, L"Tektronix Erase Flash");
     AppendMenuW(hView, MF_STRING, IDM_VIEW_TEK_ACCURATE_BG, L"Tektronix Accurate Background");
+    AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_MODE_REAL_PDP1, L"DEC PDP-1 Type 30 (1964)");
+    HMENU hPdp1Font = CreatePopupMenu();
+    AppendMenuW(hPdp1Font, MF_STRING, IDM_VIEW_PDP1_FONT_1961, L"1961 Codeword (MIT AI Lab / Spacewar!)");
+    AppendMenuW(hPdp1Font, MF_STRING, IDM_VIEW_PDP1_FONT_1964, L"1964 Character (DECUS Type 33)");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hPdp1Font, L"PDP-1 Font Generator");
+
+    HMENU hPdp1Refresh = CreatePopupMenu();
+    AppendMenuW(hPdp1Refresh, MF_STRING, IDM_VIEW_PDP1_REFRESH_60, L"60 Hz");
+    AppendMenuW(hPdp1Refresh, MF_STRING, IDM_VIEW_PDP1_REFRESH_45, L"45 Hz (Default)");
+    AppendMenuW(hPdp1Refresh, MF_STRING, IDM_VIEW_PDP1_REFRESH_30, L"30 Hz");
+    AppendMenuW(hPdp1Refresh, MF_STRING, IDM_VIEW_PDP1_REFRESH_15, L"15 Hz");
+    AppendMenuW(hPdp1Refresh, MF_STRING, IDM_VIEW_PDP1_REFRESH_10, L"10 Hz");
+    AppendMenuW(hPdp1Refresh, MF_STRING, IDM_VIEW_PDP1_REFRESH_5,  L"5 Hz");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hPdp1Refresh, L"PDP-1 Refresh Rate");
+
+    HMENU hPdp1Preset = CreatePopupMenu();
+    AppendMenuW(hPdp1Preset, MF_STRING, IDM_VIEW_PDP1_PRESET_HISTORIC, L"Historic (15s decay)");
+    AppendMenuW(hPdp1Preset, MF_STRING, IDM_VIEW_PDP1_PRESET_FAST,     L"Historic Fast Decay (5s)");
+    AppendMenuW(hPdp1Preset, MF_STRING, IDM_VIEW_PDP1_PRESET_MODERN,   L"Modern (Sharp dots, 2s)");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hPdp1Preset, L"PDP-1 Display Mode");
 
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
 
@@ -222,8 +243,9 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     else if (p->display_mode == 3) mode_id = IDM_VIEW_MODE_CRISP_COLOR;
     else if (p->display_mode == 4) mode_id = IDM_VIEW_MODE_REAL_CRT;
     else if (p->display_mode == 5) mode_id = IDM_VIEW_MODE_REAL_TEKTRONIX;
+    else if (p->display_mode == 6) mode_id = IDM_VIEW_MODE_REAL_PDP1;
 
-    CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_TEKTRONIX, mode_id, MF_BYCOMMAND);
+    CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_PDP1, mode_id, MF_BYCOMMAND);
 
     CheckMenuItem(menu, IDM_VIEW_TEK_ERASE_FLASH, p->tek_erase_flash ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
     CheckMenuItem(menu, IDM_VIEW_TEK_ACCURATE_BG, p->tek_accurate_bg ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
@@ -246,23 +268,30 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
         /* Posizione 9: CRT Persistence */
         EnableMenuItem(hView, 9, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
         bool isTek        = (p->display_mode == 5);
+        bool isPDP1       = (p->display_mode == 6);
 
         /* Posizione 10: CRT Distortion */
         EnableMenuItem(hView, 10, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
         /* Posizione 13: Tektronix Connection Speed */
         EnableMenuItem(hView, 13, MF_BYPOSITION | (isTek ? MF_ENABLED : MF_GRAYED));
-        /* Posizione 18: Override Color (disabilitato in Crisp Color e Tektronix P31) */
+        /* Posizione 18: PDP-1 Font Generator */
+        EnableMenuItem(hView, 18, MF_BYPOSITION | (isPDP1 ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 19: PDP-1 Refresh Rate */
+        EnableMenuItem(hView, 19, MF_BYPOSITION | (isPDP1 ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 20: PDP-1 Display Mode */
+        EnableMenuItem(hView, 20, MF_BYPOSITION | (isPDP1 ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 25: Override Color (disabilitato in Crisp Color e Tektronix P31, abilitato su PDP-1) */
         bool canOverrideColor = (p->display_mode != 3 && p->display_mode != 5);
-        EnableMenuItem(hView, 18, MF_BYPOSITION | (canOverrideColor ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(hView, 25, MF_BYPOSITION | (canOverrideColor ? MF_ENABLED : MF_GRAYED));
     }
 
     /* 5. Micro Tutor (Indice 5 nella menubar): non disponibile su Tektronix 4014 (DVBST) */
-    bool isTekMode = (p->display_mode == 5);
-    EnableMenuItem(menu, 5, MF_BYPOSITION | (isTekMode ? MF_GRAYED : MF_ENABLED));
+    bool isMicroTutorDisabled = (p->display_mode == 5 || p->display_mode == 6);
+    EnableMenuItem(menu, 5, MF_BYPOSITION | (isMicroTutorDisabled ? MF_GRAYED : MF_ENABLED));
     HMENU hMicroTutorMenu = GetSubMenu(menu, 5);
     if (hMicroTutorMenu) {
-        EnableMenuItem(hMicroTutorMenu, IDM_TOOLS_BOOT_MTE, MF_BYCOMMAND | (isTekMode ? MF_GRAYED : MF_ENABLED));
-        EnableMenuItem(hMicroTutorMenu, IDM_TOOLS_MT_LOG, MF_BYCOMMAND | (isTekMode ? MF_GRAYED : MF_ENABLED));
+        EnableMenuItem(hMicroTutorMenu, IDM_TOOLS_BOOT_MTE, MF_BYCOMMAND | (isMicroTutorDisabled ? MF_GRAYED : MF_ENABLED));
+        EnableMenuItem(hMicroTutorMenu, IDM_TOOLS_MT_LOG, MF_BYCOMMAND | (isMicroTutorDisabled ? MF_GRAYED : MF_ENABLED));
     }
 
     /* Plasma Decay */
@@ -318,6 +347,39 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
             CheckMenuItem(hTekSpeedSub, sId, MF_BYCOMMAND | (sId == tek_speed_id ? MF_CHECKED : MF_UNCHECKED));
         }
     }
+
+    /* PDP-1 Font Generator Checkmark */
+    UINT pdp_font_id = (p->pdp1_font == 1) ? IDM_VIEW_PDP1_FONT_1964 : IDM_VIEW_PDP1_FONT_1961;
+    HMENU hPdp1FontSub = hView ? GetSubMenu(hView, 18) : NULL;
+    if (hPdp1FontSub) {
+        CheckMenuRadioItem(hPdp1FontSub, IDM_VIEW_PDP1_FONT_1961, IDM_VIEW_PDP1_FONT_1964, pdp_font_id, MF_BYCOMMAND);
+    }
+    CheckMenuRadioItem(menu, IDM_VIEW_PDP1_FONT_1961, IDM_VIEW_PDP1_FONT_1964, pdp_font_id, MF_BYCOMMAND);
+
+    /* PDP-1 Refresh Rate Checkmark */
+    UINT pdp_ref_id = IDM_VIEW_PDP1_REFRESH_45;
+    if (p->pdp1_refresh_rate == 60) pdp_ref_id = IDM_VIEW_PDP1_REFRESH_60;
+    else if (p->pdp1_refresh_rate == 30) pdp_ref_id = IDM_VIEW_PDP1_REFRESH_30;
+    else if (p->pdp1_refresh_rate == 15) pdp_ref_id = IDM_VIEW_PDP1_REFRESH_15;
+    else if (p->pdp1_refresh_rate == 10) pdp_ref_id = IDM_VIEW_PDP1_REFRESH_10;
+    else if (p->pdp1_refresh_rate == 5)  pdp_ref_id = IDM_VIEW_PDP1_REFRESH_5;
+
+    HMENU hPdp1RefSub = hView ? GetSubMenu(hView, 19) : NULL;
+    if (hPdp1RefSub) {
+        CheckMenuRadioItem(hPdp1RefSub, IDM_VIEW_PDP1_REFRESH_60, IDM_VIEW_PDP1_REFRESH_5, pdp_ref_id, MF_BYCOMMAND);
+    }
+    CheckMenuRadioItem(menu, IDM_VIEW_PDP1_REFRESH_60, IDM_VIEW_PDP1_REFRESH_5, pdp_ref_id, MF_BYCOMMAND);
+
+    /* PDP-1 Display Mode (Presets) Checkmark */
+    UINT pdp_pres_id = IDM_VIEW_PDP1_PRESET_HISTORIC;
+    if (p->pdp1_preset == 1) pdp_pres_id = IDM_VIEW_PDP1_PRESET_FAST;
+    else if (p->pdp1_preset == 2) pdp_pres_id = IDM_VIEW_PDP1_PRESET_MODERN;
+
+    HMENU hPdp1PresSub = hView ? GetSubMenu(hView, 20) : NULL;
+    if (hPdp1PresSub) {
+        CheckMenuRadioItem(hPdp1PresSub, IDM_VIEW_PDP1_PRESET_HISTORIC, IDM_VIEW_PDP1_PRESET_MODERN, pdp_pres_id, MF_BYCOMMAND);
+    }
+    CheckMenuRadioItem(menu, IDM_VIEW_PDP1_PRESET_HISTORIC, IDM_VIEW_PDP1_PRESET_MODERN, pdp_pres_id, MF_BYCOMMAND);
 
     /* Phosphor Color Override */
     CheckMenuRadioItem(menu, IDM_VIEW_COLOR_DEFAULT, IDM_VIEW_COLOR_WHITE,

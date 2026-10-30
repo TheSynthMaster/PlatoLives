@@ -30,6 +30,9 @@ struct plato_terminal {
     int y;
     int margin_x;
     plato_framebuffer_t fb;
+    uint8_t *fb_pdp; /* Buffer dedicato DEC PDP-1 Type 30 (1024x1024) */
+    bool fb_pdp_dirty;
+    int pdp1_font;   /* 0: 1961 Codeword, 1: 1964 Character */
     plato_font_t font;
     plato_protocol_decoder_t decoder;
     plato_palette_t palette;

@@ -1,9 +1,8 @@
-# PlatoLives v5.2.0 Release Notes
+# PlatoLives v5.5
 
-### Highlights & Architecture Updates
+## What's New
 
-*
-  - Full ASCII 0x20..0x7E character set integration directly from the authentic Heathkit H-19 ROM (444-29, 2716 EPROM, CRC32: 0xd595ac1d).
-  - True 2-pixel descenders on baseline row 7 for 'g', 'j', 'p', 'q', 'y' and punctuation.
-  - Physical DVBST cathode-ray beam simulation: Gaussian spot bloom (sigma 1.80f), dielectric core saturation (intensity 1.10f), and analog deflection wiggle.
-  - Bug fixing
+- **DEC PDP-1 Type 30 Emulation**: New precision point-plotting CRT display model with simulated P7 phosphor persistence and characteristic color shift.
+- **Historic Fonts**: Adds the 1961 MIT Codeword and 1964 DEC Type 33 character generators.
+- **Display Customization**: Adjustable refresh rates (60, 45, 30, 15, 10, 5 Hz) and three optical presets: Historic, Historic Fast Decay, and Modern.
+- **Cross-platform Support**: PDP-1 emulation on macOS, Windows (x86_64/ARM64), and Linux desktop.

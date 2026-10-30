@@ -192,7 +192,10 @@ enum {
     SUB_VIEW_CRT_DECAY,
     SUB_VIEW_CRT_DIST,
     SUB_VIEW_TEK_SPEED,
-    SUB_VIEW_OVERRIDE_COLOR
+    SUB_VIEW_OVERRIDE_COLOR,
+    SUB_VIEW_PDP1_FONT,
+    SUB_VIEW_PDP1_REFRESH,
+    SUB_VIEW_PDP1_PRESET
 };
 
 void linux_menu_init(linux_menu_context_t *ctx) {
@@ -316,6 +319,12 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"Tektronix Erase Flash", NULL, ACT_VIEW_TEK_ERASE_FLASH, TYPE_ITEM, 0, true, p->tek_erase_flash, (p->display_mode != 5)};
         it[n++] = (gui_menu_item_t){"Tektronix Accurate Background", NULL, ACT_VIEW_TEK_ACCURATE_BG, TYPE_ITEM, 0, true, p->tek_accurate_bg, (p->display_mode != 5)};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        bool isPDP1 = (p->display_mode == 6);
+        it[n++] = (gui_menu_item_t){"Real DEC PDP-1 Type 30 (1964)", NULL, ACT_VIEW_REAL_PDP1, TYPE_ITEM, 0, true, isPDP1, false};
+        it[n++] = (gui_menu_item_t){"PDP-1 Font Generator", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_PDP1_FONT, false, false, !isPDP1};
+        it[n++] = (gui_menu_item_t){"PDP-1 Refresh Rate", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_PDP1_REFRESH, false, false, !isPDP1};
+        it[n++] = (gui_menu_item_t){"PDP-1 Display Mode", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_PDP1_PRESET, false, false, !isPDP1};
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Full Screen", "F11", ACT_VIEW_FULLSCREEN, TYPE_ITEM, 0, false, ctx->fullscreen, false};
         it[n++] = (gui_menu_item_t){"Show Performance HUD (FPS/CPU)", "F12", ACT_VIEW_FPS_HUD, TYPE_ITEM, 0, false, linux_hud_is_open(), false};
         it[n++] = (gui_menu_item_t){"Hide Menu Bar", "Ctrl+Shift+M", ACT_VIEW_HIDE_MENU_BAR, TYPE_ITEM, 0, true, ctx->hide_menu_bar, false};
@@ -370,7 +379,7 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
     }
 
     /* 6. Micro Tutor */
-    bool isTek = (p->display_mode == 5);
+    bool isTekOrPDP = (p->display_mode == 5);
     top[5].title = "Micro Tutor";
     top[5].x = x_cur;
     top[5].width = get_text_width(top[5].title) + 18;
@@ -378,8 +387,8 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
     {
         gui_menu_item_t *it = top[5].items;
         int n = 0;
-        it[n++] = (gui_menu_item_t){"Load and Boot from MTE...", NULL, ACT_MT_BOOT_MTE, TYPE_ITEM, 0, false, false, isTek};
-        it[n++] = (gui_menu_item_t){"Enable Z80 Diagnostic Log", NULL, ACT_MT_TOGGLE_LOG, TYPE_ITEM, 0, false, ctx->z80_log, isTek};
+        it[n++] = (gui_menu_item_t){"Load and Boot from MTE...", NULL, ACT_MT_BOOT_MTE, TYPE_ITEM, 0, false, false, isTekOrPDP};
+        it[n++] = (gui_menu_item_t){"Enable Z80 Diagnostic Log", NULL, ACT_MT_TOGGLE_LOG, TYPE_ITEM, 0, false, ctx->z80_log, isTekOrPDP};
         top[5].item_count = n;
     }
 
@@ -482,6 +491,28 @@ static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, in
             items[n++] = (gui_menu_item_t){"Amber (P40)", NULL, ACT_VIEW_COLOR_AMBER, TYPE_ITEM, 0, true, p->phosphor_color == 2, false};
             items[n++] = (gui_menu_item_t){"White (P4)", NULL, ACT_VIEW_COLOR_WHITE, TYPE_ITEM, 0, true, p->phosphor_color == 3, false};
             break;
+        case SUB_VIEW_PDP1_FONT: {
+            items[n++] = (gui_menu_item_t){"1961 Codeword (Spacewar!)", NULL, ACT_VIEW_PDP1_FONT_1961, TYPE_ITEM, 0, true, p->pdp1_font == 0, false};
+            items[n++] = (gui_menu_item_t){"1964 Character (Type 33)", NULL, ACT_VIEW_PDP1_FONT_1964, TYPE_ITEM, 0, true, p->pdp1_font == 1, false};
+            break;
+        }
+        case SUB_VIEW_PDP1_REFRESH: {
+            int hz = (p->pdp1_refresh_rate > 0) ? p->pdp1_refresh_rate : 45;
+            items[n++] = (gui_menu_item_t){"60 Hz", NULL, ACT_VIEW_PDP1_REFRESH_60, TYPE_ITEM, 0, true, hz == 60, false};
+            items[n++] = (gui_menu_item_t){"45 Hz (Authentic)", NULL, ACT_VIEW_PDP1_REFRESH_45, TYPE_ITEM, 0, true, hz == 45, false};
+            items[n++] = (gui_menu_item_t){"30 Hz", NULL, ACT_VIEW_PDP1_REFRESH_30, TYPE_ITEM, 0, true, hz == 30, false};
+            items[n++] = (gui_menu_item_t){"15 Hz", NULL, ACT_VIEW_PDP1_REFRESH_15, TYPE_ITEM, 0, true, hz == 15, false};
+            items[n++] = (gui_menu_item_t){"10 Hz", NULL, ACT_VIEW_PDP1_REFRESH_10, TYPE_ITEM, 0, true, hz == 10, false};
+            items[n++] = (gui_menu_item_t){"5 Hz", NULL, ACT_VIEW_PDP1_REFRESH_5, TYPE_ITEM, 0, true, hz == 5, false};
+            break;
+        }
+        case SUB_VIEW_PDP1_PRESET: {
+            int pr = p->pdp1_preset;
+            items[n++] = (gui_menu_item_t){"Historic (P7 15s decay, full bloom)", NULL, ACT_VIEW_PDP1_PRESET_HISTORIC, TYPE_ITEM, 0, true, pr == 0, false};
+            items[n++] = (gui_menu_item_t){"Historic Fast Decay (5s)", NULL, ACT_VIEW_PDP1_PRESET_FAST, TYPE_ITEM, 0, true, pr == 1, false};
+            items[n++] = (gui_menu_item_t){"Modern (Sharp dots, 2s)", NULL, ACT_VIEW_PDP1_PRESET_MODERN, TYPE_ITEM, 0, true, pr == 2, false};
+            break;
+        }
         default:
             break;
     }
@@ -666,7 +697,7 @@ void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t 
     /* 2. Disegno Titoli Top Bar */
     for (int i = 0; i < top_count; ++i) {
         uint32_t tcol = COL_TEXT;
-        if (i == 5 && p && p->display_mode == 5) {
+        if (i == 5 && p && (p->display_mode == 5)) {
             tcol = COL_TEXT_DIM; /* Micro Tutor dimmed su Tektronix 4014 */
         } else if (ctx->is_open && ctx->active_top_menu == i) {
             fill_rect(ctx->ui_surface, win_w, max_h, top[i].x, 3, top[i].width, MENU_BAR_HEIGHT - 6, COL_HOVER);

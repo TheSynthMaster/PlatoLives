@@ -10,6 +10,7 @@
 #endif
 #include "plato/plato_terminal.h"
 #include <string.h>
+#include <stdlib.h>
 
 static void terminal_ram_write_word(plato_terminal_t *term, uint16_t address, uint16_t value) {
     term->ram[address] = (uint8_t)(value & 0xFFu);
@@ -98,11 +99,19 @@ void plato_terminal_reset(plato_terminal_t *term) {
     plato_protocol_init(&term->decoder);
     plato_microtutor_init(&term->mt, term);
     plato_fb_clear(&term->fb);
+    if (!term->fb_pdp) {
+        term->fb_pdp = (uint8_t *)calloc(1024 * 1024, sizeof(uint8_t));
+    term->fb_pdp_dirty = true;
+    } else {
+        memset(term->fb_pdp, 0, 1024 * 1024);
+        term->fb_pdp_dirty = true;
+    }
     plato_terminal_clear_text(term);
 }
 
 void plato_terminal_init(plato_terminal_t *term) {
     if (!term) return;
+    memset(term, 0, sizeof(plato_terminal_t));
     term->x = 0;
     term->y = 496;
     term->margin_x = 0;
@@ -125,6 +134,9 @@ void plato_terminal_init(plato_terminal_t *term) {
     term->color_mode = false;
     term->delay_requested = false;
     plato_fb_init(&term->fb);
+    term->fb_pdp = (uint8_t *)calloc(1024 * 1024, sizeof(uint8_t));
+    term->fb_pdp_dirty = true;
+    term->pdp1_font = 0;
     plato_font_init(&term->font);
     plato_protocol_init(&term->decoder);
     plato_microtutor_init(&term->mt, term);

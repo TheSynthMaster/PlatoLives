@@ -88,5 +88,16 @@
 - (void)pasteText:(id)sender;
 - (void)cancelPaste:(id)sender;
 - (void)updateTekBaudMenu:(NSInteger)baud;
+@property (nonatomic, strong) NSMenu *pdp1FontMenu;
+- (void)setDisplayRealPDP1:(id)sender;
+- (void)selectPDP1Font1961:(id)sender;
+- (void)selectPDP1Font1964:(id)sender;
+- (void)updatePDP1FontMenu:(NSInteger)font;
+@property (nonatomic, strong) NSMenu *pdp1RefreshMenu;
+@property (nonatomic, strong) NSMenu *pdp1PresetMenu;
+- (void)selectPDP1Refresh:(id)sender;
+- (void)updatePDP1RefreshMenu:(NSInteger)rate;
+- (void)selectPDP1Preset:(id)sender;
+- (void)updatePDP1PresetMenu:(NSInteger)preset;
 - (void)refreshAllModalWindowThemes;
 @end

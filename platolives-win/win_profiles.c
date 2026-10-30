@@ -43,6 +43,12 @@
 #define IDC_COMBO_TEK_BAUD       229
 #define IDC_CHK_TEK_ERASE_FLASH  230
 #define IDC_CHK_TEK_ACCURATE_BG  231
+#define IDC_LBL_PDP1_FONT        232
+#define IDC_COMBO_PDP1_FONT      233
+#define IDC_LBL_PDP1_REFRESH     234
+#define IDC_COMBO_PDP1_REFRESH   235
+#define IDC_LBL_PDP1_PRESET      236
+#define IDC_COMBO_PDP1_PRESET    237
 
 typedef struct {
     HWND hwnd;
@@ -57,6 +63,9 @@ typedef struct {
     HWND hLblCrtDist, hComboCrtDist;
     HWND hLblTekBaud, hComboTekBaud;
     HWND hChkTekEraseFlash, hChkTekAccurateBg;
+    HWND hLblPdp1Font, hComboPdp1Font;
+    HWND hLblPdp1Refresh, hComboPdp1Refresh;
+    HWND hLblPdp1Preset, hComboPdp1Preset;
     HWND hChkFullscreen, hChkDefault, hChkScript, hEditScript;
     HWND hBtnNew, hBtnDelete, hBtnDefault, hBtnConnect, hBtnSave, hBtnClose;
 
@@ -79,6 +88,14 @@ static dlg_ctx_t g_dlg;
 static const int g_decay_ms_values[] = { 100, 200, 500, 1000, 2000, 5000 };
 static const int g_crt_decay_ms_values[] = { 20, 200, 500, 1000, 2000, 5000 };
 static const int g_tek_baud_values[9] = { 0, 110, 150, 300, 600, 1200, 2400, 4800, 9600 };
+static const int g_pdp1_refresh_values[6] = { 60, 45, 30, 15, 10, 5 };
+
+static int index_for_pdp1_refresh(int val) {
+    for (int i = 0; i < 6; i++) {
+        if (g_pdp1_refresh_values[i] == val) return i;
+    }
+    return 1; /* Default: 45 Hz */
+}
 
 static int index_for_ms(const int *arr, size_t count, int val) {
     for (size_t i = 0; i < count; i++) {
@@ -91,6 +108,7 @@ static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
     bool isPlasma = (mode == 0 || mode == 2); /* Real Plasma o Split */
     bool isCRT    = (mode == 4);                 /* Real Color CRT */
     bool isTek    = (mode == 5);                 /* Real Tektronix 4014 (DVBST) */
+    bool isPdp    = (mode == 6);                 /* DEC PDP-1 Type 30 (1964) */
 
     ShowWindow(ctx->hLblPlasmaDecay, isPlasma ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hComboPlasmaDecay, isPlasma ? SW_SHOW : SW_HIDE);
@@ -108,6 +126,13 @@ static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
     ShowWindow(ctx->hComboTekBaud, isTek ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hChkTekEraseFlash, isTek ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hChkTekAccurateBg, isTek ? SW_SHOW : SW_HIDE);
+
+    ShowWindow(ctx->hLblPdp1Font, isPdp ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hComboPdp1Font, isPdp ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hLblPdp1Refresh, isPdp ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hComboPdp1Refresh, isPdp ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hLblPdp1Preset, isPdp ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hComboPdp1Preset, isPdp ? SW_SHOW : SW_HIDE);
 
     /* Phosphor Color nascosto in Tektronix (5) e disabilitato in Crisp Color (3) */
     ShowWindow(ctx->hLblPhosphor, isTek ? SW_HIDE : SW_SHOW);
@@ -132,6 +157,10 @@ static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
 
     SendMessage(ctx->hComboMode, CB_SETCURSEL, (WPARAM)p->display_mode, 0);
     SendMessage(ctx->hComboPhosphor, CB_SETCURSEL, (WPARAM)p->phosphor_color, 0);
+    SendMessage(ctx->hComboPdp1Font, CB_SETCURSEL, (WPARAM)(p->pdp1_font == 1 ? 1 : 0), 0);
+    SendMessage(ctx->hComboPdp1Refresh, CB_SETCURSEL, (WPARAM)index_for_pdp1_refresh(p->pdp1_refresh_rate), 0);
+    int p_pres = (p->pdp1_preset >= 0 && p->pdp1_preset <= 2) ? p->pdp1_preset : 0;
+    SendMessage(ctx->hComboPdp1Preset, CB_SETCURSEL, (WPARAM)p_pres, 0);
 
     /* Plasma */
     int d_idx = index_for_ms(g_decay_ms_values, 6, p->persistence_ms);
@@ -211,6 +240,12 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
     p->display_mode = (int)SendMessage(ctx->hComboMode, CB_GETCURSEL, 0, 0);
     int ph_idx = (int)SendMessage(ctx->hComboPhosphor, CB_GETCURSEL, 0, 0);
     p->phosphor_color = (ph_idx >= 0 && ph_idx <= 3) ? ph_idx : 0;
+    int pf_idx = (int)SendMessage(ctx->hComboPdp1Font, CB_GETCURSEL, 0, 0);
+    p->pdp1_font = (pf_idx == 1) ? 1 : 0;
+    int pr_idx = (int)SendMessage(ctx->hComboPdp1Refresh, CB_GETCURSEL, 0, 0);
+    p->pdp1_refresh_rate = (pr_idx >= 0 && pr_idx < 6) ? g_pdp1_refresh_values[pr_idx] : 45;
+    int pp_idx = (int)SendMessage(ctx->hComboPdp1Preset, CB_GETCURSEL, 0, 0);
+    p->pdp1_preset = (pp_idx >= 0 && pp_idx <= 2) ? pp_idx : 0;
 
     int d_idx = (int)SendMessage(ctx->hComboPlasmaDecay, CB_GETCURSEL, 0, 0);
     p->persistence_ms = (d_idx >= 0 && d_idx < 6) ? g_decay_ms_values[d_idx] : 100;
@@ -390,6 +425,9 @@ static LRESULT CALLBACK ProfilesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     np.tek_baud_rate = 2400;
                     np.tek_erase_flash = true;
                     np.tek_accurate_bg = true;
+                    np.pdp1_font = 0;
+                    np.pdp1_refresh_rate = 45;
+                    np.pdp1_preset = 0;
                     snprintf(np.startup_script, sizeof(np.startup_script), "%s", PLATO_DEFAULT_AUTOLOGIN_SCRIPT);
                     plato_profiles_add(ctx->list, &np);
                     ctx->current_index = (int)(ctx->list->count - 1);
@@ -557,6 +595,7 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Crisp Color");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Color CRT");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Tektronix 4014 (DVBST)");
+    SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"DEC PDP-1 Type 30 (1964)");
 
     g_dlg.hLblPhosphor = CreateWindowW(L"STATIC", L"Phosphor Color:", WS_CHILD | WS_VISIBLE, rx + 420, 108, 160, 18, hwnd, (HMENU)IDC_LBL_PHOSPHOR_COLOR, wc.hInstance, NULL);
     g_dlg.hComboPhosphor = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 420, 126, 400, 150, hwnd, (HMENU)IDC_COMBO_PHOSPHOR_COLOR, wc.hInstance, NULL);
@@ -618,6 +657,27 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
 
     g_dlg.hChkTekEraseFlash = CreateWindowW(L"BUTTON", L"Tektronix Erase Flash", WS_CHILD | BS_AUTOCHECKBOX, rx + 420, 156, 220, 18, hwnd, (HMENU)IDC_CHK_TEK_ERASE_FLASH, wc.hInstance, NULL);
     g_dlg.hChkTekAccurateBg = CreateWindowW(L"BUTTON", L"Tektronix Accurate Background", WS_CHILD | BS_AUTOCHECKBOX, rx + 420, 178, 260, 18, hwnd, (HMENU)IDC_CHK_TEK_ACCURATE_BG, wc.hInstance, NULL);
+
+    /* Controlli DEC PDP-1 Type 30 (1964) - Layout 3 Colonne */
+    g_dlg.hLblPdp1Font = CreateWindowW(L"STATIC", L"PDP-1 Font Generator:", WS_CHILD, rx, 156, 260, 18, hwnd, (HMENU)IDC_LBL_PDP1_FONT, wc.hInstance, NULL);
+    g_dlg.hComboPdp1Font = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_PDP1_FONT, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboPdp1Font, CB_ADDSTRING, 0, (LPARAM)L"1961 Codeword (MIT AI Lab / Spacewar!)");
+    SendMessageW(g_dlg.hComboPdp1Font, CB_ADDSTRING, 0, (LPARAM)L"1964 Character (DECUS Type 33)");
+
+    g_dlg.hLblPdp1Refresh = CreateWindowW(L"STATIC", L"PDP-1 Refresh Rate:", WS_CHILD, rx + 280, 156, 260, 18, hwnd, (HMENU)IDC_LBL_PDP1_REFRESH, wc.hInstance, NULL);
+    g_dlg.hComboPdp1Refresh = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx + 280, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_PDP1_REFRESH, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboPdp1Refresh, CB_ADDSTRING, 0, (LPARAM)L"60 Hz");
+    SendMessageW(g_dlg.hComboPdp1Refresh, CB_ADDSTRING, 0, (LPARAM)L"45 Hz (Default)");
+    SendMessageW(g_dlg.hComboPdp1Refresh, CB_ADDSTRING, 0, (LPARAM)L"30 Hz");
+    SendMessageW(g_dlg.hComboPdp1Refresh, CB_ADDSTRING, 0, (LPARAM)L"15 Hz");
+    SendMessageW(g_dlg.hComboPdp1Refresh, CB_ADDSTRING, 0, (LPARAM)L"10 Hz");
+    SendMessageW(g_dlg.hComboPdp1Refresh, CB_ADDSTRING, 0, (LPARAM)L"5 Hz");
+
+    g_dlg.hLblPdp1Preset = CreateWindowW(L"STATIC", L"PDP-1 Display Mode:", WS_CHILD, rx + 560, 156, 260, 18, hwnd, (HMENU)IDC_LBL_PDP1_PRESET, wc.hInstance, NULL);
+    g_dlg.hComboPdp1Preset = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx + 560, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_PDP1_PRESET, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboPdp1Preset, CB_ADDSTRING, 0, (LPARAM)L"Historic (15s decay)");
+    SendMessageW(g_dlg.hComboPdp1Preset, CB_ADDSTRING, 0, (LPARAM)L"Historic Fast Decay (5s)");
+    SendMessageW(g_dlg.hComboPdp1Preset, CB_ADDSTRING, 0, (LPARAM)L"Modern (Sharp dots, 2s)");
 
     /* Checkbox Opzioni */
     g_dlg.hChkFullscreen = CreateWindowW(L"BUTTON", L"Launch in Full Screen", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 206, 240, 18, hwnd, (HMENU)IDC_CHK_FULLSCREEN, wc.hInstance, NULL);
