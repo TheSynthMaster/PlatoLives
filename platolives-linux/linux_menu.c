@@ -195,7 +195,9 @@ enum {
     SUB_VIEW_OVERRIDE_COLOR,
     SUB_VIEW_PDP1_FONT,
     SUB_VIEW_PDP1_REFRESH,
-    SUB_VIEW_PDP1_PRESET
+    SUB_VIEW_PDP1_PRESET,
+    SUB_VIEW_C64_PRESET,
+    SUB_VIEW_C64_SCHEME
 };
 
 void linux_menu_init(linux_menu_context_t *ctx) {
@@ -325,11 +327,17 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"PDP-1 Refresh Rate", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_PDP1_REFRESH, false, false, !isPDP1};
         it[n++] = (gui_menu_item_t){"PDP-1 Display Mode", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_PDP1_PRESET, false, false, !isPDP1};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        bool isC64 = (p->display_mode == 7);
+        it[n++] = (gui_menu_item_t){"Commodore 64 (VIC-II)", NULL, ACT_VIEW_REAL_C64, TYPE_ITEM, 0, true, isC64, false};
+        it[n++] = (gui_menu_item_t){"C64 Display Mode", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_C64_PRESET, false, false, !isC64};
+        it[n++] = (gui_menu_item_t){"C64 Border Frame (12.5%)", NULL, ACT_VIEW_C64_BORDER, TYPE_ITEM, 0, true, p->c64_border, !isC64};
+        it[n++] = (gui_menu_item_t){"C64 Color Scheme", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_C64_SCHEME, false, false, !isC64};
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Full Screen", "F11", ACT_VIEW_FULLSCREEN, TYPE_ITEM, 0, false, ctx->fullscreen, false};
         it[n++] = (gui_menu_item_t){"Show Performance HUD (FPS/CPU)", "F12", ACT_VIEW_FPS_HUD, TYPE_ITEM, 0, false, linux_hud_is_open(), false};
         it[n++] = (gui_menu_item_t){"Hide Menu Bar", "Ctrl+Shift+M", ACT_VIEW_HIDE_MENU_BAR, TYPE_ITEM, 0, true, ctx->hide_menu_bar, false};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
-        it[n++] = (gui_menu_item_t){"Override Color", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_OVERRIDE_COLOR, false, false, (p->display_mode == 5)};
+        it[n++] = (gui_menu_item_t){"Override Color", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_OVERRIDE_COLOR, false, false, (p->display_mode == 5 || p->display_mode == 7)};
         top[2].item_count = n;
     }
 
@@ -513,6 +521,19 @@ static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, in
             items[n++] = (gui_menu_item_t){"Modern (Sharp dots, 2s)", NULL, ACT_VIEW_PDP1_PRESET_MODERN, TYPE_ITEM, 0, true, pr == 2, false};
             break;
         }
+        case SUB_VIEW_C64_PRESET: {
+            items[n++] = (gui_menu_item_t){"Authentic RF / Composite", NULL, ACT_VIEW_C64_PRESET_RF, TYPE_ITEM, 0, true, p->c64_preset == 0, false};
+            items[n++] = (gui_menu_item_t){"Commodore 1702 CRT Monitor", NULL, ACT_VIEW_C64_PRESET_CRT, TYPE_ITEM, 0, true, p->c64_preset == 1, false};
+            items[n++] = (gui_menu_item_t){"Clean Crisp Hires", NULL, ACT_VIEW_C64_PRESET_CRISP, TYPE_ITEM, 0, true, p->c64_preset == 2, false};
+            break;
+        }
+        case SUB_VIEW_C64_SCHEME: {
+            items[n++] = (gui_menu_item_t){"Classic Blue (Two-Tone Default)", NULL, ACT_VIEW_C64_SCHEME_CLASSIC, TYPE_ITEM, 0, true, p->c64_color_scheme == 0, false};
+            items[n++] = (gui_menu_item_t){"C64 Multi-Color (16-Color VIC-II)", NULL, ACT_VIEW_C64_SCHEME_MC, TYPE_ITEM, 0, true, p->c64_color_scheme == 1, false};
+            items[n++] = (gui_menu_item_t){"Calibrated Amber Monitor (P40)", NULL, ACT_VIEW_C64_SCHEME_AMBER, TYPE_ITEM, 0, true, p->c64_color_scheme == 2, false};
+            items[n++] = (gui_menu_item_t){"Calibrated Green Monitor (P31)", NULL, ACT_VIEW_C64_SCHEME_GREEN, TYPE_ITEM, 0, true, p->c64_color_scheme == 3, false};
+            break;
+        }
         default:
             break;
     }
@@ -520,7 +541,7 @@ static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, in
 }
 
 #define MAIN_POPUP_WIDTH 280
-#define SUB_POPUP_WIDTH  250
+#define SUB_POPUP_WIDTH  260
 #define ITEM_HEIGHT      24
 
 /* Calcolo Dinamico Larghezza Popup Principale */

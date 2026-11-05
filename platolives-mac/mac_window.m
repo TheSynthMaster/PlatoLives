@@ -117,8 +117,15 @@ static void plato_mac_beep(void *context) {
         [self.view setPDP1RefreshRate:pdpRate];
         NSInteger pdpPreset = p[@"pdp1Preset"] ? [p[@"pdp1Preset"] integerValue] : 0;
         [self.view setPDP1Preset:pdpPreset];
-    }
-    else [self.view setDisplayRealPlasma];
+    } else if (mode == 7) {
+        [self.view setDisplayRealC64];
+        NSInteger c64Pr = p[@"c64Preset"] ? [p[@"c64Preset"] integerValue] : 0;
+        [self.view setC64Preset:c64Pr];
+        BOOL c64Brd = p[@"c64Border"] ? [p[@"c64Border"] boolValue] : YES;
+        [self.view setC64Border:c64Brd];
+        NSInteger c64Sch = p[@"c64ColorScheme"] ? [p[@"c64ColorScheme"] integerValue] : 0;
+        [self.view setC64ColorScheme:c64Sch];
+    } else [self.view setDisplayRealPlasma];
 
     NSInteger tekBaud = p[@"tekBaudRate"] ? [p[@"tekBaudRate"] integerValue] : 2400;
     [self.view setTekBaudRate:tekBaud];
@@ -243,7 +250,17 @@ static void plato_mac_beep(void *context) {
 @implementation PLATOThemeColors
 + (PLATOThemeColors *)colorsForMode:(NSInteger)mode phosphor:(NSInteger)phosphor {
     PLATOThemeColors *c = [[PLATOThemeColors alloc] init];
-    if (mode == 6 && phosphor == 0) { /* DEC PDP-1 Type 30 (P7 Native Cascade Phosphor) */
+    if (mode == 7) { /* Commodore 64 (VIC-II) */
+        c.normal    = [NSColor colorWithCalibratedRed:124.0/255.0 green:112.0/255.0 blue:218.0/255.0 alpha:1.0]; /* #7C70DA */
+        c.bright    = [NSColor colorWithCalibratedRed:255.0/255.0 green:255.0/255.0 blue:255.0/255.0 alpha:1.0]; /* White */
+        c.disabled  = [NSColor colorWithCalibratedRed:70.0/255.0  green:65.0/255.0  blue:120.0/255.0 alpha:1.0];
+        c.muted     = [NSColor colorWithCalibratedRed:95.0/255.0  green:85.0/255.0  blue:160.0/255.0 alpha:1.0];
+        c.dim       = [NSColor colorWithCalibratedRed:80.0/255.0  green:70.0/255.0  blue:140.0/255.0 alpha:1.0];
+        c.bgDark    = [NSColor colorWithCalibratedRed:66.0/255.0  green:52.0/255.0  blue:144.0/255.0 alpha:1.0]; /* #423490 */
+        c.bgBox     = [NSColor colorWithCalibratedRed:88.0/255.0  green:72.0/255.0  blue:168.0/255.0 alpha:1.0];
+        c.hoverBg   = [NSColor colorWithCalibratedRed:50.0/255.0  green:38.0/255.0  blue:115.0/255.0 alpha:1.0];
+        c.border    = [NSColor colorWithCalibratedRed:88.0/255.0  green:72.0/255.0  blue:168.0/255.0 alpha:1.0];
+    } else if (mode == 6 && phosphor == 0) { /* DEC PDP-1 Type 30 (P7 Native Cascade Phosphor) */
         c.normal    = [NSColor colorWithCalibratedRed:0.0/255.0 green:212.0/255.0 blue:170.0/255.0 alpha:1.0]; /* #00D4AA radar turquoise */
         c.bright    = [NSColor colorWithCalibratedRed:96.0/255.0 green:225.0/255.0 blue:255.0/255.0 alpha:1.0]; /* #60E1FF electric blue flash */
         c.disabled  = [NSColor colorWithCalibratedRed:0.0/255.0 green:80.0/255.0 blue:65.0/255.0 alpha:1.0];
@@ -479,6 +496,9 @@ static void plato_mac_beep(void *context) {
             @"pdp1Font": @0,
             @"pdp1RefreshRate": @45,
             @"pdp1Preset": @0,
+            @"c64Preset": @0,
+            @"c64Border": @YES,
+            @"c64ColorScheme": @0,
             @"fullScreen": @YES,
             @"isDefault": @YES
         } mutableCopy];
@@ -538,6 +558,13 @@ static void plato_mac_beep(void *context) {
 @property (nonatomic, strong) NSPopUpButton *decayPopup;
 @property (nonatomic, strong) NSTextField *plasmaDistortionLbl;
 @property (nonatomic, strong) NSPopUpButton *plasmaDistortionPopup;
+
+// Controlli Commodore 64 VIC-II
+@property (nonatomic, strong) NSTextField *c64PresetLbl;
+@property (nonatomic, strong) NSPopUpButton *c64PresetPopup;
+@property (nonatomic, strong) NSButton *c64BorderCheckbox;
+@property (nonatomic, strong) NSTextField *c64SchemeLbl;
+@property (nonatomic, strong) NSPopUpButton *c64SchemePopup;
 
 // Controlli Real Color CRT
 @property (nonatomic, strong) NSTextField *crtBeamLbl;
@@ -685,7 +712,7 @@ static void plato_mac_beep(void *context) {
     [content addSubview:modeLbl];
     [_themeLabels addObject:modeLbl];
     _modePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 777, fw, 25) pullsDown:NO];
-    [_modePopup addItemsWithTitles:@[@"Real Plasma", @"Crisp Monochrome", @"Split Monochrome", @"Crisp Color", @"Real Color CRT", @"Real Tektronix 4014 (DVBST)", @"DEC PDP-1 Type 30 (1964)"]];
+    [_modePopup addItemsWithTitles:@[@"Real Plasma", @"Crisp Monochrome", @"Split Monochrome", @"Crisp Color", @"Real Color CRT", @"Real Tektronix 4014 (DVBST)", @"DEC PDP-1 Type 30 (1964)", @"Commodore 64 (VIC-II)"]];
     [_modePopup setTarget:self];
     [_modePopup setAction:@selector(onModeChanged:)];
     [content addSubview:_modePopup];
@@ -739,6 +766,32 @@ static void plato_mac_beep(void *context) {
     _pdp1PresetPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 663, fw, 25) pullsDown:NO];
     [_pdp1PresetPopup addItemsWithTitles:@[@"Historic (P7 15s decay, full bloom)", @"Historic Fast Decay (5s)", @"Modern (Sharp dots, 2s)"]];
     [content addSubview:_pdp1PresetPopup];
+
+    // --- Controlli Commodore 64 VIC-II ---
+    _c64PresetLbl = [NSTextField labelWithString:@"C64 Mode:"];
+    [_c64PresetLbl setFrame:NSMakeRect(rx, 742, 105, 18)];
+    [_c64PresetLbl setTextColor:plasmaOrange];
+    [content addSubview:_c64PresetLbl];
+    [_themeLabels addObject:_c64PresetLbl];
+
+    _c64PresetPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 739, fw, 25) pullsDown:NO];
+    [_c64PresetPopup addItemsWithTitles:@[@"Authentic RF / Composite", @"Commodore 1702 CRT Monitor", @"Clean Crisp Hires"]];
+    [content addSubview:_c64PresetPopup];
+
+    _c64BorderCheckbox = [NSButton checkboxWithTitle:@"VIC-II Border Frame (12.5%)" target:nil action:nil];
+    [_c64BorderCheckbox setFrame:NSMakeRect(fx, 704, fw, 18)];
+    [content addSubview:_c64BorderCheckbox];
+
+    _c64SchemeLbl = [NSTextField labelWithString:@"C64 Colors:"];
+    [_c64SchemeLbl setFrame:NSMakeRect(rx, 666, 105, 18)];
+    [_c64SchemeLbl setTextColor:plasmaOrange];
+    [content addSubview:_c64SchemeLbl];
+    [_themeLabels addObject:_c64SchemeLbl];
+
+    _c64SchemePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(fx, 663, fw, 25) pullsDown:NO];
+    [_c64SchemePopup addItemsWithTitles:@[@"Classic Blue (Two-Tone Default)", @"C64 Multi-Color (16-Color VIC-II)", @"Calibrated Amber Monitor (P40)", @"Calibrated Green Monitor (P31)"]];
+    [content addSubview:_c64SchemePopup];
+
 
     // --- Controlli Real Color CRT ---
     _crtBeamLbl = [NSTextField labelWithString:@"CRT Beam:"];
@@ -872,10 +925,20 @@ static void plato_mac_beep(void *context) {
     [_pdp1RefreshPopup setHidden:!isPDP1];
     [_pdp1PresetLbl setHidden:!isPDP1];
     [_pdp1PresetPopup setHidden:!isPDP1];
+[_pdp1PresetPopup setHidden:!isPDP1];
 
-    /* Phosphor Color nascosto solo per Tektronix, visibile per PDP-1 */
-    [_overrideColorLbl setHidden:isTek];
-    [_overrideColorPopup setHidden:isTek];
+    BOOL isC64 = (mIdx == 7);
+    [_c64PresetLbl setHidden:!isC64];
+    [_c64PresetPopup setHidden:!isC64];
+    [_c64BorderCheckbox setHidden:!isC64];
+    [_c64SchemeLbl setHidden:!isC64];
+    [_c64SchemePopup setHidden:!isC64];
+
+    /* Phosphor Color disabilitato/nascosto per Tektronix, CRT, Crisp Color e C64 */
+    BOOL hidePhosphor = (isTek || isC64 || isCRT || mIdx == 3);
+    [_overrideColorLbl setHidden:hidePhosphor];
+    [_overrideColorPopup setHidden:hidePhosphor];
+
 }
 
 - (void)onModeChanged:(id)sender {
@@ -928,6 +991,7 @@ static void plato_mac_beep(void *context) {
     else if (mode == 4) pIdx = 4; // Real Color CRT
     else if (mode == 5) pIdx = 5; // Real Tektronix 4014
     else if (mode == 6) pIdx = 6; // Real DEC PDP-1 Type 30
+    else if (mode == 7) pIdx = 7; // Commodore 64 (VIC-II)
     else pIdx = 0;                // Real Plasma
     [self.modePopup selectItemAtIndex:pIdx];
 
@@ -957,6 +1021,18 @@ static void plato_mac_beep(void *context) {
     NSInteger pdpPr = p[@"pdp1Preset"] ? [p[@"pdp1Preset"] integerValue] : 0;
     if (pdpPr < 0 || pdpPr > 2) pdpPr = 0;
     [self.pdp1PresetPopup selectItemAtIndex:pdpPr];
+
+    NSInteger c64Pr = p[@"c64Preset"] ? [p[@"c64Preset"] integerValue] : 0;
+    if (c64Pr < 0 || c64Pr > 2) c64Pr = 0;
+    [self.c64PresetPopup selectItemAtIndex:c64Pr];
+
+    BOOL c64Brd = p[@"c64Border"] ? [p[@"c64Border"] boolValue] : YES;
+    [self.c64BorderCheckbox setState:c64Brd ? NSControlStateValueOn : NSControlStateValueOff];
+
+    NSInteger c64Sch = p[@"c64ColorScheme"] ? [p[@"c64ColorScheme"] integerValue] : 0;
+    if (c64Sch < 0 || c64Sch > 2) c64Sch = 0;
+    [self.c64SchemePopup selectItemAtIndex:c64Sch];
+
 
     // Tektronix settings
     BOOL eraseFlash = p[@"tekEraseFlash"] ? [p[@"tekEraseFlash"] boolValue] : YES;
@@ -1031,6 +1107,7 @@ static void plato_mac_beep(void *context) {
     else if (mIdx == 4) modeVal = 4; // Real Color CRT
     else if (mIdx == 5) modeVal = 5; // Real Tektronix 4014
     else if (mIdx == 6) modeVal = 6; // Real DEC PDP-1 Type 30
+    else if (mIdx == 7) modeVal = 7; // Commodore 64 (VIC-II)
     else modeVal = 1;                // Real Plasma
     p[@"displayMode"] = @(modeVal);
 
@@ -1559,6 +1636,9 @@ static void plato_mac_beep(void *context) {
     [self updatePDP1FontMenu:[controller.view pdp1Font]];
     [self updatePDP1RefreshMenu:[controller.view pdp1RefreshRate]];
     [self updatePDP1PresetMenu:[controller.view pdp1Preset]];
+    [self updateC64PresetMenu:[controller.view c64Preset]];
+    [self updateC64BorderMenu:[controller.view c64Border]];
+    [self updateC64ColorSchemeMenu:[controller.view c64ColorScheme]];
 }
 
 - (void)applyKeyboardReferencePresentation {
@@ -1845,6 +1925,48 @@ static void plato_mac_beep(void *context) {
 
     [viewMenu addItem:[NSMenuItem separatorItem]];
 
+    // --- COMMODORE 64 (VIC-II ENGINE) ---
+    NSMenuItem *c64Item = [[NSMenuItem alloc] initWithTitle:@"Commodore 64 (VIC-II)" action:@selector(setDisplayRealC64:) keyEquivalent:@""];
+    [c64Item setTarget:self]; [c64Item setTag:1008];
+    [viewMenu addItem:c64Item];
+
+    NSMenuItem *c64PresetItem = [[NSMenuItem alloc] initWithTitle:@"C64 Display Mode" action:nil keyEquivalent:@""];
+    self.c64PresetMenu = [[NSMenu alloc] initWithTitle:@"C64 Display Mode"];
+    NSArray *c64PresetTitles = @[@"Authentic RF / Composite", @"Commodore 1702 CRT Monitor", @"Clean Crisp Hires"];
+    for (int i = 0; i < 3; i++) {
+        NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:c64PresetTitles[i] action:@selector(selectC64Preset:) keyEquivalent:@""];
+        [it setTarget:self]; [it setTag:2801 + i];
+        if (i == 0) [it setState:NSControlStateValueOn];
+        [self.c64PresetMenu addItem:it];
+    }
+    [c64PresetItem setSubmenu:self.c64PresetMenu];
+    [viewMenu addItem:c64PresetItem];
+
+    NSMenuItem *c64BorderItem = [[NSMenuItem alloc] initWithTitle:@"C64 Border Frame" action:nil keyEquivalent:@""];
+    self.c64BorderMenu = [[NSMenu alloc] initWithTitle:@"C64 Border Frame"];
+    NSMenuItem *bOn = [[NSMenuItem alloc] initWithTitle:@"Enabled (VIC-II Frame 12.5%)" action:@selector(toggleC64BorderOn:) keyEquivalent:@""];
+    [bOn setTarget:self]; [bOn setTag:2811]; [bOn setState:NSControlStateValueOn];
+    [self.c64BorderMenu addItem:bOn];
+    NSMenuItem *bOff = [[NSMenuItem alloc] initWithTitle:@"Disabled (Full Display)" action:@selector(toggleC64BorderOff:) keyEquivalent:@""];
+    [bOff setTarget:self]; [bOff setTag:2812];
+    [self.c64BorderMenu addItem:bOff];
+    [c64BorderItem setSubmenu:self.c64BorderMenu];
+    [viewMenu addItem:c64BorderItem];
+
+    NSMenuItem *c64SchemeItem = [[NSMenuItem alloc] initWithTitle:@"C64 Color Scheme" action:nil keyEquivalent:@""];
+    self.c64ColorSchemeMenu = [[NSMenu alloc] initWithTitle:@"C64 Color Scheme"];
+    NSArray *c64SchemeTitles = @[@"Classic Blue (Two-Tone Default)", @"C64 Multi-Color (16-Color VIC-II)", @"Calibrated Amber Monitor (P40)", @"Calibrated Green Monitor (P31)"];
+    for (int i = 0; i < 4; i++) {
+        NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:c64SchemeTitles[i] action:@selector(selectC64Scheme:) keyEquivalent:@""];
+        [it setTarget:self]; [it setTag:2821 + i];
+        if (i == 0) [it setState:NSControlStateValueOn];
+        [self.c64ColorSchemeMenu addItem:it];
+    }
+    [c64SchemeItem setSubmenu:self.c64ColorSchemeMenu];
+    [viewMenu addItem:c64SchemeItem];
+
+    [viewMenu addItem:[NSMenuItem separatorItem]];
+
     unichar fullScreenKey = NSF11FunctionKey, fpsCounterKey = NSF12FunctionKey;
     NSMenuItem *fullScreenItem = [[NSMenuItem alloc] initWithTitle:@"Toggle Full Screen" action:@selector(toggleMainFullScreen:) keyEquivalent:[NSString stringWithCharacters:&fullScreenKey length:1]];
     [fullScreenItem setKeyEquivalentModifierMask:0]; [fullScreenItem setTarget:self]; [viewMenu addItem:fullScreenItem];
@@ -1888,7 +2010,7 @@ static void plato_mac_beep(void *context) {
     NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
     NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
 
-    NSMenuItem *copyVerbatimItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Verbatim" action:@selector(copyAllTextVerbatim:) keyEquivalent:@"c"];
+    NSMenuItem *copyVerbatimItem = [[NSMenuItem alloc] initWithTitle:@"Copy All Text Verbatim" action:@selector(copyAllTextVerbatim:) keyEquivalent:@""];
     [copyVerbatimItem setTarget:self];
     [editMenu addItem:copyVerbatimItem];
 
@@ -2333,13 +2455,14 @@ static void plato_mac_beep(void *context) {
     else if (mode == 4) targetTag = 1005;
     else if (mode == 5) targetTag = 1006;
     else if (mode == 6) targetTag = 1007;
+    else if (mode == 7) targetTag = 1008;
 
     NSMenu *targetMenu = self.viewMenu;
     if (!targetMenu) {
         targetMenu = [[[NSApp mainMenu] itemWithTitle:@"View"] submenu];
     }
     if (targetMenu) {
-        for (NSInteger tag = 1001; tag <= 1007; tag++) {
+        for (NSInteger tag = 1001; tag <= 1008; tag++) {
             [[targetMenu itemWithTag:tag] setState:(tag == targetTag ? NSControlStateValueOn : NSControlStateValueOff)];
         }
     }
@@ -2359,6 +2482,21 @@ static void plato_mac_beep(void *context) {
     if (self.pdp1PresetMenu) {
         for (NSMenuItem *it in [self.pdp1PresetMenu itemArray]) [it setEnabled:isPDP1Mode];
     }
+
+    BOOL isC64 = (mode == 7);
+    if (self.c64PresetMenu) {
+        for (NSMenuItem *it in [self.c64PresetMenu itemArray]) [it setEnabled:isC64];
+    }
+    if (self.c64BorderMenu) {
+        for (NSMenuItem *it in [self.c64BorderMenu itemArray]) [it setEnabled:isC64];
+    }
+    if (self.c64ColorSchemeMenu) {
+        for (NSMenuItem *it in [self.c64ColorSchemeMenu itemArray]) [it setEnabled:isC64];
+    }
+    if (self.overrideColorMenu) {
+        for (NSMenuItem *it in [self.overrideColorMenu itemArray]) [it setEnabled:(!isTek && !isC64 && mode != 3 && mode != 4)];
+    }
+
     NSMenuItem *mtItem = self.microTutorMenuItem;
     if (!mtItem) {
         mtItem = [[NSApp mainMenu] itemWithTitle:@"Micro Tutor"];
@@ -2437,8 +2575,8 @@ static void plato_mac_beep(void *context) {
     NSInteger currentMode = [active.view currentDisplayMode];
     if (currentMode == newMode) return;
 
-    BOOL currentIsColor = (currentMode == 3 || currentMode == 4);
-    BOOL newIsColor = (newMode == 3 || newMode == 4);
+    BOOL currentIsColor = (currentMode == 3 || currentMode == 4 || currentMode == 7);
+    BOOL newIsColor = (newMode == 3 || newMode == 4 || newMode == 7);
     BOOL isConnected = (active.view->transport && active.view->transport->connected);
 
     if (isConnected && (currentIsColor != newIsColor)) {
@@ -2475,6 +2613,14 @@ static void plato_mac_beep(void *context) {
         [active.view setPDP1RefreshRate:pdpRate];
         NSInteger pdpPreset = active.currentProfile[@"pdp1Preset"] ? [active.currentProfile[@"pdp1Preset"] integerValue] : 0;
         [active.view setPDP1Preset:pdpPreset];
+    } else if (newMode == 7) {
+        [active.view setDisplayRealC64];
+        NSInteger c64Pr = active.currentProfile[@"c64Preset"] ? [active.currentProfile[@"c64Preset"] integerValue] : 0;
+        [active.view setC64Preset:c64Pr];
+        BOOL c64Brd = active.currentProfile[@"c64Border"] ? [active.currentProfile[@"c64Border"] boolValue] : YES;
+        [active.view setC64Border:c64Brd];
+        NSInteger c64Sch = active.currentProfile[@"c64ColorScheme"] ? [active.currentProfile[@"c64ColorScheme"] integerValue] : 0;
+        [active.view setC64ColorScheme:c64Sch];
     }
 
         [self updateDisplayModeMenu:newMode];
@@ -2512,6 +2658,14 @@ static void plato_mac_beep(void *context) {
         [active.view setPDP1RefreshRate:pdpRate];
         NSInteger pdpPreset = active.currentProfile[@"pdp1Preset"] ? [active.currentProfile[@"pdp1Preset"] integerValue] : 0;
         [active.view setPDP1Preset:pdpPreset];
+    } else if (newMode == 7) {
+        [active.view setDisplayRealC64];
+        NSInteger c64Pr = active.currentProfile[@"c64Preset"] ? [active.currentProfile[@"c64Preset"] integerValue] : 0;
+        [active.view setC64Preset:c64Pr];
+        BOOL c64Brd = active.currentProfile[@"c64Border"] ? [active.currentProfile[@"c64Border"] boolValue] : YES;
+        [active.view setC64Border:c64Brd];
+        NSInteger c64Sch = active.currentProfile[@"c64ColorScheme"] ? [active.currentProfile[@"c64ColorScheme"] integerValue] : 0;
+        [active.view setC64ColorScheme:c64Sch];
     }
 
     [self updateDisplayModeMenu:newMode];
@@ -2543,6 +2697,10 @@ static void plato_mac_beep(void *context) {
 
 - (void)setDisplayRealPDP1:(id)sender {
     [self requestDisplayMode:6 sender:sender];
+}
+
+- (void)setDisplayRealC64:(id)sender {
+    [self requestDisplayMode:7 sender:sender];
 }
 
 - (void)selectPDP1Font1961:(id)sender {
@@ -2674,6 +2832,64 @@ static void plato_mac_beep(void *context) {
     }
 
     [self updateTekBaudMenu:baud];
+}
+
+
+- (void)updateC64PresetMenu:(NSInteger)preset {
+    if (self.c64PresetMenu) {
+        for (NSMenuItem *it in [self.c64PresetMenu itemArray]) {
+            [it setState:([it tag] == 2801 + preset ? NSControlStateValueOn : NSControlStateValueOff)];
+        }
+    }
+}
+
+- (void)updateC64BorderMenu:(BOOL)border {
+    if (self.c64BorderMenu) {
+        [[self.c64BorderMenu itemWithTag:2811] setState:(border ? NSControlStateValueOn : NSControlStateValueOff)];
+        [[self.c64BorderMenu itemWithTag:2812] setState:(border ? NSControlStateValueOff : NSControlStateValueOn)];
+    }
+}
+
+- (void)updateC64ColorSchemeMenu:(NSInteger)scheme {
+    if (self.c64ColorSchemeMenu) {
+        for (NSMenuItem *it in [self.c64ColorSchemeMenu itemArray]) {
+            [it setState:([it tag] == 2821 + scheme ? NSControlStateValueOn : NSControlStateValueOff)];
+        }
+    }
+}
+
+- (void)selectC64Preset:(id)sender {
+    NSInteger pr = [sender tag] - 2801;
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setC64Preset:pr];
+        [self updateC64PresetMenu:pr];
+    }
+}
+
+- (void)toggleC64BorderOn:(id)sender {
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setC64Border:YES];
+        [self updateC64BorderMenu:YES];
+    }
+}
+
+- (void)toggleC64BorderOff:(id)sender {
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setC64Border:NO];
+        [self updateC64BorderMenu:NO];
+    }
+}
+
+- (void)selectC64Scheme:(id)sender {
+    NSInteger sc = [sender tag] - 2821;
+    PLATOTerminalWindowController *active = [self activeTerminalController];
+    if (active && active.view) {
+        [active.view setC64ColorScheme:sc];
+        [self updateC64ColorSchemeMenu:sc];
+    }
 }
 
 - (void)updateTekBaudMenu:(NSInteger)baud {

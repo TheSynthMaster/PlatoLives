@@ -3,6 +3,7 @@
 #import "mac_window.h"
 #import <QuartzCore/QuartzCore.h>
 #include <math.h>
+#include "plato/plato_c64.h"
 
 NSString *PLATOKeyboardReferenceText(void) {
     return @"PLATO KEYBOARD REFERENCE\n\n"
@@ -253,7 +254,7 @@ static void* network_worker(void *arg) {
 
 - (void)updateLayerFilters {
     if (!plasmaLayer) return;
-    NSString *filter = (opticalProfile.display_mode == 1 || opticalProfile.display_mode == 3) ? kCAFilterNearest : kCAFilterLinear;
+    NSString *filter = (opticalProfile.display_mode == 1 || opticalProfile.display_mode == 3 || (opticalProfile.display_mode == 7 && opticalProfile.c64_preset == 2)) ? kCAFilterNearest : kCAFilterLinear;
     plasmaLayer.minificationFilter = filter;
     plasmaLayer.magnificationFilter = filter;
 }
@@ -309,6 +310,9 @@ static void* network_worker(void *arg) {
         plato_metadata_callback_t metaCb = terminal->metadata_callback;
         void *metaCtx = terminal->metadata_context;
         plato_terminal_reset(terminal);
+        if (opticalProfile.display_mode == 7) {
+            plato_terminal_set_color_mode(terminal, true);
+                    }
         plato_keyboard_state_init(&keyboardState);
         terminal->transport = self->transport;
         terminal->beep_callback = beepCb;
@@ -570,10 +574,14 @@ static void* network_worker(void *arg) {
 
             /* Disegna il pallino coordinato con lo schema colore attivo */
             uint32_t col = 0xFFFF6E00u; /* Default Orange Plasma */
-            if (opticalProfile.display_mode == 5) {
+            if (opticalProfile.display_mode == 7) {
+                col = 0xFFFFF0F0u;      /* C64 VIC-II: Bright White */
+            } else if (opticalProfile.display_mode == 5) {
                 col = 0xFF33FF33u;      /* Real Tektronix: Sempre Verde P31 */
             } else if (opticalProfile.display_mode == 6 && opticalProfile.phosphor_color == 0) {
                 col = 0xFF00D4AAu;      /* DEC PDP-1: Radar Turquoise P7 */
+            } else if (opticalProfile.display_mode == 3 || opticalProfile.display_mode == 4) {
+                col = 0xFFF0F0F0u;      /* Color Crisp/CRT: White */
             } else if (opticalProfile.phosphor_color == 1) {
                 col = 0xFF33FF33u;      /* Green P31 */
             } else if (opticalProfile.phosphor_color == 2) {
@@ -652,6 +660,48 @@ static void* network_worker(void *arg) {
     if (optical) plato_optical_invalidate(optical);
     [self updateLayerFilters];
     [self refreshDisplay];
+}
+
+
+- (void)setDisplayRealC64 {
+    opticalProfile.display_mode = 7; /* Commodore 64 (VIC-II) */
+    if (terminal) {
+        plato_terminal_set_color_mode(terminal, true);
+            }
+    if (optical) plato_optical_invalidate(optical);
+    [self updateLayerFilters];
+    [self refreshDisplay];
+}
+
+- (void)setC64Preset:(NSInteger)preset {
+    opticalProfile.c64_preset = (int)preset;
+    if (optical) plato_optical_invalidate(optical);
+    [self updateLayerFilters];
+    [self refreshDisplay];
+}
+
+- (NSInteger)c64Preset {
+    return opticalProfile.c64_preset;
+}
+
+- (void)setC64Border:(BOOL)enabled {
+    opticalProfile.c64_border = enabled;
+    if (optical) plato_optical_invalidate(optical);
+    [self refreshDisplay];
+}
+
+- (BOOL)c64Border {
+    return opticalProfile.c64_border;
+}
+
+- (void)setC64ColorScheme:(NSInteger)scheme {
+    opticalProfile.c64_color_scheme = (int)scheme;
+    if (optical) plato_optical_invalidate(optical);
+    [self refreshDisplay];
+}
+
+- (NSInteger)c64ColorScheme {
+    return opticalProfile.c64_color_scheme;
 }
 
 - (void)setDisplayRealPDP1 {
@@ -1062,6 +1112,15 @@ static void* network_worker(void *arg) {
             double q_pct = ((double)q_count / (double)MAX_VECTOR_EVENTS) * 100.0;
             fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nSPEED   %@\nQUEUE   %d%% (%u/%d)\nCPU     %5.1f%%",
                        userInfo, fpsTotal, baudStr, (int)(q_pct + 0.5), (unsigned int)q_count, (int)MAX_VECTOR_EVENTS, cpuUsagePercent];
+        } else if (opticalProfile.display_mode == 7) {
+            /* Modalita Commodore 64 (VIC-II) */
+            const char *presetStr = (opticalProfile.c64_preset == 0) ? "RF COMP" :
+                                    (opticalProfile.c64_preset == 1) ? "1702 CRT" : "CRISP";
+            const char *borderStr = opticalProfile.c64_border ? "ENABLED" : "DISABLED";
+            const char *palStr = (opticalProfile.c64_color_scheme == 1) ? "AMBER P40" :
+                                 (opticalProfile.c64_color_scheme == 2) ? "GREEN P31" : "VIC-II 16C";
+            fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nMODE    C64 %s\nBORDER  %s\nPALETTE %s\nCPU     %5.1f%%",
+                       userInfo, fpsTotal, presetStr, borderStr, palStr, cpuUsagePercent];
         } else if (opticalProfile.display_mode == 6) {
             NSString *fontName = (opticalProfile.pdp1_font == 1) ? @"1964 CHAR" : @"1961 CODE";
             NSString *presetName = @"HISTORIC";
@@ -1087,7 +1146,11 @@ static void* network_worker(void *arg) {
         NSColor *borderColor = nil;
         NSColor *bgColor = nil;
 
-        if (displayMode == 6 && phosphor == 0) {
+        if (displayMode == 7) {
+            textColor   = [NSColor colorWithCalibratedRed:124.0/255.0 green:112.0/255.0 blue:218.0/255.0 alpha:0.98];
+            borderColor = [NSColor colorWithCalibratedRed:88.0/255.0  green:72.0/255.0  blue:168.0/255.0 alpha:1.00];
+            bgColor     = [NSColor colorWithCalibratedRed:66.0/255.0  green:52.0/255.0  blue:144.0/255.0 alpha:220.0/255.0];
+        } else if (displayMode == 6 && phosphor == 0) {
             textColor   = [NSColor colorWithCalibratedRed:0.0/255.0   green:212.0/255.0 blue:170.0/255.0 alpha:0.98];
             borderColor = [NSColor colorWithCalibratedRed:0.0/255.0   green:80.0/255.0  blue:65.0/255.0  alpha:1.00];
             bgColor     = [NSColor colorWithCalibratedRed:0.0/255.0   green:15.0/255.0  blue:12.0/255.0  alpha:200.0/255.0];
@@ -1163,7 +1226,7 @@ static void* network_worker(void *arg) {
         int plato_x = (int)((loc.x - drawX) / scale);
         int plato_y = (int)((loc.y - drawY) / scale);
 
-        plato_optical_unwarp_touch(&plato_x, &plato_y, opticalProfile.display_mode, opticalProfile.plasma_distortion, opticalProfile.crt_distortion);
+        if (opticalProfile.display_mode == 7) { int cx = plato_x * 4, cy = plato_y * 4; c64_unwarp_touch(&cx, &cy, opticalProfile.c64_border); plato_x = cx; plato_y = cy; } else { plato_optical_unwarp_touch(&plato_x, &plato_y, opticalProfile.display_mode, opticalProfile.plasma_distortion, opticalProfile.crt_distortion); }
 
         if (plato_x < 0) plato_x = 0;
         if (plato_x >= PLATO_WIDTH) plato_x = PLATO_WIDTH - 1;

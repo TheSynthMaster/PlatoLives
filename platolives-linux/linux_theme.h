@@ -37,7 +37,18 @@ extern int g_linux_theme_phosphor;
 
 static inline linux_theme_colors_t linux_theme_get(int mode, int phosphor) {
     linux_theme_colors_t c;
-    if (mode == 6 && phosphor == 0) {
+    if (mode == 7) {
+        /* Mode 7 (Commodore 64 VIC-II): Canonical C64 Dark Blue (#423490) & Box Blue (#5848A8) */
+        c.normal    = (linux_color_t){ 240, 240, 255, 255 }; /* Bianco C64 brillante per testo attivo */
+        c.bright    = (linux_color_t){ 255, 255, 255, 255 }; /* Bianco puro per hover / selezione */
+        c.disabled  = (linux_color_t){ 120, 110, 175, 255 }; /* Lavanda scura per voci disabilitate */
+        c.muted     = (linux_color_t){ 165, 155, 215, 255 }; /* Lavanda secondaria */
+        c.dim       = (linux_color_t){ 120, 110, 175, 255 }; /* Lavanda smorzata per etichette */
+        c.bg_dark   = (linux_color_t){  66,  52, 144, 255 }; /* #423490 (C64 Dark Blue) */
+        c.bg_box    = (linux_color_t){  88,  72, 168, 255 }; /* #5848A8 (C64 Box Blue) */
+        c.hover_bg  = (linux_color_t){ 105,  90, 195, 255 }; /* #695AC3 (Hover highlight) */
+        c.border    = (linux_color_t){ 110,  95, 190, 255 }; /* #6E5FBE */
+    } else if (mode == 6 && phosphor == 0) {
         /* Mode 6 (DEC PDP-1 Type 30): P7 Cascade Phosphor - Turchese Radar MIT */
         c.normal    = (linux_color_t){  0, 212, 170, 255 }; /* #00D4AA */
         c.bright    = (linux_color_t){ 60, 255, 210, 255 }; /* Electric cyan flash */

@@ -389,6 +389,9 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             np.pdp1_font = 0;
             np.pdp1_refresh_rate = 45;
             np.pdp1_preset = 0;
+            np.c64_preset = 0;
+            np.c64_border = true;
+            np.c64_color_scheme = 0;
             np.tek_baud_rate = 2400;
             np.tek_erase_flash = true;
             np.tek_accurate_bg = true;
@@ -416,7 +419,7 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
         if (pt_in_rect(mx, my, 340, 128, 110, 26)) { g_active_field = FIELD_PORT; return; }
 
         /* Phosphor Color a X=540, Y=128 */
-        if (g_edit_profile.display_mode != 5) {
+        if (g_edit_profile.display_mode != 5 && g_edit_profile.display_mode != 7) {
             int ph_x = 540;
             for (int i = 0; i < 4; i++) {
                 if (pt_in_rect(mx, my, ph_x, 128, 85, 26)) {
@@ -427,10 +430,10 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             }
         }
 
-        /* 7 Display Modes: width 84, step 89, X=340..958 */
+        /* 8 Display Modes: width 72, step 77, X=340..951 */
         int mode_x = 340;
-        for (int m = 0; m < 7; m++) {
-            if (pt_in_rect(mx, my, mode_x, 162, 84, 26)) {
+        for (int m = 0; m < 8; m++) {
+            if (pt_in_rect(mx, my, mode_x, 162, 72, 26)) {
                 g_edit_profile.display_mode = m;
                 if (m == 5 && g_edit_profile.tek_baud_rate <= 0) {
                     g_edit_profile.tek_baud_rate = 2400; /* Auto-proposta 2400 Baud */
@@ -440,7 +443,7 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
                 }
                 return;
             }
-            mode_x += 89;
+            mode_x += 77;
         }
 
         int mode = g_edit_profile.display_mode;
@@ -540,6 +543,37 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
                     return;
                 }
                 pr_x += 150;
+            }
+        } else if (mode == 7) {
+            /* C64 Presets at Y=196 */
+            int px = 340;
+            for (int i = 0; i < 3; i++) {
+                if (pt_in_rect(mx, my, px, 196, 140, 24)) {
+                    g_edit_profile.c64_preset = i;
+                    return;
+                }
+                px += 146;
+            }
+
+            /* C64 Border at Y=226 */
+            if (pt_in_rect(mx, my, 340, 226, 140, 24)) {
+                g_edit_profile.c64_border = true;
+                return;
+            }
+            if (pt_in_rect(mx, my, 486, 226, 140, 24)) {
+                g_edit_profile.c64_border = false;
+                return;
+            }
+
+            /* C64 Color Scheme at Y=256 */
+            const int sch_w[] = { 120, 130, 110, 110 };
+            int sx = 340;
+            for (int i = 0; i < 4; i++) {
+                if (pt_in_rect(mx, my, sx, 256, sch_w[i], 24)) {
+                    g_edit_profile.c64_color_scheme = i;
+                    return;
+                }
+                sx += sch_w[i] + 6;
             }
         }
 
@@ -854,8 +888,8 @@ void linux_profiles_render(void) {
     char port_buf[16]; snprintf(port_buf, sizeof(port_buf), "%d", g_edit_profile.port);
     draw_prof_text(g_prof_ren, 346.0f, 146.0f, port_buf, th.bright.r, th.bright.g, th.bright.b);
 
-    /* Phosphor Color a fianco di Port (Y=128, X=540) - nascosto su Tektronix 4014 P31 */
-    if (g_edit_profile.display_mode != 5) {
+    /* Phosphor Color a fianco di Port (Y=128, X=540) - nascosto su Tektronix 4014 P31 e C64 */
+    if (g_edit_profile.display_mode != 5 && g_edit_profile.display_mode != 7) {
         draw_prof_text(g_prof_ren, 465.0f, 147.0f, "Phosphor:", th.dim.r, th.dim.g, th.dim.b);
         const char *ph_labels[] = { "Default", "Green P31", "Amber P40", "White P4" };
         int ph_x = 540;
@@ -866,13 +900,13 @@ void linux_profiles_render(void) {
         }
     }
 
-    /* 7 Display Modes: width 84, gap 5 (step 89) -> 340..958 */
+    /* 8 Display Modes: width 72, gap 5 (step 77) -> 340..951 */
     draw_prof_text(g_prof_ren, 260.0f, 181.0f, "Mode:", th.dim.r, th.dim.g, th.dim.b);
-    const char *modes[] = { "Real Plasma", "Crisp Mono", "Split Mono", "Crisp Color", "Real CRT", "Tek 4014", "DEC PDP-1" };
+    const char *modes[] = { "Real Plasma", "Crisp Mono", "Split Mono", "Crisp Color", "Real CRT", "Tek 4014", "DEC PDP-1", "C64 VIC-II" };
     int mode_x = 340;
-    for (int m = 0; m < 7; m++) {
-        draw_prof_button(g_prof_ren, mode_x, 162, 84, 26, modes[m], (g_edit_profile.display_mode == m));
-        mode_x += 89;
+    for (int m = 0; m < 8; m++) {
+        draw_prof_button(g_prof_ren, mode_x, 162, 72, 26, modes[m], (g_edit_profile.display_mode == m));
+        mode_x += 77;
     }
 
     /* Parametri Condizionali Plasma / CRT / Tektronix */
@@ -955,6 +989,27 @@ void linux_profiles_render(void) {
         for (int i = 0; i < 3; i++) {
             draw_prof_button(g_prof_ren, pr_x, 256, 140, 24, pr_labels[i], (g_edit_profile.pdp1_preset == i));
             pr_x += 150;
+        }
+    } else if (mode == 7) {
+        draw_prof_text(g_prof_ren, 260.0f, 214.0f, "Preset:", th.dim.r, th.dim.g, th.dim.b);
+        const char *c64_presets[] = { "RF / Composite", "1702 CRT Monitor", "Clean Crisp Hires" };
+        int px = 340;
+        for (int i = 0; i < 3; i++) {
+            draw_prof_button(g_prof_ren, px, 196, 140, 24, c64_presets[i], (g_edit_profile.c64_preset == i));
+            px += 146;
+        }
+
+        draw_prof_text(g_prof_ren, 260.0f, 244.0f, "Border:", th.dim.r, th.dim.g, th.dim.b);
+        draw_prof_button(g_prof_ren, 340, 226, 140, 24, "Enabled (12.5%)", g_edit_profile.c64_border);
+        draw_prof_button(g_prof_ren, 486, 226, 140, 24, "Disabled (Full)", !g_edit_profile.c64_border);
+
+        draw_prof_text(g_prof_ren, 260.0f, 274.0f, "Scheme:", th.dim.r, th.dim.g, th.dim.b);
+        const char *c64_schemes[] = { "Classic Blue", "Multi-Color (16C)", "Amber (P40)", "Green (P31)" };
+        const int sch_w[] = { 120, 130, 110, 110 };
+        int sx = 340;
+        for (int i = 0; i < 4; i++) {
+            draw_prof_button(g_prof_ren, sx, 256, sch_w[i], 24, c64_schemes[i], (g_edit_profile.c64_color_scheme == i));
+            sx += sch_w[i] + 6;
         }
     }
 

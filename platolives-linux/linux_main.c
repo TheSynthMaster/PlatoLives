@@ -28,6 +28,7 @@ int g_linux_theme_phosphor = 0;
 
 #include "plato/plato_terminal.h"
 #include "plato/plato_optical.h"
+#include "plato/plato_c64.h"
 #include "plato/plato_transport.h"
 #include "plato/plato_profile.h"
 #include "plato/plato_keyboard.h"
@@ -418,6 +419,9 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
             telem.pdp1_font = app->profile.pdp1_font;
             telem.pdp1_refresh_rate = app->profile.pdp1_refresh_rate;
             telem.pdp1_preset = app->profile.pdp1_preset;
+            telem.c64_preset = app->profile.c64_preset;
+            telem.c64_border = app->profile.c64_border;
+            telem.c64_color_scheme = app->profile.c64_color_scheme;
             int q_head = app->terminal.vector_queue.head;
             int q_tail = app->terminal.vector_queue.tail;
             telem.tek_queue_count = (q_head - q_tail + MAX_VECTOR_EVENTS) % MAX_VECTOR_EVENTS;
@@ -464,8 +468,29 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
         size_t buffer_size = TEXTURE_WIDTH * TEXTURE_HEIGHT * 4;
 
         glBindTexture(GL_TEXTURE_2D, app->texture_id);
+        int cur_mode = app->profile.display_mode;
+        bool use_nearest = (cur_mode == 1 || cur_mode == 3 || (cur_mode == 7 && app->profile.c64_preset == 2));
+        
+        static void (APIENTRY *my_glGenerateMipmap)(GLenum) = NULL;
+        static bool mipmap_checked = false;
+        if (!mipmap_checked) {
+            my_glGenerateMipmap = (void (APIENTRY *)(GLenum))SDL_GL_GetProcAddress("glGenerateMipmap");
+            if (!my_glGenerateMipmap) my_glGenerateMipmap = (void (APIENTRY *)(GLenum))SDL_GL_GetProcAddress("glGenerateMipmapEXT");
+            mipmap_checked = true;
+        }
+
+        GLint min_filter = use_nearest ? GL_NEAREST : (my_glGenerateMipmap ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+        GLint mag_filter = use_nearest ? GL_NEAREST : GL_LINEAR;
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter);
+
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, app->pbo_ids[app->pbo_index]);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
+        
+        if (!use_nearest && my_glGenerateMipmap) {
+            my_glGenerateMipmap(GL_TEXTURE_2D);
+        }
 
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, app->pbo_ids[next_index]);
         glBufferData(GL_PIXEL_UNPACK_BUFFER, (GLsizeiptr)buffer_size, NULL, GL_STREAM_DRAW);
@@ -987,20 +1012,22 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_CRISP_COLOR:
         case ACT_VIEW_REAL_CRT:
         case ACT_VIEW_REAL_TEKTRONIX:
-        case ACT_VIEW_REAL_PDP1: {
+        case ACT_VIEW_REAL_PDP1:
+        case ACT_VIEW_REAL_C64: {
             int new_mode = (action == ACT_VIEW_CRISP_MONO) ? 1 :
                            (action == ACT_VIEW_SPLIT_MONO) ? 2 :
                            (action == ACT_VIEW_REAL_PLASMA) ? 0 :
                            (action == ACT_VIEW_CRISP_COLOR) ? 3 :
                            (action == ACT_VIEW_REAL_CRT) ? 4 :
-                           (action == ACT_VIEW_REAL_TEKTRONIX) ? 5 : 6;
+                           (action == ACT_VIEW_REAL_TEKTRONIX) ? 5 :
+                           (action == ACT_VIEW_REAL_PDP1) ? 6 : 7;
             if (new_mode == 6 && app->profile.pdp1_refresh_rate <= 0) {
                 app->profile.pdp1_refresh_rate = 45;
             }
 
             int old_mode = app->profile.display_mode;
-            bool cur_is_color = (old_mode == 3 || old_mode == 4);
-            bool new_is_color = (new_mode == 3 || new_mode == 4);
+            bool cur_is_color = (old_mode == 3 || old_mode == 4 || old_mode == 7);
+            bool new_is_color = (new_mode == 3 || new_mode == 4 || new_mode == 7);
             bool is_connected = (app->transport && app->transport->connected);
 
             app->profile.display_mode = new_mode;
@@ -1065,6 +1092,26 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_PDP1_REFRESH_15: app->profile.pdp1_refresh_rate = 15; goto sync_optical_view;
         case ACT_VIEW_PDP1_REFRESH_10: app->profile.pdp1_refresh_rate = 10; goto sync_optical_view;
         case ACT_VIEW_PDP1_REFRESH_5:  app->profile.pdp1_refresh_rate = 5;  goto sync_optical_view;
+
+        /* C64 Presets */
+        case ACT_VIEW_C64_PRESET_RF:
+        case ACT_VIEW_C64_PRESET_CRT:
+        case ACT_VIEW_C64_PRESET_CRISP:
+            app->profile.c64_preset = action - ACT_VIEW_C64_PRESET_RF;
+            goto sync_optical_view;
+
+        /* C64 Border Frame */
+        case ACT_VIEW_C64_BORDER:
+            app->profile.c64_border = !app->profile.c64_border;
+            goto sync_optical_view;
+
+        /* C64 Color Scheme */
+        case ACT_VIEW_C64_SCHEME_CLASSIC:
+        case ACT_VIEW_C64_SCHEME_MC:
+        case ACT_VIEW_C64_SCHEME_AMBER:
+        case ACT_VIEW_C64_SCHEME_GREEN:
+            app->profile.c64_color_scheme = action - ACT_VIEW_C64_SCHEME_CLASSIC;
+            goto sync_optical_view;
 
         /* PDP-1 Display Mode (Preset) */
         case ACT_VIEW_PDP1_PRESET_HISTORIC: app->profile.pdp1_preset = 0; goto sync_optical_view;
@@ -1538,10 +1585,7 @@ static void handle_sdl_mouse(linux_client_t *app, int mouse_x, int mouse_y, bool
     int plato_x = (local_x * PLATO_WIDTH) / app->vp_side;
     int plato_y = (local_y * PLATO_HEIGHT) / app->vp_side;
 
-    plato_optical_unwarp_touch(&plato_x, &plato_y, 
-                               app->profile.display_mode, 
-                               app->profile.plasma_distortion, 
-                               app->profile.crt_distortion);
+    if (app->profile.display_mode == 7) { int cx = plato_x * 4, cy = plato_y * 4; c64_unwarp_touch(&cx, &cy, app->profile.c64_border); plato_x = cx; plato_y = cy; } else { plato_optical_unwarp_touch(&plato_x, &plato_y, app->profile.display_mode, app->profile.plasma_distortion, app->profile.crt_distortion); }
 
     plato_protocol_send_touch(&app->terminal, (int16_t)plato_x, (int16_t)plato_y);
 }

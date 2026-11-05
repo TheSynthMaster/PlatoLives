@@ -515,6 +515,19 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
                 }
             }
         } else if (g_kstate == KSTATE_RECORD_KEY) {
+            SDL_Keycode sym = ev->key.keysym.sym;
+            if (sym == SDLK_ESCAPE) {
+                g_kstate = KSTATE_NORMAL;
+                return;
+            }
+            if (sym == SDLK_LCTRL || sym == SDLK_RCTRL ||
+                sym == SDLK_LALT  || sym == SDLK_RALT  ||
+                sym == SDLK_LSHIFT|| sym == SDLK_RSHIFT||
+                sym == SDLK_LGUI  || sym == SDLK_RGUI  ||
+                sym == SDLK_MODE) {
+                return;
+            }
+
             memset(&g_tmp_bind, 0, sizeof(g_tmp_bind));
             SDL_Keymod mod = SDL_GetModState();
             if (mod & KMOD_SHIFT) g_tmp_bind.modifiers |= PLATO_KEY_MOD_SHIFT;

@@ -95,6 +95,13 @@
 - (void)updatePDP1FontMenu:(NSInteger)font;
 @property (nonatomic, strong) NSMenu *pdp1RefreshMenu;
 @property (nonatomic, strong) NSMenu *pdp1PresetMenu;
+@property (nonatomic, strong) NSMenu *c64PresetMenu;
+@property (nonatomic, strong) NSMenu *c64BorderMenu;
+@property (nonatomic, strong) NSMenu *c64ColorSchemeMenu;
+- (void)updateC64PresetMenu:(NSInteger)preset;
+- (void)updateC64BorderMenu:(BOOL)border;
+- (void)updateC64ColorSchemeMenu:(NSInteger)scheme;
+
 - (void)selectPDP1Refresh:(id)sender;
 - (void)updatePDP1RefreshMenu:(NSInteger)rate;
 - (void)selectPDP1Preset:(id)sender;

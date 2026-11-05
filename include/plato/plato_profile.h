@@ -13,7 +13,7 @@ typedef struct {
     char name[64];
     char host[128];
     int port;
-    int display_mode;        /* 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT, 5: Real Tektronix, 6: DEC PDP-1 Type 30 */
+    int display_mode;        /* 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT, 5: Real Tektronix, 6: DEC PDP-1 Type 30, 7: Commodore 64 (VIC-II) */
     int persistence_ms;      /* 100, 200, 500, 1000, 2000, 5000 */
     int plasma_distortion;   /* 0: None, 1: Barrel, 2: Cylindrical */
     int crt_beam_level;      /* 0: Standard, 1: High, 2: Ultra */
@@ -26,6 +26,9 @@ typedef struct {
     int pdp1_font;
     int pdp1_refresh_rate;
     int pdp1_preset;           /* 0: 1961 Codeword (Spacewar!), 1: 1964 Character (Type 33) */
+    int c64_preset;            /* 0: Authentic RF / Composite, 1: 1702 CRT Monitor, 2: Crisp Hires */
+    bool c64_border;           /* true: VIC-II Border Enabled (12.5%), false: Full Display */
+    int c64_color_scheme;      /* 0: Classic Blue, 1: Amber Monitor, 2: Green Phosphor */
     bool full_screen;
     bool is_default;
     bool startup_script_enabled;

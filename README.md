@@ -1,24 +1,40 @@
-# PlatoLives (v5.5)
+# PlatoLives (v5.6)
 
-## Latest Changes (v5.5)
+## Latest Changes (v5.6)
 
-- **DEC PDP-1 Type 30 Display Emulation**: Introduces a point-plotting CRT display model with a 1024×1024 native coordinate space, 2× optical supersampling, and simulated P7 phosphor persistence and color shift.
-- **Historic PDP-1 Fonts**: Adds two character generators: the 1961 MIT Codeword font and the 1964 DEC Type 33 font.
-- **Configurable Display Response**: Offers selectable cathode refresh rates (60, 45, 30, 15, 10, and 5 Hz) and three optical presets: Historic (15s), Historic Fast Decay (5s), and Modern (2s).
-- **Cross-platform Support**: PDP-1 emulation is available on macOS, Windows (x86_64 and ARM64), and Linux desktop.
+- **Commodore 64 (VIC-II) Display Emulation**: Experience PLATO through the warm, nostalgic lens of the iconic Commodore 64, complete with the famous two-tone blue palette, 1702 CRT monitor simulation, and authentic composite RF warmth.
+- **Iconic C64 Border & Color Schemes**: Features the authentic 12.5% VIC-II outer border frame, 16-color Multi-Color graphics, and calibrated P40 Amber and P31 Green phosphor monitor options.
+- **Clean Crisp Hires Mode**: Offers sharp, modern legibility of terminal lessons while preserving authentic 8-bit character shapes.
+- **Global Input System Refactoring**: Resolves keyboard shortcut collisions across macOS, Windows, and Linux, ensuring native PLATO keys (COPY, DATA, EDIT, HELP, etc.) always have absolute precedence.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Windows%20(x86__64%20%26%20ARM64)%20%7C%20Linux%20(ARM64%20%26%20x86__64)-orange.svg)](#)
 [![Language](https://img.shields.io/badge/language-C11%20%7C%20Direct3D%2011%20%7C%20Cocoa%2FMetal%20%7C%20OpenGL%203.3-blue.svg)](#)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-red.svg)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-CDC%20IST--III%20%2F%20CERL%20X--20%20%2F%20CDC%20721%20%2F%20Tektronix%204014%20%2F%20DEC%20PDP--1-brightgreen.svg)](#)
 
-<img width="3658" height="1964" alt="PlatoLives Banner" src="https://github.com/user-attachments/assets/8b8e7e8c-1219-4be6-82f9-b20b1591509c" />
+<div align="center">
+<table width="80%">
+  <tr>
+    <td colspan="2" align="center">
+      <img src="https://github.com/user-attachments/assets/8b8e7e8c-1219-4be6-82f9-b20b1591509c" alt="PlatoLives Banner" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="https://github.com/user-attachments/assets/bb3890bf-e8cd-4251-bcef-6e796084fd9c" alt="Tektronix 4014" width="100%">
+    </td>
+    <td width="50%">
+      <img src="https://github.com/user-attachments/assets/8b501627-32f3-41a7-82fd-c2298d36a3dc" alt="DEC PDP-1" width="100%">
+    </td>
+  </tr>
+</table>
+</div>
 
 **PlatoLives** is a modern native client for **PLATO**, the legendary computer-based education and social system that originated at the University of Illinois.
 
 It connects to PLATO systems such as **Cyber1/CYBIS** and **IRATA.ONLINE**, while preserving something often lost in modern PLATO clients: the tactile, optical, and physical feeling of sitting in front of real vintage terminal hardware.
 
-The display can be rendered as an authentic **orange gas-plasma display**, a **color CRT**, a **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**, or a **DEC PDP-1 Type 30 Precision CRT Display**. Each mode models the physical properties of the original hardware—cell illumination, electron beam flare, cascade phosphors, dielectric storage charge, scanlines, and subtle glass curvature. The result is not simply a terminal window displaying PLATO graphics, but an authentic reproduction of the computing hardware that originally displayed them.
+The display can be rendered as an authentic **orange gas-plasma display**, a **color CRT**, a **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**, a **DEC PDP-1 Type 30 Precision CRT Display**, or a **Commodore 64 (VIC-II)**. Each mode models the physical properties of the original hardware—cell illumination, electron beam flare, cascade phosphors, dielectric storage charge, scanlines, and subtle glass curvature. The result is not simply a terminal window displaying PLATO graphics, but an authentic reproduction of the computing hardware that originally displayed them.
 
 At the same time, PlatoLives is a modern client. It supports copy and paste, scripting, automation, SSH/headless operation, modern Unicode text, customizable keyboard profiles, and native cross-platform execution on macOS, Windows (x86_64 & ARM64), and Linux.
 
@@ -28,7 +44,19 @@ In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to 
 
 ---
 
-# What's new in v5.5
+# What's new in v5.6
+
+Version 5.6 introduces emulation of the **Commodore 64 (VIC-II)**, recreating the feeling of using PLATO on the world's most iconic 8-bit home computer.
+
+- **The Authentic 8-bit Experience**: Sit in front of a warm Commodore 1702 CRT monitor or switch to the soft, nostalgic analog bloom of an authentic RF composite TV connection.
+- **Classic Two-Tone Blue & Color Palettes**: Switch effortlessly between the beloved two-tone blue boot screen palette, rich 16-color VIC-II graphics, or monochrome amber/green phosphor monitors.
+- **Signature 12.5% Border Frame**: Displays the classic Commodore 64 border, complete with touch coordinate compensation, with the option to disable the border for an edge-to-edge view.
+- **Clean Crisp Hires**: A specialized high-contrast mode for crisp readability during long reading and coding sessions.
+- **Input System Refactoring**: Complete overhaul of shortcut handling and keymapper recording across Windows, macOS, and Linux.
+
+---
+
+# What's new in v5.5 (Historic)
 
 Version 5.5 introduces emulation of the **DEC PDP-1 Type 30 Precision CRT Display**, adding a point-plotting display model alongside the existing terminal display options.
 
@@ -42,6 +70,7 @@ Version 5.5 introduces emulation of the **DEC PDP-1 Type 30 Precision CRT Displa
 # Authentic DEC PDP-1 Type 30 CRT Display Emulation
 
 The defining milestone of PlatoLives 5.5 is the physical emulation of the **DEC PDP-1 Type 30 Precision Display**, the display on which computer graphics history and the first video game (*Spacewar!*, 1962) were born.
+```text
 +-------------------------------------------------------------------------+
 | DEC PDP-1 TYPE 30 PHYSICAL PIPELINE |
 | |
@@ -71,6 +100,8 @@ The defining milestone of PlatoLives 5.5 is the physical emulation of the **DEC 
 +-------------------------------------------------------------------------+
 code
 Code
+```
+
 ### Point-Plotting Precision CRT Architecture
 
 Unlike raster displays that sweep an electron beam line by line across a phosphor grid, the DEC Type 30 was a **point-plotting vector display**. The computer addressed points individually using two 10-bit digital-to-analog converters, projecting an electron beam onto a circular 16-inch cathode ray tube.
@@ -108,12 +139,13 @@ PlatoLives includes two distinct historical font implementations:
 
 There are plenty of ways to connect to PLATO. PlatoLives is intended for people who want something closer to **using a physical PLATO terminal**, rather than simply accessing a PLATO server.
 
-### Four Authentic Hardware Display Models
+### Five Authentic Hardware Display Models
 
 1. **Real Plasma**: Recreates the iconic orange gas-plasma panels developed for PLATO IV at the University of Illinois, simulating micro-cell ionization, neon glow, and bistable discharge.
 2. **Real Color CRT**: Recreates the CDC color terminals, featuring RGB phosphors, electron beam blooming, scanline structures, and configurable CRT profiles.
 3. **Real Tektronix 4014 (DVBST)**: Vector storage-tube experience with progressive line tracing, P31 phosphors, slow electron background noise, and full-screen flash erase.
 4. **Real DEC PDP-1 Type 30 (1964)**: Precision point-plotting CRT display featuring P7 cascade phosphors, chromatic decay shift, and historic MIT font generators.
+5. **Real Commodore 64 (VIC-II)**: Brings the world's most beloved 8-bit computer to PLATO. Features the classic two-tone blue scheme, 16-color VIC-II palettes, warm Commodore 1702 CRT scanlines, composite RF bloom, and the iconic 12.5% border frame.
 
 Each mode supports glass curvature simulation, optical touch compensation, and phosphor overrides (P31 Green, P40 Amber, P4 White).
 
@@ -239,9 +271,11 @@ With Zig installed:
 ```bash
 brew install zig
 ./build_all.sh
-Artifacts are output to build/:
-code
-Text
+```
+
+Build artifacts are output to `build/`:
+
+```text
 PlatoLives.app
 PlatoLives-windows-x86_64.exe
 PlatoLives-windows-arm64.exe
@@ -250,10 +284,13 @@ PlatoLives-linux-gui-x86_64
 PlatoLives-console-linux-arm64
 PlatoLives-console-linux-x86_64
 build/linux_desktop_install/
-Native macOS build
+```
+
+### Native macOS build
+
 Requirements: macOS 13+, Xcode Command Line Tools, CMake 3.16+.
-code
-Bash
+
+```bash
 git clone git@github.com:TheSynthMaster/PlatoLives.git
 cd PlatoLives
 mkdir build
@@ -261,56 +298,33 @@ cd build
 cmake ..
 make -j$(sysctl -n hw.ncpu)
 ctest --output-on-failure
-Technical Details
-Component	Details
-Core	Portable C11
-Display Modes	Real Gas-Plasma, Color CRT, Real Tektronix 4014 (DVBST), DEC PDP-1 Type 30 (1964)
-Logical Display	
-512
-×
-512
-512×512
- PLATO vector and text grid
-PDP-1 Optical Canvas	
-1024
-×
-1024
-1024×1024
- native point space supersampled to 
-2048
-×
-2048
-2048×2048
- canvas
-PDP-1 Phosphor Model	P7 Cascade: 
-ZnS:Ag
-ZnS:Ag
- prompt flash (
-τ
-=
-350
- ms
-τ=350 ms
-) + 
-ZnS:Cu
-ZnS:Cu
- yellow-amber phosphorescence
-Vector Engine	Lock-free 8192-slot ring buffer with hardware bit-credit pacer
-DVBST Physics	Dual-layer dielectric charge (tek_stored) and writing-beam flare (tek_flare)
-Text Matrix	
-64
-×
-32
-64×32
- character matrix with downloadable font recognition
-macOS Rendering	Cocoa / Core Animation / Metal
-Windows Rendering	Win32 / Direct3D 11 (Native x86_64 and ARM64)
-Linux Rendering	OpenGL 3.3 Core / SDL2 / stb_truetype
-Input Engine	5 Built-in layouts (Standard, WASD, WASX, WADX, Numpad), custom remapping
-Networking	Non-blocking BSD/WinSock2 TCP with immediate cancel and auto-retry
-Automation	State-aware scripting interpreter with network session control
-MicroTutor	Pure C11 Z80 CPU and floppy controller emulation
-Versioning	Single Source of Truth via root VERSION file
-License
+```
+
+---
+
+# Technical Details
+
+| Component | Details |
+| :--- | :--- |
+| Core | Portable C11 |
+| Display Modes | Real Gas-Plasma, Color CRT, Real Tektronix 4014 (DVBST), DEC PDP-1 Type 30 (1964) |
+| Logical Display | 512 × 512 PLATO vector and text grid |
+| PDP-1 Optical Canvas | 1024 × 1024 native point space, supersampled to a 2048 × 2048 canvas |
+| PDP-1 Phosphor Model | P7 cascade: ZnS:Ag prompt flash (τ = 350 ms) and ZnS:Cu yellow-amber phosphorescence |
+| Vector Engine | Lock-free 8192-slot ring buffer with hardware bit-credit pacer |
+| DVBST Physics | Dual-layer dielectric charge (`tek_stored`) and writing-beam flare (`tek_flare`) |
+| Text Matrix | 64 × 32 character matrix with downloadable font recognition |
+| macOS Rendering | Cocoa / Core Animation / Metal |
+| Windows Rendering | Win32 / Direct3D 11 (Native x86_64 and ARM64) |
+| Linux Rendering | OpenGL 3.3 Core / SDL2 / stb_truetype |
+| Input Engine | 5 built-in layouts (Standard, WASD, WASX, WADX, Numpad), custom remapping |
+| Networking | Non-blocking BSD/WinSock2 TCP with immediate cancel and auto-retry |
+| Automation | State-aware scripting interpreter with network session control |
+| MicroTutor | Pure C11 Z80 CPU and floppy controller emulation |
+| Versioning | Single source of truth via root `VERSION` file |
+
+
+# License
+
 PlatoLives is released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license.
 See LICENSE for the complete license text.

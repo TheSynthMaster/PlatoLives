@@ -67,6 +67,8 @@ set(LIBPLATO_SOURCES
     src/plato_optical.c
     src/plato_pdp1_font.c
     src/plato_pdp1.c
+    src/plato_c64_font.c
+    src/plato_c64.c
     
     src/plato_microtutor.c
     src/z80emu.c

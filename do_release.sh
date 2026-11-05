@@ -30,8 +30,8 @@ echo "[OK] DMG creato con successo in build/${DMG_NAME}"
 echo ""
 echo "=== Git Commit & Push v${VERSION_STR} ==="
 git add -A
-git commit -m "Release v${VERSION_STR}: DEC PDP-1 Type 30 Precision CRT Display Engine & Cross-Platform Parity" || true
-git tag -f -a "v${VERSION_STR}" -m "PlatoLives ${VERSION_STR} - DEC PDP-1 Type 30 Engine & Multiplatform Release"
+git commit -m "Release v${VERSION_STR}: Commodore 64 (VIC-II) Display Engine & Input System Refactoring" || true
+git tag -f -a "v${VERSION_STR}" -m "PlatoLives ${VERSION_STR} - Commodore 64 Display Engine & Multiplatform Release"
 git push origin HEAD --tags --force
 echo "[OK] Commit e Tag v${VERSION_STR} inviati su GitHub con successo!"
 

@@ -1,8 +1,10 @@
-# PlatoLives v5.5
+# PlatoLives v5.6
 
 ## What's New
 
-- **DEC PDP-1 Type 30 Emulation**: New precision point-plotting CRT display model with simulated P7 phosphor persistence and characteristic color shift.
-- **Historic Fonts**: Adds the 1961 MIT Codeword and 1964 DEC Type 33 character generators.
-- **Display Customization**: Adjustable refresh rates (60, 45, 30, 15, 10, 5 Hz) and three optical presets: Historic, Historic Fast Decay, and Modern.
-- **Cross-platform Support**: PDP-1 emulation on macOS, Windows (x86_64/ARM64), and Linux desktop.
+- **Commodore 64 (VIC-II) Display Engine**: Brings the warmth and tactile nostalgia of the world's most beloved 8-bit home computer to PLATO. Sit in front of a virtual Commodore 1702 CRT monitor or experience the vintage softness of an authentic RF composite connection.
+- **Authentic C64 Color Schemes & Phosphors**: Choose between the iconic Two-Tone Classic Blue, full 16-color VIC-II graphics, or calibrated vintage P40 Amber and P31 Green monochrome monitor palettes.
+- **Authentic 12.5% Border Frame**: Features the unmistakable C64 outer border with seamless optical touch compensation, plus a full-screen toggle for maximum workspace.
+- **Clean Crisp Hires Option**: Enjoy high-contrast readability of PLATO lessons and notes while preserving authentic 8-bit character charm.
+- **Global Input System & Keymapper Refactoring**: Complete priority given to native PLATO keys across Windows, macOS, and Linux, eliminating OS shortcut conflicts (Ctrl+C, Alt mnemonics) and streamlining custom key remapping.
+- **Unified Multiplatform Release**: Native performance and parity across macOS (Metal/Cocoa), Windows (Direct3D 11, x86_64 & ARM64), Linux Desktop (OpenGL/SDL2), and Linux Headless Console.

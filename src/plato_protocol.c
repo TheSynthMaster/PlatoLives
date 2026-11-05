@@ -5,6 +5,7 @@
 #include "plato/plato_transport.h"
 #include "plato/plato_graphics.h"
 #include "plato/plato_pdp1.h"
+#include "plato/plato_c64.h"
 
 static const uint8_t PTAT0[128] = {
     0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
@@ -149,6 +150,7 @@ static void coordinate_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
         plato_terminal_push_vector(term, VEC_EVENT_POINT, (float)x, (float)y, (float)x, (float)y, dec->screen_mode);
         plato_draw_point(&term->fb, x, y, dec->screen_mode);
         if (term->fb_pdp) pdp1_fb_draw_point(term->fb_pdp, x, y, dec->screen_mode); term->fb_pdp_dirty = true;
+        if (term->fb_c64_gfx) c64_fb_draw_point(term, x, y, dec->screen_mode);
         term->x = x; term->y = y;
     } else if (dec->data_mode == PLATO_MODE_LINE) {
         if (dec->first_line_coord) { term->x = x; term->y = y; dec->first_line_coord = false; }
@@ -156,6 +158,7 @@ static void coordinate_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
             plato_terminal_push_vector(term, VEC_EVENT_LINE, (float)term->x, (float)term->y, (float)x, (float)y, dec->screen_mode);
         plato_draw_line(&term->fb, term->x, term->y, x, y, dec->screen_mode);
             if (term->fb_pdp) pdp1_fb_draw_line(term->fb_pdp, term->x, term->y, x, y, dec->screen_mode); term->fb_pdp_dirty = true;
+            if (term->fb_c64_gfx) c64_fb_draw_line(term, term->x, term->y, x, y, dec->screen_mode);
             plato_transport_log_msg(term->transport, "[LINE] (%d,%d)->(%d,%d) mode=%d fg=0x%08X\n",
                                     term->x, term->y, x, y, dec->screen_mode, term->fb.fg_color);
             term->x = x; term->y = y;
@@ -166,6 +169,7 @@ static void coordinate_complete(plato_protocol_decoder_t *dec, plato_terminal_t 
             plato_terminal_push_vector(term, VEC_EVENT_BLOCK, (float)dec->block_x0, (float)dec->block_y0, (float)x, (float)y, dec->screen_mode);
             plato_draw_block(&term->fb, dec->block_x0, dec->block_y0, x, y, dec->screen_mode);
             if (term->fb_pdp) pdp1_fb_draw_block(term->fb_pdp, dec->block_x0, dec->block_y0, x, y, dec->screen_mode); term->fb_pdp_dirty = true;
+            if (term->fb_c64_gfx) c64_fb_draw_block(term, dec->block_x0, dec->block_y0, x, y, dec->screen_mode);
             plato_transport_log_msg(term->transport, "[BLOCK] (%d,%d)->(%d,%d) mode=%d fg=0x%08X bg=0x%08X\n",
                                     dec->block_x0, dec->block_y0, x, y, dec->screen_mode, term->fb.fg_color, term->fb.bg_color);
             term->x = dec->block_x0;
@@ -390,6 +394,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
             plato_transport_log_msg(term->transport, "[PAINT] seed=(%d,%d) mode=%d fg=0x%08X\n", term->x, term->y, dec->screen_mode, term->fb.fg_color);
             plato_draw_paint(&term->fb, term->x, term->y, dec->screen_mode);
             if (term->fb_pdp) pdp1_fb_draw_paint(term->fb_pdp, term->x, term->y, dec->screen_mode); term->fb_pdp_dirty = true;
+            if (term->fb_c64_gfx) c64_fb_draw_paint(term, term->x, term->y, dec->screen_mode);
             dec->state = STATE_NORMAL;
         }
         return;
@@ -416,6 +421,7 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
                 plato_terminal_push_vector(term, VEC_EVENT_ERASE, 0.0f, 0.0f, 0.0f, 0.0f, PLATO_SCREEN_WRITE);
                 plato_fb_clear(&term->fb);
                 if (term->fb_pdp) pdp1_fb_clear(term->fb_pdp); term->fb_pdp_dirty = true;
+                if (term->fb_c64_gfx) c64_fb_clear(term);
                 term->x = 0; term->y = 496; term->margin_x = 0;
                 plato_terminal_clear_text(term);
                 dec->char_size = 1;
@@ -577,6 +583,9 @@ void plato_protocol_process_byte(plato_protocol_decoder_t *dec, plato_terminal_t
         plato_draw_char(&term->fb, &term->font, dec->charset, byte, term->x, term->y, dec->screen_mode, scale);
         if (term->fb_pdp) {
             pdp1_fb_draw_char(term->fb_pdp, &term->font, term->pdp1_font, dec->charset, byte, term->x, term->y, dec->screen_mode, scale); term->fb_pdp_dirty = true;
+        }
+        if (term->fb_c64_text) {
+            c64_fb_draw_char(term, &term->font, dec->charset, byte, term->x, term->y, dec->screen_mode, scale);
         }
         plato_terminal_put_char(term, term->x, term->y, byte, dec->charset, dec->screen_mode, scale);
         /* In Alpha PLATO l avanzamento orizzontale avvolge modulo 512 senza LF o scroll. */

@@ -32,7 +32,7 @@ typedef struct {
 static const keyref_entry_t g_kr_table[] = {
     {"NEXT", "Return / Enter / Ctrl+N", false},
     {"SHIFT-NEXT", "Shift+Return / Shift+Ctrl+N", false},
-    {"BACK", "Esc / Backspace / F8 / Ctrl+B", false},
+    {"BACK", "Esc / F8 / Ctrl+B", false},
     {"SHIFT-BACK", "Shift+Esc / Shift+F8 / Shift+Ctrl+B", false},
     {"STOP", "F10 / F4 / Ctrl+S / Alt+S", false},
     {"SHIFT-STOP", "Shift + any STOP shortcut", false},

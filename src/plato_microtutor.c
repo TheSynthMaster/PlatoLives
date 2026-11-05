@@ -1,6 +1,7 @@
 #include "plato/plato_microtutor.h"
 #include "plato/plato_terminal.h"
 #include "plato/plato_graphics.h"
+#include "plato/plato_c64.h"
 #include "plato/plato_transport.h"
 #include <string.h>
 #include <stdio.h>
@@ -448,6 +449,7 @@ bool plato_microtutor_boot_mte(plato_microtutor_t *mt, const char *filepath) {
 
     /* Pulisce lo schermo */
     plato_fb_clear(&mt->term->fb);
+    if (mt->term->fb_c64_gfx) c64_fb_clear(mt->term);
     plato_terminal_clear_text(mt->term);
 
     plato_microtutor_log_msg(mt, "[MTE BOOT] Boot eseguito con successo da '%s' (plevel=%u, settori=%u, PC=0x5306)\n",
@@ -699,6 +701,7 @@ int plato_microtutor_check_resident(void *context, Z80_STATE *state) {
             int x = (int)(state->registers.word[Z80_HL] & 0x1FF);
             int y = (int)(state->registers.word[Z80_DE] & 0x1FF);
             plato_draw_point(&term->fb, x, y, PLATO_SCREEN_WRITE);
+            if (term->fb_c64_gfx) c64_fb_draw_point(term, x, y, PLATO_SCREEN_WRITE);
             term->x = x;
             term->y = y;
             plato_microtutor_log_msg(mt, "[Z80 RESIDENT] R_DOT (%d,%d)\n", x, y);
@@ -709,6 +712,7 @@ int plato_microtutor_check_resident(void *context, Z80_STATE *state) {
             int x = (int)(state->registers.word[Z80_HL] & 0x1FF);
             int y = (int)(state->registers.word[Z80_DE] & 0x1FF);
             plato_draw_line(&term->fb, term->x, term->y, x, y, PLATO_SCREEN_WRITE);
+            if (term->fb_c64_gfx) c64_fb_draw_line(term, term->x, term->y, x, y, PLATO_SCREEN_WRITE);
             plato_microtutor_log_msg(mt, "[Z80 RESIDENT] R_LINE (%d,%d)->(%d,%d)\n", term->x, term->y, x, y);
             term->x = x;
             term->y = y;
@@ -774,12 +778,14 @@ int plato_microtutor_check_resident(void *context, Z80_STATE *state) {
                         uint8_t ascii = (eff_slot == 0) ? PLATO_M0_TO_ASCII[code6] : PLATO_M1_TO_ASCII[code6];
                         if (ascii != 0) {
                             plato_draw_char(&term->fb, &term->font, PLATO_CHARSET_M0, ascii, term->x, term->y, PLATO_SCREEN_WRITE, scale);
+                            if (term->fb_c64_text) c64_fb_draw_char(term, &term->font, PLATO_CHARSET_M0, ascii, term->x, term->y, PLATO_SCREEN_WRITE, scale);
                             plato_terminal_put_char(term, term->x, term->y, ascii, PLATO_CHARSET_M0, PLATO_SCREEN_WRITE, scale);
                         }
                     } else {
                         plato_charset_t charset = (eff_slot == 2) ? PLATO_CHARSET_M2 : PLATO_CHARSET_M3;
                         uint8_t ch = (uint8_t)(0x20u + code6);
                         plato_draw_char(&term->fb, &term->font, charset, ch, term->x, term->y, PLATO_SCREEN_WRITE, scale);
+                        if (term->fb_c64_text) c64_fb_draw_char(term, &term->font, charset, ch, term->x, term->y, PLATO_SCREEN_WRITE, scale);
                         plato_terminal_put_char(term, term->x, term->y, ch, charset, PLATO_SCREEN_WRITE, scale);
                     }
                     term->x = (term->x + 8 * scale) & 0x1FF;
@@ -796,6 +802,7 @@ int plato_microtutor_check_resident(void *context, Z80_STATE *state) {
             int x2 = (int)(term->ram[(uint16_t)(cp + 4u)] | (term->ram[(uint16_t)(cp + 5u)] << 8)) & 0x1FF;
             int y2 = (int)(term->ram[(uint16_t)(cp + 6u)] | (term->ram[(uint16_t)(cp + 7u)] << 8)) & 0x1FF;
             plato_draw_block(&term->fb, x1, y1, x2, y2, PLATO_SCREEN_ERASE);
+            if (term->fb_c64_gfx) c64_fb_draw_block(term, x1, y1, x2, y2, PLATO_SCREEN_ERASE);
             plato_microtutor_log_msg(mt, "[Z80 RESIDENT] R_BLOCK (%d,%d)-(%d,%d)\n", x1, y1, x2, y2);
             return 1;
         }
@@ -830,6 +837,7 @@ int plato_microtutor_check_resident(void *context, Z80_STATE *state) {
             plato_microtutor_log_msg(mt, "[Z80 RESIDENT] R_MODE L: 0x%02X\n", state->registers.byte[Z80_L]);
             if (state->registers.byte[Z80_L] & 1u) {
                 plato_fb_clear(&term->fb);
+                if (term->fb_c64_gfx) c64_fb_clear(term);
                 plato_terminal_clear_text(term);
             }
             return 1;
@@ -844,6 +852,7 @@ int plato_microtutor_check_resident(void *context, Z80_STATE *state) {
 
         case R_WE:
             plato_draw_point(&term->fb, term->x, term->y, PLATO_SCREEN_WRITE);
+            if (term->fb_c64_gfx) c64_fb_draw_point(term, term->x, term->y, PLATO_SCREEN_WRITE);
             return 1;
 
         case R_DIR:
@@ -923,6 +932,7 @@ int plato_microtutor_check_resident(void *context, Z80_STATE *state) {
 
         case R_PAINT:
             plato_draw_paint(&term->fb, term->x, term->y, PLATO_SCREEN_WRITE);
+            if (term->fb_c64_gfx) c64_fb_draw_paint(term, term->x, term->y, PLATO_SCREEN_WRITE);
             return 1;
 
         case R_WAIT16:

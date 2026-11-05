@@ -723,9 +723,12 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
                     default:
                         if (wParam >= VK_F1 && wParam <= VK_F12) {
                             vk = PLATO_VKEY_F1 + (wParam - VK_F1);
+                        } else if (wParam >= 'A' && wParam <= 'Z') {
+                            cp = (uint32_t)(wParam - 'A' + 'a');
+                        } else if (wParam >= '0' && wParam <= '9') {
+                            cp = (uint32_t)wParam;
                         } else {
-                            BYTE kstate[256];
-                            GetKeyboardState(kstate);
+                            BYTE kstate[256] = {0};
                             WORD chars = 0;
                             if (ToAscii((UINT)wParam, (UINT)(lParam >> 16) & 0xFF, kstate, &chars, 0) == 1) {
                                 cp = (uint32_t)(chars & 0xFF);

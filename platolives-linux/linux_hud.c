@@ -140,6 +140,7 @@ static const char *get_display_mode_name(int mode) {
         case 4: return "Real Color CRT";
         case 5: return "Real Tektronix 4014";
         case 6: return "DEC PDP-1 Type 30 (1964)";
+        case 7: return "Commodore 64 (VIC-II)";
         default: return "Unknown";
     }
 }
@@ -182,7 +183,39 @@ void linux_hud_render(void) {
     y += dy;
 
     int mode = g_hud_data.display_mode;
-    if (mode == 6) {
+    if (mode == 7) {
+        /* Commodore 64 (VIC-II): MODE, BORDER, PALETTE, CPU */
+        const char *presetStr = (g_hud_data.c64_preset == 0) ? "RF COMP" :
+                                (g_hud_data.c64_preset == 1) ? "1702 CRT" : "CRISP";
+        const char *borderStr = g_hud_data.c64_border ? "ENABLED" : "DISABLED";
+        const char *palStr = (g_hud_data.c64_color_scheme == 1) ? "VIC-II 16C" :
+                             (g_hud_data.c64_color_scheme == 2) ? "AMBER P40" :
+                             (g_hud_data.c64_color_scheme == 3) ? "GREEN P31" : "CLASSIC";
+
+        snprintf(label, sizeof(label), "MODE    ");
+        snprintf(val, sizeof(val), "C64 %s", presetStr);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "BORDER  ");
+        snprintf(val, sizeof(val), "%s", borderStr);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "PALETTE ");
+        snprintf(val, sizeof(val), "%s", palStr);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.bright.r, th.bright.g, th.bright.b);
+        y += dy;
+
+        snprintf(label, sizeof(label), "CPU     ");
+        snprintf(val, sizeof(val), "%5.1f%%", g_hud_data.cpu_percent);
+        draw_hud_text(g_hud_ren, 22.0f, y, label, th.dim.r, th.dim.g, th.dim.b);
+        draw_hud_text(g_hud_ren, 90.0f, y, val, th.normal.r, th.normal.g, th.normal.b);
+        y += dy;
+    } else if (mode == 6) {
         /* DEC PDP-1 Type 30: MODE, FONT, REFRESH, CPU */
         const char *preset_name = "HISTORIC";
         if (g_hud_data.pdp1_preset == 1) preset_name = "FAST 5S";

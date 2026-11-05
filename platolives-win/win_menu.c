@@ -47,7 +47,7 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hConn, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hConn, MF_STRING, IDM_FILE_EXIT, L"Exit\tAlt+F4");
 
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hConn, L"&Connection");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hConn, L"Connection");
 
     /* ============================================================= */
     /* 2. Scripts                                                    */
@@ -75,7 +75,7 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     if (active_scripts == 0) {
         AppendMenuW(hScripts, MF_GRAYED, 0, L"(No Active Scripts)");
     }
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hScripts, L"&Scripts");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hScripts, L"Scripts");
 
     /* ============================================================= */
     /* 3. View                                                       */
@@ -162,6 +162,24 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hPdp1Preset, MF_STRING, IDM_VIEW_PDP1_PRESET_FAST,     L"Historic Fast Decay (5s)");
     AppendMenuW(hPdp1Preset, MF_STRING, IDM_VIEW_PDP1_PRESET_MODERN,   L"Modern (Sharp dots, 2s)");
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hPdp1Preset, L"PDP-1 Display Mode");
+    AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_MODE_REAL_C64, L"Commodore 64 (VIC-II)");
+
+    HMENU hC64Preset = CreatePopupMenu();
+    AppendMenuW(hC64Preset, MF_STRING, IDM_VIEW_C64_PRESET_RF, L"Authentic RF / Composite");
+    AppendMenuW(hC64Preset, MF_STRING, IDM_VIEW_C64_PRESET_CRT, L"Commodore 1702 CRT Monitor");
+    AppendMenuW(hC64Preset, MF_STRING, IDM_VIEW_C64_PRESET_CRISP, L"Clean Crisp Hires");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hC64Preset, L"C64 Display Mode");
+
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_C64_BORDER, L"C64 Border Frame (12.5%)");
+
+    HMENU hC64Scheme = CreatePopupMenu();
+    AppendMenuW(hC64Scheme, MF_STRING, IDM_VIEW_C64_SCHEME_CLASSIC, L"Classic Blue (Two-Tone Default)");
+    AppendMenuW(hC64Scheme, MF_STRING, IDM_VIEW_C64_SCHEME_MC, L"C64 Multi-Color (16-Color VIC-II)");
+    AppendMenuW(hC64Scheme, MF_STRING, IDM_VIEW_C64_SCHEME_AMBER, L"Calibrated Amber Monitor (P40)");
+    AppendMenuW(hC64Scheme, MF_STRING, IDM_VIEW_C64_SCHEME_GREEN, L"Calibrated Green Monitor (P31)");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hC64Scheme, L"C64 Color Scheme");
+
 
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
 
@@ -175,7 +193,7 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hOverrideColor, MF_STRING, IDM_VIEW_COLOR_AMBER, L"Amber (P40)");
     AppendMenuW(hOverrideColor, MF_STRING, IDM_VIEW_COLOR_WHITE, L"White (P4)");
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hOverrideColor, L"Override Color");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hView, L"&View");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hView, L"View");
 
     /* ============================================================= */
     /* 4. Keyboard (Posizione tra View ed Edit)                       */
@@ -187,20 +205,20 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_KEYMAP_MANAGE, L"Manage Keyboard Profiles...");
     AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hKeyboard, MF_STRING, IDM_VIEW_KEYBOARD_REF, L"Keyboard Reference\tCtrl+K");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hKeyboard, L"&Keyboard");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hKeyboard, L"Keyboard");
 
     /* ============================================================= */
     /* 5. Edit                                                       */
     /* ============================================================= */
     HMENU hEdit = CreatePopupMenu();
-    AppendMenuW(hEdit, MF_STRING, IDM_EDIT_COPY_TEXT_VERBATIM, L"Copy All Text Verbatim\tCtrl+C");
+    AppendMenuW(hEdit, MF_STRING, IDM_EDIT_COPY_TEXT_VERBATIM, L"Copy All Text Verbatim");
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_COPY_TEXT_COMPACT, L"Copy All Text Compact\tCtrl+Shift+C");
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_COPY_SELECTED_TEXT, L"Copy Selected Text...\tCtrl+Shift+T");
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_COPY_SCREEN_IMAGE, L"Copy Screen Image");
     AppendMenuW(hEdit, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_PASTE, L"Paste Text\tCtrl+V");
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_CANCEL_PASTE, L"Cancel Paste\tCtrl+.");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hEdit, L"&Edit");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hEdit, L"Edit");
 
     /* ============================================================= */
     /* 5. Micro Tutor                                                */
@@ -208,7 +226,7 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     HMENU hMicroTutor = CreatePopupMenu();
     AppendMenuW(hMicroTutor, MF_STRING, IDM_TOOLS_BOOT_MTE, L"Load and Boot from MTE...");
     AppendMenuW(hMicroTutor, MF_STRING, IDM_TOOLS_MT_LOG, L"Enable Z80 Diagnostic Log");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hMicroTutor, L"&Micro Tutor");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hMicroTutor, L"Micro Tutor");
 
     /* ============================================================= */
     /* 6. Tools (Intatto)                                            */
@@ -217,14 +235,14 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hTools, MF_STRING, IDM_EDIT_LIVE_TEXT_BUFFER, L"Show Live Text Buffer\tCtrl+Shift+T");
     AppendMenuW(hTools, MF_STRING, IDM_TOOLS_DIAG_LOG, L"Enable Network Diagnostic Log");
     AppendMenuW(hTools, MF_STRING, IDM_TOOLS_RENDERER_LOG, L"Enable Renderer Performance Log");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hTools, L"&Tools");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hTools, L"Tools");
 
     /* ============================================================= */
     /* 7. Help                                                       */
     /* ============================================================= */
     HMENU hHelp = CreatePopupMenu();
     AppendMenuW(hHelp, MF_STRING, IDM_HELP_ABOUT, L"About PlatoLives...");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hHelp, L"&Help");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hHelp, L"Help");
 
     return hMenuBar;
 }
@@ -244,8 +262,9 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     else if (p->display_mode == 4) mode_id = IDM_VIEW_MODE_REAL_CRT;
     else if (p->display_mode == 5) mode_id = IDM_VIEW_MODE_REAL_TEKTRONIX;
     else if (p->display_mode == 6) mode_id = IDM_VIEW_MODE_REAL_PDP1;
+    else if (p->display_mode == 7) mode_id = IDM_VIEW_MODE_REAL_C64;
 
-    CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_PDP1, mode_id, MF_BYCOMMAND);
+    CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_C64, mode_id, MF_BYCOMMAND);
 
     CheckMenuItem(menu, IDM_VIEW_TEK_ERASE_FLASH, p->tek_erase_flash ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
     CheckMenuItem(menu, IDM_VIEW_TEK_ACCURATE_BG, p->tek_accurate_bg ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
@@ -269,6 +288,7 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
         EnableMenuItem(hView, 9, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
         bool isTek        = (p->display_mode == 5);
         bool isPDP1       = (p->display_mode == 6);
+        bool isC64        = (p->display_mode == 7);
 
         /* Posizione 10: CRT Distortion */
         EnableMenuItem(hView, 10, MF_BYPOSITION | (isCRT ? MF_ENABLED : MF_GRAYED));
@@ -280,9 +300,17 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
         EnableMenuItem(hView, 19, MF_BYPOSITION | (isPDP1 ? MF_ENABLED : MF_GRAYED));
         /* Posizione 20: PDP-1 Display Mode */
         EnableMenuItem(hView, 20, MF_BYPOSITION | (isPDP1 ? MF_ENABLED : MF_GRAYED));
+
+        /* Posizione 23: C64 Preset */
+        EnableMenuItem(hView, 23, MF_BYPOSITION | (isC64 ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 24: C64 Border */
+        EnableMenuItem(hView, 24, MF_BYPOSITION | (isC64 ? MF_ENABLED : MF_GRAYED));
+        /* Posizione 25: C64 Color Scheme */
+        EnableMenuItem(hView, 25, MF_BYPOSITION | (isC64 ? MF_ENABLED : MF_GRAYED));
+
         /* Posizione 25: Override Color (disabilitato in Crisp Color e Tektronix P31, abilitato su PDP-1) */
-        bool canOverrideColor = (p->display_mode != 3 && p->display_mode != 5);
-        EnableMenuItem(hView, 25, MF_BYPOSITION | (canOverrideColor ? MF_ENABLED : MF_GRAYED));
+        bool canOverrideColor = (p->display_mode != 3 && p->display_mode != 5 && p->display_mode != 7);
+        EnableMenuItem(hView, 30, MF_BYPOSITION | (canOverrideColor ? MF_ENABLED : MF_GRAYED));
     }
 
     /* 5. Micro Tutor (Indice 5 nella menubar): non disponibile su Tektronix 4014 (DVBST) */
@@ -380,6 +408,26 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
         CheckMenuRadioItem(hPdp1PresSub, IDM_VIEW_PDP1_PRESET_HISTORIC, IDM_VIEW_PDP1_PRESET_MODERN, pdp_pres_id, MF_BYCOMMAND);
     }
     CheckMenuRadioItem(menu, IDM_VIEW_PDP1_PRESET_HISTORIC, IDM_VIEW_PDP1_PRESET_MODERN, pdp_pres_id, MF_BYCOMMAND);
+
+    
+    /* C64 Presets Checkmark */
+    UINT c64_pres_id = IDM_VIEW_C64_PRESET_RF + p->c64_preset;
+    HMENU hC64PresSub = hView ? GetSubMenu(hView, 23) : NULL;
+    if (hC64PresSub) {
+        CheckMenuRadioItem(hC64PresSub, IDM_VIEW_C64_PRESET_RF, IDM_VIEW_C64_PRESET_CRISP, c64_pres_id, MF_BYCOMMAND);
+    }
+    CheckMenuRadioItem(menu, IDM_VIEW_C64_PRESET_RF, IDM_VIEW_C64_PRESET_CRISP, c64_pres_id, MF_BYCOMMAND);
+
+    /* C64 Border Checkmark */
+    CheckMenuItem(menu, IDM_VIEW_C64_BORDER, p->c64_border ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+
+    /* C64 Color Scheme Checkmark */
+    UINT c64_sch_id = IDM_VIEW_C64_SCHEME_CLASSIC + p->c64_color_scheme;
+    HMENU hC64SchSub = hView ? GetSubMenu(hView, 25) : NULL;
+    if (hC64SchSub) {
+        CheckMenuRadioItem(hC64SchSub, IDM_VIEW_C64_SCHEME_CLASSIC, IDM_VIEW_C64_SCHEME_GREEN, c64_sch_id, MF_BYCOMMAND);
+    }
+    CheckMenuRadioItem(menu, IDM_VIEW_C64_SCHEME_CLASSIC, IDM_VIEW_C64_SCHEME_GREEN, c64_sch_id, MF_BYCOMMAND);
 
     /* Phosphor Color Override */
     CheckMenuRadioItem(menu, IDM_VIEW_COLOR_DEFAULT, IDM_VIEW_COLOR_WHITE,

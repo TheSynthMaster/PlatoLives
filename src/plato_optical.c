@@ -1,5 +1,6 @@
 #include "plato/plato_optical.h"
 #include "plato/plato_pdp1.h"
+#include "plato/plato_c64.h"
 #include "plato/plato_tek_font.h"
 #include <stdlib.h>
 #include <string.h>
@@ -50,7 +51,11 @@ struct PLATOPlasmaState {
 
     /* Motore Fisico DEC PDP-1 Type 30 Precision CRT (1964) */
     pdp1_context_t *pdp1_ctx;
+    c64_context_t *c64_ctx;
     int pdp1_font_mode;
+    int c64_preset;
+    bool c64_border;
+    int c64_color_scheme;
 
     /* Motore Fisico Tektronix 4014 (DVBST) */
     float *tek_flare;       /* Energia transitoria del raggio (Transient Flare) */
@@ -97,6 +102,10 @@ static void plasmaFreeState(struct PLATOPlasmaState *ps) {
         pdp1_destroy(ps->pdp1_ctx);
         ps->pdp1_ctx = NULL;
     }
+    if (ps->c64_ctx) {
+        c64_destroy(ps->c64_ctx);
+        ps->c64_ctx = NULL;
+    }
     ps->tek_flare = ps->tek_stored = NULL;
     ps->gain = ps->energy = ps->source = ps->tmp = ps->local = ps->wide = NULL;
     ps->crisp = ps->logical = NULL;
@@ -136,6 +145,7 @@ static bool plasmaAllocState(struct PLATOPlasmaState *ps) {
     ps->tek_erase_time = 0.0;
     ps->tek_erase_grace_until = 0.0;
     ps->pdp1_ctx = pdp1_create();
+    ps->c64_ctx = c64_create();
     ps->pdp1_font_mode = 0;
     ps->tek_pacer_last_sec = 0.0;
     ps->tek_pacer_credit_bits = 0.0;
@@ -1631,6 +1641,7 @@ void plato_optical_invalidate(plato_optical_t *opt) {
         }
         opt->state->tek_erase_time = 0.0;
         opt->state->tek_erase_grace_until = 0.0;
+        opt->state->animateUntil = 1e12;
     }
 }
 
@@ -1661,7 +1672,8 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
         opt->state->crtBeamLevel != prof->crt_beam_level ||
         opt->state->phosphorColor != prof->phosphor_color ||
         opt->state->decayDuration != new_decay_dur ||
-        opt->state->crtDecayDuration != new_crt_decay_dur || opt->state->pdp1_font_mode != prof->pdp1_font) {
+        opt->state->crtDecayDuration != new_crt_decay_dur || opt->state->pdp1_font_mode != prof->pdp1_font ||
+        opt->state->c64_preset != prof->c64_preset || opt->state->c64_border != prof->c64_border || opt->state->c64_color_scheme != prof->c64_color_scheme) {
 
         opt->state->displayMode = prof->display_mode;
         opt->state->phosphorColor = prof->phosphor_color;
@@ -1674,12 +1686,16 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
         opt->state->crtBeamLevel = prof->crt_beam_level;
         opt->state->crtDistortion = prof->crt_distortion;
         opt->state->pdp1_font_mode = prof->pdp1_font;
+        opt->state->c64_preset = prof->c64_preset;
+        opt->state->c64_border = prof->c64_border;
+        opt->state->c64_color_scheme = prof->c64_color_scheme;
 
         opt->state->tilesInitialized = false; /* Forza re-inizializzazione e ridisegno di tutti i tile */
         opt->state->lastTime = 0.0;
         double dur = (prof->display_mode == 4) ? new_crt_decay_dur : new_decay_dur;
         if (prof->display_mode == 5) dur = 0.50;
         if (prof->display_mode == 6) dur = 1.00;
+        if (prof->display_mode == 7) dur = 0.20;
         if (dur < 0.10) dur = 0.10;
         opt->state->animateUntil = now_sec + dur;
     }
@@ -1687,7 +1703,7 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
     if (opt->state->decayTau < 0.001f) opt->state->decayTau = 0.001f;
     if (opt->state->crtDecayTau < 0.001f) opt->state->crtDecayTau = 0.001f;
 
-    bool was_dirty = term->fb.dirty;
+    bool was_dirty = term->fb.dirty || !opt->state->tilesInitialized;
     if (term->fb.dirty) {
         double dur = 0.0;
         if (prof->display_mode == 4) dur = opt->state->crtDecayDuration;
@@ -1738,6 +1754,10 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
             opt->state->tilesInitialized = true;
         }
         tektronixRender(opt, out_bgra, now_sec, prof);
+    } else if (prof->display_mode == 7) {
+        if (!opt->state->c64_ctx) opt->state->c64_ctx = c64_create();
+        c64_render(opt->state->c64_ctx, term, prof, out_bgra, now_sec);
+        opt->last_was_full = prof->c64_border;
     } else if (prof->display_mode == 6) {
         if (!opt->state->tilesInitialized) {
             pdp1_context_t *pdp = opt->state->pdp1_ctx;

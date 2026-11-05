@@ -8,6 +8,8 @@
 #include "plato/plato_graphics.h"
 #include "plato/plato_keyboard.h"
 #include "plato/plato_optical.h"
+#include "plato/plato_c64_font.h"
+#include "plato/plato_c64.h"
 #include "plato/plato_profile.h"
 #include "plato/plato_script.h"
 
@@ -69,6 +71,13 @@ FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
 - (void)setDisplayRealColorCRT;
 - (void)setDisplayRealTektronix;
 - (void)setDisplayRealPDP1;
+- (void)setDisplayRealC64;
+- (void)setC64Preset:(NSInteger)preset;
+- (NSInteger)c64Preset;
+- (void)setC64Border:(BOOL)enabled;
+- (BOOL)c64Border;
+- (void)setC64ColorScheme:(NSInteger)scheme;
+- (NSInteger)c64ColorScheme;
 - (void)setPDP1Font:(NSInteger)font;
 - (NSInteger)pdp1Font;
 - (void)setPDP1RefreshRate:(NSInteger)rate;

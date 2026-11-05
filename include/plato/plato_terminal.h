@@ -32,6 +32,11 @@ struct plato_terminal {
     plato_framebuffer_t fb;
     uint8_t *fb_pdp; /* Buffer dedicato DEC PDP-1 Type 30 (1024x1024) */
     bool fb_pdp_dirty;
+    uint8_t *fb_c64_gfx;        /* Buffer dedicato C64 VIC-II Hires Graphics (320x200) */
+    uint32_t *fb_c64_gfx_color; /* Colori grafica C64 (320x200) */
+    uint8_t *fb_c64_text;       /* Buffer dedicato C64 PETSCII Text (512x512) */
+    uint32_t *fb_c64_text_color;/* Colori testo C64 (512x512) */
+    bool fb_c64_dirty;
     int pdp1_font;   /* 0: 1961 Codeword, 1: 1964 Character */
     plato_font_t font;
     plato_protocol_decoder_t decoder;

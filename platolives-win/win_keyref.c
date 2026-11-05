@@ -32,7 +32,7 @@ static const wchar_t *g_keyref_text =
     L"----------------------------------------------------------------------\r\n"
     L"NEXT                Return / Enter / Ctrl+N\r\n"
     L"SHIFT-NEXT          Shift+Return / Shift+Ctrl+N\r\n"
-    L"BACK                Esc / Backspace / F8 / Ctrl+B\r\n"
+    L"BACK                Esc / F8 / Ctrl+B\r\n"
     L"SHIFT-BACK          Shift+Esc / Shift+F8 / Shift+Ctrl+B\r\n"
     L"STOP                F10 / F4 / Ctrl+S / Alt+S\r\n"
     L"SHIFT-STOP          Shift + any STOP shortcut\r\n"

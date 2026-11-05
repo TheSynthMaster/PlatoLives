@@ -49,6 +49,12 @@
 #define IDC_COMBO_PDP1_REFRESH   235
 #define IDC_LBL_PDP1_PRESET      236
 #define IDC_COMBO_PDP1_PRESET    237
+#define IDC_LBL_C64_PRESET       240
+#define IDC_COMBO_C64_PRESET     241
+#define IDC_LBL_C64_BORDER       242
+#define IDC_COMBO_C64_BORDER     243
+#define IDC_LBL_C64_SCHEME       244
+#define IDC_COMBO_C64_SCHEME     245
 
 typedef struct {
     HWND hwnd;
@@ -66,6 +72,9 @@ typedef struct {
     HWND hLblPdp1Font, hComboPdp1Font;
     HWND hLblPdp1Refresh, hComboPdp1Refresh;
     HWND hLblPdp1Preset, hComboPdp1Preset;
+    HWND hLblC64Preset, hComboC64Preset;
+    HWND hLblC64Border, hComboC64Border;
+    HWND hLblC64Scheme, hComboC64Scheme;
     HWND hChkFullscreen, hChkDefault, hChkScript, hEditScript;
     HWND hBtnNew, hBtnDelete, hBtnDefault, hBtnConnect, hBtnSave, hBtnClose;
 
@@ -108,7 +117,8 @@ static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
     bool isPlasma = (mode == 0 || mode == 2); /* Real Plasma o Split */
     bool isCRT    = (mode == 4);                 /* Real Color CRT */
     bool isTek    = (mode == 5);                 /* Real Tektronix 4014 (DVBST) */
-    bool isPdp    = (mode == 6);                 /* DEC PDP-1 Type 30 (1964) */
+    bool isPdp    = (mode == 6);
+    bool isC64    = (mode == 7);
 
     ShowWindow(ctx->hLblPlasmaDecay, isPlasma ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hComboPlasmaDecay, isPlasma ? SW_SHOW : SW_HIDE);
@@ -134,13 +144,20 @@ static void dlg_update_visibility(dlg_ctx_t *ctx, int mode) {
     ShowWindow(ctx->hLblPdp1Preset, isPdp ? SW_SHOW : SW_HIDE);
     ShowWindow(ctx->hComboPdp1Preset, isPdp ? SW_SHOW : SW_HIDE);
 
-    /* Phosphor Color nascosto in Tektronix (5) e disabilitato in Crisp Color (3) */
-    ShowWindow(ctx->hLblPhosphor, isTek ? SW_HIDE : SW_SHOW);
-    ShowWindow(ctx->hComboPhosphor, isTek ? SW_HIDE : SW_SHOW);
-    if (!isTek) {
-        bool canOverride = (mode != 3);
-        EnableWindow(ctx->hLblPhosphor, canOverride);
-        EnableWindow(ctx->hComboPhosphor, canOverride);
+    ShowWindow(ctx->hLblC64Preset, isC64 ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hComboC64Preset, isC64 ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hLblC64Border, isC64 ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hComboC64Border, isC64 ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hLblC64Scheme, isC64 ? SW_SHOW : SW_HIDE);
+    ShowWindow(ctx->hComboC64Scheme, isC64 ? SW_SHOW : SW_HIDE);
+
+    /* Phosphor Color nascosto in Tektronix (5), C64 (7), CRT (4) e disabilitato in Crisp Color (3) */
+    bool hidePhosphor = (isTek || isC64 || isCRT || mode == 3);
+    ShowWindow(ctx->hLblPhosphor, hidePhosphor ? SW_HIDE : SW_SHOW);
+    ShowWindow(ctx->hComboPhosphor, hidePhosphor ? SW_HIDE : SW_SHOW);
+    if (!hidePhosphor) {
+        EnableWindow(ctx->hLblPhosphor, TRUE);
+        EnableWindow(ctx->hComboPhosphor, TRUE);
     }
 }
 
@@ -161,6 +178,10 @@ static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
     SendMessage(ctx->hComboPdp1Refresh, CB_SETCURSEL, (WPARAM)index_for_pdp1_refresh(p->pdp1_refresh_rate), 0);
     int p_pres = (p->pdp1_preset >= 0 && p->pdp1_preset <= 2) ? p->pdp1_preset : 0;
     SendMessage(ctx->hComboPdp1Preset, CB_SETCURSEL, (WPARAM)p_pres, 0);
+
+    SendMessage(ctx->hComboC64Preset, CB_SETCURSEL, (WPARAM)((p->c64_preset >= 0 && p->c64_preset <= 2) ? p->c64_preset : 0), 0);
+    SendMessage(ctx->hComboC64Border, CB_SETCURSEL, (WPARAM)(p->c64_border ? 0 : 1), 0);
+    SendMessage(ctx->hComboC64Scheme, CB_SETCURSEL, (WPARAM)((p->c64_color_scheme >= 0 && p->c64_color_scheme <= 3) ? p->c64_color_scheme : 0), 0);
 
     /* Plasma */
     int d_idx = index_for_ms(g_decay_ms_values, 6, p->persistence_ms);
@@ -246,6 +267,13 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
     p->pdp1_refresh_rate = (pr_idx >= 0 && pr_idx < 6) ? g_pdp1_refresh_values[pr_idx] : 45;
     int pp_idx = (int)SendMessage(ctx->hComboPdp1Preset, CB_GETCURSEL, 0, 0);
     p->pdp1_preset = (pp_idx >= 0 && pp_idx <= 2) ? pp_idx : 0;
+
+    int c64p_idx = (int)SendMessage(ctx->hComboC64Preset, CB_GETCURSEL, 0, 0);
+    p->c64_preset = (c64p_idx >= 0 && c64p_idx <= 2) ? c64p_idx : 0;
+    int c64b_idx = (int)SendMessage(ctx->hComboC64Border, CB_GETCURSEL, 0, 0);
+    p->c64_border = (c64b_idx == 0);
+    int c64s_idx = (int)SendMessage(ctx->hComboC64Scheme, CB_GETCURSEL, 0, 0);
+    p->c64_color_scheme = (c64s_idx >= 0 && c64s_idx <= 3) ? c64s_idx : 0;
 
     int d_idx = (int)SendMessage(ctx->hComboPlasmaDecay, CB_GETCURSEL, 0, 0);
     p->persistence_ms = (d_idx >= 0 && d_idx < 6) ? g_decay_ms_values[d_idx] : 100;
@@ -596,6 +624,7 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Color CRT");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Real Tektronix 4014 (DVBST)");
     SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"DEC PDP-1 Type 30 (1964)");
+    SendMessageW(g_dlg.hComboMode, CB_ADDSTRING, 0, (LPARAM)L"Commodore 64 (VIC-II)");
 
     g_dlg.hLblPhosphor = CreateWindowW(L"STATIC", L"Phosphor Color:", WS_CHILD | WS_VISIBLE, rx + 420, 108, 160, 18, hwnd, (HMENU)IDC_LBL_PHOSPHOR_COLOR, wc.hInstance, NULL);
     g_dlg.hComboPhosphor = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 420, 126, 400, 150, hwnd, (HMENU)IDC_COMBO_PHOSPHOR_COLOR, wc.hInstance, NULL);
@@ -678,6 +707,25 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboPdp1Preset, CB_ADDSTRING, 0, (LPARAM)L"Historic (15s decay)");
     SendMessageW(g_dlg.hComboPdp1Preset, CB_ADDSTRING, 0, (LPARAM)L"Historic Fast Decay (5s)");
     SendMessageW(g_dlg.hComboPdp1Preset, CB_ADDSTRING, 0, (LPARAM)L"Modern (Sharp dots, 2s)");
+
+        /* Controlli Commodore 64 VIC-II - Layout 3 Colonne */
+    g_dlg.hLblC64Preset = CreateWindowW(L"STATIC", L"C64 Display Mode:", WS_CHILD, rx, 156, 260, 18, hwnd, (HMENU)IDC_LBL_C64_PRESET, wc.hInstance, NULL);
+    g_dlg.hComboC64Preset = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_C64_PRESET, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboC64Preset, CB_ADDSTRING, 0, (LPARAM)L"Authentic RF / Composite");
+    SendMessageW(g_dlg.hComboC64Preset, CB_ADDSTRING, 0, (LPARAM)L"Commodore 1702 CRT Monitor");
+    SendMessageW(g_dlg.hComboC64Preset, CB_ADDSTRING, 0, (LPARAM)L"Clean Crisp Hires");
+
+    g_dlg.hLblC64Border = CreateWindowW(L"STATIC", L"C64 Border Frame:", WS_CHILD, rx + 280, 156, 260, 18, hwnd, (HMENU)IDC_LBL_C64_BORDER, wc.hInstance, NULL);
+    g_dlg.hComboC64Border = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx + 280, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_C64_BORDER, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboC64Border, CB_ADDSTRING, 0, (LPARAM)L"Enabled (12.5% Frame)");
+    SendMessageW(g_dlg.hComboC64Border, CB_ADDSTRING, 0, (LPARAM)L"Disabled (Full Display)");
+
+    g_dlg.hLblC64Scheme = CreateWindowW(L"STATIC", L"C64 Color Scheme:", WS_CHILD, rx + 560, 156, 260, 18, hwnd, (HMENU)IDC_LBL_C64_SCHEME, wc.hInstance, NULL);
+    g_dlg.hComboC64Scheme = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx + 560, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_C64_SCHEME, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboC64Scheme, CB_ADDSTRING, 0, (LPARAM)L"Classic Blue (Two-Tone)");
+    SendMessageW(g_dlg.hComboC64Scheme, CB_ADDSTRING, 0, (LPARAM)L"C64 Multi-Color (16-Color)");
+    SendMessageW(g_dlg.hComboC64Scheme, CB_ADDSTRING, 0, (LPARAM)L"Amber Monitor (P40)");
+    SendMessageW(g_dlg.hComboC64Scheme, CB_ADDSTRING, 0, (LPARAM)L"Green Monitor (P31)");
 
     /* Checkbox Opzioni */
     g_dlg.hChkFullscreen = CreateWindowW(L"BUTTON", L"Launch in Full Screen", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 206, 240, 18, hwnd, (HMENU)IDC_CHK_FULLSCREEN, wc.hInstance, NULL);

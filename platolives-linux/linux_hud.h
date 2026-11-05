@@ -18,6 +18,9 @@ typedef struct {
     int pdp1_font;
     int pdp1_refresh_rate;
     int pdp1_preset;
+    int c64_preset;
+    bool c64_border;
+    int c64_color_scheme;
     char user_info[128];
     bool connected;
 } linux_hud_telemetry_t;

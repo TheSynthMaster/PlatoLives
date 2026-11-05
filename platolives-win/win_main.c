@@ -28,6 +28,7 @@
 #include "plato/plato_transport.h"
 #include "plato/plato_protocol.h"
 #include "plato/plato_keyboard.h"
+#include "plato/plato_c64.h"
 #include "plato/plato_ringbuf.h"
 #include "plato/plato_graphics.h"
 #include "plato/plato_optical.h"
@@ -61,7 +62,14 @@ static const char *g_hlsl_source =
 "SamplerState g_sampler : register(s0);\n"
 "\n"
 "float4 ps_crisp(VS_OUTPUT input) : SV_TARGET {\n"
-"    float4 c = g_texture.Sample(g_sampler, input.uv);\n"
+"    float dy = fwidth(input.uv.y);\n"
+"    if (dy > 1.25f / 2048.0f) {\n"
+"        float4 c1 = g_texture.Sample(g_sampler, input.uv - float2(0, dy * 0.375f));\n"
+"        float4 c2 = g_texture.Sample(g_sampler, input.uv - float2(0, dy * 0.125f));\n"
+"        float4 c3 = g_texture.Sample(g_sampler, input.uv + float2(0, dy * 0.125f));\n"
+"        float4 c4 = g_texture.Sample(g_sampler, input.uv + float2(0, dy * 0.375f));\n"
+"        return (c1 + c2 + c3 + c4) * 0.25f;\n"
+"    }\n"
 "    return g_texture.Sample(g_sampler, input.uv);\n"
 "}\n";
 
@@ -501,6 +509,15 @@ static void win_render_hud_overlay(win_app_t *app, double now_sec, bool is_anima
         snprintf(hud_text, sizeof(hud_text),
                  "%sFPS     %5.1f\nSPEED   %s\nQUEUE   %d%% (%u/%d)\nCPU     %5.1f%%",
                  user_info, fps_total, baud_str, (int)(q_pct + 0.5), q_count, MAX_VECTOR_EVENTS, cpu_val);
+        } else if (mode == 7) {
+        const char *presetStr = (app->active_profile.c64_preset == 0) ? "RF COMP" :
+                                (app->active_profile.c64_preset == 1) ? "1702 CRT" : "CRISP";
+        const char *borderStr = app->active_profile.c64_border ? "ENABLED" : "DISABLED";
+        const char *palStr = (app->active_profile.c64_color_scheme == 1) ? "VIC-II 16C" :
+                             (app->active_profile.c64_color_scheme == 2) ? "AMBER P40" :
+                             (app->active_profile.c64_color_scheme == 3) ? "GREEN P31" : "CLASSIC";
+        snprintf(hud_text, sizeof(hud_text), "%sFPS     %5.1f\nMODE    C64 %s\nBORDER  %s\nPALETTE %s\nCPU     %5.1f%%",
+                 user_info, fps_total, presetStr, borderStr, palStr, cpu_val);
     } else if (mode == 6) {
         char font_name[32];
         strcpy(font_name, (app->active_profile.pdp1_font == 1) ? "1964 CHAR" : "1961 CODE");
@@ -712,7 +729,8 @@ static void win_render_frame(win_app_t *app) {
     ID3D11DeviceContext_PSSetShader(app->context, app->ps_crisp, NULL, 0);
     ID3D11DeviceContext_PSSetShaderResources(app->context, 0, 1, &app->srv);
     int cur_mode = app->active_profile.display_mode;
-    ID3D11SamplerState *cur_sampler = (cur_mode == 1 || cur_mode == 3) ? app->sampler_point : app->sampler_linear;
+    bool use_point = (cur_mode == 1 || cur_mode == 3 || (cur_mode == 7 && app->active_profile.c64_preset == 2));
+    ID3D11SamplerState *cur_sampler = use_point ? app->sampler_point : app->sampler_linear;
     ID3D11DeviceContext_PSSetSamplers(app->context, 0, 1, &cur_sampler);
 
     ID3D11DeviceContext_Draw(app->context, 3, 0);
@@ -1070,7 +1088,7 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data) {
     app->active_profile = *p;
     app->display_mode = p->display_mode;
     app->distortion = p->plasma_distortion;
-    plato_terminal_set_color_mode(&app->terminal, (p->display_mode == 3 || p->display_mode == 4));
+    plato_terminal_set_color_mode(&app->terminal, (p->display_mode == 3 || p->display_mode == 4 || p->display_mode == 7));
     plato_terminal_set_palette(&app->terminal, (plato_palette_t)p->phosphor_color);
     plato_optical_invalidate(app->optical);
 
@@ -1101,7 +1119,6 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
     ev.ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     ev.alt   = (GetKeyState(VK_MENU) & 0x8000) != 0;
 
-    /* Durante l'esecuzione dello script, blocca tutto tranne Cancel Script (Ctrl+Shift+X) */
     if (app->script_runner && plato_script_is_running(app->script_runner)) {
         if (ev.ctrl && ev.shift && !ev.alt && (wParam == 'X' || wParam == 'x')) {
             plato_script_stop(app->script_runner);
@@ -1109,7 +1126,6 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
         return;
     }
 
-    /* Controllo Hotkey Script Personalizzati */
     if (app->script_list && app->script_list->count > 0) {
         uint32_t current_mods = 0;
         if (ev.ctrl)  current_mods |= PLATO_HOTKEY_MOD_CTRL;
@@ -1126,7 +1142,48 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
         }
     }
 
-    if (ev.alt && wParam == VK_RETURN) { win_toggle_fullscreen(app); return; }
+    switch (wParam) {
+        case VK_F1:  ev.vkey = PLATO_VKEY_F1; break;
+        case VK_F2:  ev.vkey = PLATO_VKEY_F2; break;
+        case VK_F3:  ev.vkey = PLATO_VKEY_F3; break;
+        case VK_F4:  ev.vkey = PLATO_VKEY_F4; break;
+        case VK_F5:  ev.vkey = PLATO_VKEY_F5; break;
+        case VK_F6:  ev.vkey = PLATO_VKEY_F6; break;
+        case VK_F7:  ev.vkey = PLATO_VKEY_F7; break;
+        case VK_F8:  ev.vkey = PLATO_VKEY_F8; break;
+        case VK_F9:  ev.vkey = PLATO_VKEY_F9; break;
+        case VK_F10: ev.vkey = PLATO_VKEY_F10; break;
+        case VK_LEFT:   ev.vkey = PLATO_VKEY_LEFT; break;
+        case VK_RIGHT:  ev.vkey = PLATO_VKEY_RIGHT; break;
+        case VK_UP:     ev.vkey = PLATO_VKEY_UP; break;
+        case VK_DOWN:   ev.vkey = PLATO_VKEY_DOWN; break;
+        case VK_PRIOR:  ev.vkey = PLATO_VKEY_PAGEUP; break;
+        case VK_NEXT:   ev.vkey = PLATO_VKEY_PAGEDOWN; break;
+        case VK_RETURN: ev.vkey = PLATO_VKEY_RETURN; break;
+        case VK_BACK:   ev.vkey = PLATO_VKEY_BACKSPACE; break;
+        case VK_ESCAPE: ev.vkey = PLATO_VKEY_ESCAPE; break;
+        case VK_TAB:    ev.vkey = PLATO_VKEY_TAB; break;
+        default:
+            if (wParam >= 'A' && wParam <= 'Z') {
+                ev.unmod_codepoint = (uint32_t)(wParam - 'A' + 'a');
+            } else if (wParam >= '0' && wParam <= '9') {
+                ev.unmod_codepoint = (uint32_t)wParam;
+            }
+            break;
+    }
+
+    /* PRECEDENZA ASSOLUTA PLATO: Valutiamo l'evento nativo prima degli shortcuts UI */
+    bool handled = false;
+    if (ev.vkey != PLATO_VKEY_NONE || ev.unmod_codepoint != 0) {
+        handled = plato_keyboard_dispatch(&app->keyboard_state, &app->terminal, &ev, win_get_time_sec());
+    }
+
+    if (handled) return;
+
+    /* FALLBACK: Shortcuts UI eseguiti SOLO se PLATO non li ha consumati */
+    if (wParam == VK_F11 || (ev.alt && wParam == VK_RETURN)) { win_toggle_fullscreen(app); return; }
+    if (wParam == VK_F12) { app->show_fps_hud = !app->show_fps_hud; return; }
+    
     if (ev.ctrl && !ev.shift && !ev.alt) {
         if (wParam == 'N') { win_launch_instance(NULL); return; }
         if (wParam == 'C') { win_copy_text_to_clipboard(app, false); return; }
@@ -1139,42 +1196,6 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
         if (wParam == 'C') { win_copy_text_to_clipboard(app, true); return; }
         if (wParam == 'T') { win_text_buffer_show(app->hwnd, &app->terminal); return; }
         if (wParam == 'G') { SendMessage(app->hwnd, WM_COMMAND, MAKEWPARAM(IDM_TOOLS_CYCLE_ARROW_MODE, 0), 0); return; }
-    }
-
-    switch (wParam) {
-        case VK_F1:  ev.vkey = PLATO_VKEY_F1; break;
-        case VK_F2:  ev.vkey = PLATO_VKEY_F2; break;
-        case VK_F3:  ev.vkey = PLATO_VKEY_F3; break;
-        case VK_F4:  ev.vkey = PLATO_VKEY_F4; break;
-        case VK_F5:  ev.vkey = PLATO_VKEY_F5; break;
-        case VK_F6:  ev.vkey = PLATO_VKEY_F6; break;
-        case VK_F7:  ev.vkey = PLATO_VKEY_F7; break;
-        case VK_F8:  ev.vkey = PLATO_VKEY_F8; break;
-        case VK_F9:  ev.vkey = PLATO_VKEY_F9; break;
-        case VK_F10: ev.vkey = PLATO_VKEY_F10; break;
-        case VK_F11: win_toggle_fullscreen(app); return;
-        case VK_F12: app->show_fps_hud = !app->show_fps_hud; return;
-        case VK_LEFT:   ev.vkey = PLATO_VKEY_LEFT; break;
-        case VK_RIGHT:  ev.vkey = PLATO_VKEY_RIGHT; break;
-        case VK_UP:     ev.vkey = PLATO_VKEY_UP; break;
-        case VK_DOWN:   ev.vkey = PLATO_VKEY_DOWN; break;
-        case VK_PRIOR:  ev.vkey = PLATO_VKEY_PAGEUP; break;
-        case VK_NEXT:   ev.vkey = PLATO_VKEY_PAGEDOWN; break;
-        case VK_RETURN: ev.vkey = PLATO_VKEY_RETURN; break;
-        case VK_BACK:   ev.vkey = PLATO_VKEY_BACKSPACE; break;
-        case VK_ESCAPE: ev.vkey = PLATO_VKEY_ESCAPE; break;
-        case VK_TAB:    ev.vkey = PLATO_VKEY_TAB; break;
-        default:
-            if (ev.ctrl && wParam >= 'A' && wParam <= 'Z') {
-                ev.unmod_codepoint = (uint32_t)(wParam - 'A' + 'a');
-            } else if (ev.ctrl && wParam >= '0' && wParam <= '9') {
-                ev.unmod_codepoint = (uint32_t)wParam;
-            }
-            break;
-    }
-
-    if (ev.vkey != PLATO_VKEY_NONE || ev.unmod_codepoint != 0) {
-        plato_keyboard_dispatch(&app->keyboard_state, &app->terminal, &ev, win_get_time_sec());
     }
 }
 
@@ -1210,7 +1231,7 @@ static void win_handle_lbuttondown(win_app_t *app, LPARAM lParam) {
         int plato_y = 511 - py;
 
         plato_profile_t *cur_p = &app->profile_list.profiles[app->current_profile_idx];
-        plato_optical_unwarp_touch(&plato_x, &plato_y, app->display_mode, cur_p->plasma_distortion, cur_p->crt_distortion);
+        if (app->display_mode == 7) { int cx = plato_x * 4, cy = plato_y * 4; c64_unwarp_touch(&cx, &cy, cur_p->c64_border); plato_x = cx; plato_y = cy; } else { plato_optical_unwarp_touch(&plato_x, &plato_y, app->display_mode, cur_p->plasma_distortion, cur_p->crt_distortion); }
 
         if (plato_x < 0) plato_x = 0;
         if (plato_x >= PLATO_WIDTH) plato_x = PLATO_WIDTH - 1;
@@ -1227,7 +1248,17 @@ win_theme_colors_t win_get_current_theme_colors(void) {
     int mode = g_app.active_profile.display_mode;
     int phosphor = g_app.active_profile.phosphor_color;
 
-    if (mode == 5 || phosphor == 1) { /* Tektronix o Green P31 */
+        if (mode == 7) { /* Commodore 64 (VIC-II) */
+        c.normal    = RGB(240, 240, 255); /* Bianco C64 brillante per testo attivo, dropdown e menu abilitati */
+        c.bright    = RGB(255, 255, 255); /* Bianco puro per selezione / hover */
+        c.disabled  = RGB(120, 110, 175); /* Lavanda smorzata / scura per voci di menu disabilitate */
+        c.muted     = RGB(165, 155, 215); /* Tonalità secondaria */
+        c.dim       = RGB(120, 110, 175); /* Lavanda smorzata per pulsanti disabilitati */
+        c.bg_dark   = RGB(66, 52, 144);   /* #423490 (C64 Dark Blue) */
+        c.bg_box    = RGB(88, 72, 168);   /* #5848A8 (C64 Box Blue) */
+        c.hover_bg  = RGB(105, 90, 195);  /* Evidenziazione hover chiara e visibile */
+        c.border    = RGB(110, 95, 190);
+    } else if (mode == 5 || phosphor == 1) { /* Tektronix o Green P31 */
         c.normal    = RGB(51, 255, 51);
         c.bright    = RGB(120, 255, 120);
         c.disabled  = RGB(25, 110, 25);
@@ -1551,7 +1582,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     if (data->hSubMenu) {
                         RECT rcArrow = rc;
                         rcArrow.right -= 10;
-                        SetTextColor(hdc, PLATO_PLASMA_COLOR);
+                        COLORREF arrCol = is_dis ? PLATO_PLASMA_DISABLED : (is_sel ? PLATO_PLASMA_BRIGHT : PLATO_PLASMA_COLOR);
+                        SetTextColor(hdc, arrCol);
                         DrawTextW(hdc, L"\x203A", -1, &rcArrow, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
                     }
 
@@ -1718,7 +1750,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             }
 
             /* Menu Display Modes: 0: Real Plasma, 1: Crisp Mono, 2: Split Mono, 3: Crisp Color, 4: Real CRT, 5: Real Tektronix, 6: Real PDP-1 */
-            if (cmdId >= IDM_VIEW_MODE_REAL_PLASMA && cmdId <= IDM_VIEW_MODE_REAL_PDP1) {
+            if (cmdId >= IDM_VIEW_MODE_REAL_PLASMA && cmdId <= IDM_VIEW_MODE_REAL_C64) {
                 int new_mode = g_app.active_profile.display_mode;
                 if (cmdId == IDM_VIEW_MODE_REAL_PLASMA) new_mode = 0;
                 else if (cmdId == IDM_VIEW_MODE_CRISP_MONO) new_mode = 1;
@@ -1727,13 +1759,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 else if (cmdId == IDM_VIEW_MODE_REAL_CRT) new_mode = 4;
                 else if (cmdId == IDM_VIEW_MODE_REAL_TEKTRONIX) new_mode = 5;
                 else if (cmdId == IDM_VIEW_MODE_REAL_PDP1) new_mode = 6;
+                else if (cmdId == IDM_VIEW_MODE_REAL_C64) new_mode = 7;
 
                 if (new_mode == g_app.active_profile.display_mode) {
                     return 0;
                 }
 
-                bool cur_is_color = (g_app.active_profile.display_mode == 3 || g_app.active_profile.display_mode == 4);
-                bool new_is_color = (new_mode == 3 || new_mode == 4);
+                bool cur_is_color = (g_app.active_profile.display_mode == 3 || g_app.active_profile.display_mode == 4 || g_app.active_profile.display_mode == 7);
+                bool new_is_color = (new_mode == 3 || new_mode == 4 || new_mode == 7);
                 bool is_connected = (g_app.transport && g_app.transport->connected);
 
                 if (is_connected && (cur_is_color != new_is_color)) {
@@ -1748,6 +1781,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     g_app.display_mode = new_mode;
                     win_connect_profile(&g_app.active_profile, &g_app);
                     plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                     win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                          g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                     win_refresh_window_theme(hwnd);
@@ -1758,6 +1792,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 g_app.display_mode = new_mode;
                 plato_terminal_set_color_mode(&g_app.terminal, new_is_color);
                 plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 win_refresh_window_theme(hwnd);
@@ -1768,6 +1803,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 int font_idx = (cmdId == IDM_VIEW_PDP1_FONT_1964) ? 1 : 0;
                 g_app.active_profile.pdp1_font = font_idx;
                 plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 win_refresh_window_theme(hwnd);
@@ -1779,6 +1815,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 const int rates[] = { 60, 45, 30, 15, 10, 5 };
                 g_app.active_profile.pdp1_refresh_rate = rates[cmdId - IDM_VIEW_PDP1_REFRESH_60];
                 plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
@@ -1788,6 +1825,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             if (cmdId >= IDM_VIEW_PDP1_PRESET_HISTORIC && cmdId <= IDM_VIEW_PDP1_PRESET_MODERN) {
                 g_app.active_profile.pdp1_preset = cmdId - IDM_VIEW_PDP1_PRESET_HISTORIC;
                 plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
@@ -1796,6 +1834,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             if (cmdId == IDM_VIEW_TEK_ERASE_FLASH) {
                 g_app.active_profile.tek_erase_flash = !g_app.active_profile.tek_erase_flash;
                 plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
@@ -1804,11 +1843,43 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             if (cmdId == IDM_VIEW_TEK_ACCURATE_BG) {
                 g_app.active_profile.tek_accurate_bg = !g_app.active_profile.tek_accurate_bg;
                 plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 return 0;
             }
 
+            
+            /* Menu C64 Display Mode / Presets */
+            if (cmdId >= IDM_VIEW_C64_PRESET_RF && cmdId <= IDM_VIEW_C64_PRESET_CRISP) {
+                g_app.active_profile.c64_preset = cmdId - IDM_VIEW_C64_PRESET_RF;
+                plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                return 0;
+            }
+
+            /* Menu C64 Border */
+            if (cmdId == IDM_VIEW_C64_BORDER) {
+                g_app.active_profile.c64_border = !g_app.active_profile.c64_border;
+                plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                return 0;
+            }
+
+            /* Menu C64 Color Scheme */
+            if (cmdId >= IDM_VIEW_C64_SCHEME_CLASSIC && cmdId <= IDM_VIEW_C64_SCHEME_GREEN) {
+                g_app.active_profile.c64_color_scheme = cmdId - IDM_VIEW_C64_SCHEME_CLASSIC;
+                plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
+                win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
+                                     g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
+                win_refresh_window_theme(hwnd);
+                return 0;
+            }
             /* Menu Tektronix Connection Speed */
             if (cmdId >= IDM_VIEW_TEK_SPEED_INSTANT && cmdId <= IDM_VIEW_TEK_SPEED_9600) {
                 const int speeds[] = { 0, 110, 150, 300, 600, 1200, 2400, 4800, 9600 };
@@ -1867,6 +1938,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 g_app.active_profile.phosphor_color = new_col;
                 plato_terminal_set_palette(&g_app.terminal, (plato_palette_t)new_col);
                 plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
                                      g_app.diag_log, g_app.renderer_log, g_app.is_fullscreen, &g_app.profile_list, g_app.current_profile_idx);
                 win_refresh_window_theme(hwnd);
@@ -1957,6 +2029,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 case IDM_VIEW_FPS_HUD:
                     g_app.show_fps_hud = !g_app.show_fps_hud;
                     plato_optical_invalidate(g_app.optical);
+                g_app.terminal.fb.dirty = true;
                     return 0;
                 case IDM_TOOLS_SAVE_SCREEN_TEXT:
                     win_copy_screen_text(&g_app);
@@ -2044,6 +2117,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         case WM_LBUTTONDOWN:
             win_handle_lbuttondown(&g_app, lParam);
             return 0;
+        case WM_SYSCOMMAND:
+            if ((wParam & 0xFFF0) == SC_KEYMENU) {
+                return 0; /* Impedisce ad Alt/Alt+Key di agganciare la barra menu */
+            }
+            break;
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
             win_handle_keydown(&g_app, wParam, lParam);

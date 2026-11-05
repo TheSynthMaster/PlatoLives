@@ -99,13 +99,22 @@ void plato_terminal_reset(plato_terminal_t *term) {
     plato_protocol_init(&term->decoder);
     plato_microtutor_init(&term->mt, term);
     plato_fb_clear(&term->fb);
-    if (!term->fb_pdp) {
-        term->fb_pdp = (uint8_t *)calloc(1024 * 1024, sizeof(uint8_t));
+    if (!term->fb_pdp) term->fb_pdp = (uint8_t *)calloc(1024 * 1024, 1);
+    else memset(term->fb_pdp, 0, 1024 * 1024);
     term->fb_pdp_dirty = true;
-    } else {
-        memset(term->fb_pdp, 0, 1024 * 1024);
-        term->fb_pdp_dirty = true;
-    }
+
+    if (!term->fb_c64_gfx) term->fb_c64_gfx = (uint8_t *)calloc(320 * 200, 1);
+    else memset(term->fb_c64_gfx, 0, 320 * 200);
+
+    if (!term->fb_c64_gfx_color) term->fb_c64_gfx_color = (uint32_t *)calloc(320 * 200, sizeof(uint32_t));
+    else memset(term->fb_c64_gfx_color, 0, 320 * 200 * sizeof(uint32_t));
+
+    if (!term->fb_c64_text) term->fb_c64_text = (uint8_t *)calloc(512 * 512, 1);
+    else memset(term->fb_c64_text, 0, 512 * 512);
+
+    if (!term->fb_c64_text_color) term->fb_c64_text_color = (uint32_t *)calloc(512 * 512, sizeof(uint32_t));
+    else memset(term->fb_c64_text_color, 0, 512 * 512 * sizeof(uint32_t));
+    term->fb_c64_dirty = true;
     plato_terminal_clear_text(term);
 }
 
@@ -136,6 +145,11 @@ void plato_terminal_init(plato_terminal_t *term) {
     plato_fb_init(&term->fb);
     term->fb_pdp = (uint8_t *)calloc(1024 * 1024, sizeof(uint8_t));
     term->fb_pdp_dirty = true;
+    term->fb_c64_gfx = (uint8_t *)calloc(320 * 200, sizeof(uint8_t));
+    term->fb_c64_gfx_color = (uint32_t *)calloc(320 * 200, sizeof(uint32_t));
+    term->fb_c64_text = (uint8_t *)calloc(512 * 512, sizeof(uint8_t));
+    term->fb_c64_text_color = (uint32_t *)calloc(512 * 512, sizeof(uint32_t));
+    term->fb_c64_dirty = true;
     term->pdp1_font = 0;
     plato_font_init(&term->font);
     plato_protocol_init(&term->decoder);
