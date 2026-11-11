@@ -16,13 +16,7 @@ bin/
 # Backup locali e snapshot
 old/
 
-# Script personali e comandi remoti
-comandi-remoti.txt
-invia.sh
-lancia_remoto.sh
-merge_c_h.sh
-versioning.sh
-upgrade.py
+# Cache Python
 *.pyc
 
 # Screenshot e media locali
