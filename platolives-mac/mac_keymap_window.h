@@ -10,6 +10,7 @@
 
 @interface PLATOKeyboardProfilesWindowController : NSWindowController <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate>
 @property (nonatomic, weak) id<PLATOKeyboardProfilesDelegate> delegate;
+@property (nonatomic, strong) NSButton *doubleTapCheckbox;
 @property (nonatomic, assign) plato_keymap_manager_t *keymapManager;
 
 - (instancetype)initWithKeymapManager:(plato_keymap_manager_t *)mgr;

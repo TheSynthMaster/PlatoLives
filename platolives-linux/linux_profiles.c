@@ -390,7 +390,7 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             np.pdp1_refresh_rate = 45;
             np.pdp1_preset = 0;
             np.c64_preset = 0;
-            np.c64_border = true;
+            np.c64_border = 1;
             np.c64_color_scheme = 0;
             np.tek_baud_rate = 2400;
             np.tek_erase_flash = true;
@@ -556,12 +556,16 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             }
 
             /* C64 Border at Y=226 */
-            if (pt_in_rect(mx, my, 340, 226, 140, 24)) {
-                g_edit_profile.c64_border = true;
+            if (pt_in_rect(mx, my, 340, 226, 90, 24)) {
+                g_edit_profile.c64_border = 0;
                 return;
             }
-            if (pt_in_rect(mx, my, 486, 226, 140, 24)) {
-                g_edit_profile.c64_border = false;
+            if (pt_in_rect(mx, my, 436, 226, 90, 24)) {
+                g_edit_profile.c64_border = 1;
+                return;
+            }
+            if (pt_in_rect(mx, my, 532, 226, 90, 24)) {
+                g_edit_profile.c64_border = 2;
                 return;
             }
 
@@ -585,6 +589,14 @@ void linux_profiles_handle_event(const SDL_Event *ev) {
             return;
         }
         if (pt_in_rect(mx, my, 670, 292, 180, 22)) { g_edit_profile.startup_script_enabled = !g_edit_profile.startup_script_enabled; return; }
+
+        /* Click Window Size a Y=292 (1x, 2x, 3x, 4x) */
+        for (int s = 1; s <= 4; s++) {
+            if (pt_in_rect(mx, my, 860 + (s - 1) * 28, 292, 24, 20)) {
+                g_edit_profile.window_scale = s;
+                return;
+            }
+        }
 
         /* Click Script Text Area */
         if (pt_in_rect(mx, my, SCRIPT_BOX_X, SCRIPT_BOX_Y, SCRIPT_BOX_W, SCRIPT_BOX_H)) {
@@ -999,9 +1011,10 @@ void linux_profiles_render(void) {
             px += 146;
         }
 
-        draw_prof_text(g_prof_ren, 260.0f, 244.0f, "Border:", th.dim.r, th.dim.g, th.dim.b);
-        draw_prof_button(g_prof_ren, 340, 226, 140, 24, "Enabled (12.5%)", g_edit_profile.c64_border);
-        draw_prof_button(g_prof_ren, 486, 226, 140, 24, "Disabled (Full)", !g_edit_profile.c64_border);
+                draw_prof_text(g_prof_ren, 260.0f, 244.0f, "Border:", th.dim.r, th.dim.g, th.dim.b);
+        draw_prof_button(g_prof_ren, 340, 226, 90, 24, "Disabled", g_edit_profile.c64_border == 0);
+        draw_prof_button(g_prof_ren, 436, 226, 90, 24, "Static", g_edit_profile.c64_border == 1);
+        draw_prof_button(g_prof_ren, 532, 226, 90, 24, "Turbo FX", g_edit_profile.c64_border == 2);
 
         draw_prof_text(g_prof_ren, 260.0f, 274.0f, "Scheme:", th.dim.r, th.dim.g, th.dim.b);
         const char *c64_schemes[] = { "Classic Blue", "Multi-Color (16C)", "Amber (P40)", "Green (P31)" };
@@ -1025,6 +1038,27 @@ void linux_profiles_render(void) {
     draw_prof_rect(g_prof_ren, 670, 292, 18, 18, th.bg_box.r, th.bg_box.g, th.bg_box.b, true, th.border.r, th.border.g, th.border.b);
     if (g_edit_profile.startup_script_enabled) draw_prof_text(g_prof_ren, 674.0f, 307.0f, "X", th.bright.r, th.bright.g, th.bright.b);
     draw_prof_text(g_prof_ren, 696.0f, 307.0f, "Startup Script", th.normal.r, th.normal.g, th.normal.b);
+
+    /* Render Window Size a Y=292 */
+    draw_prof_text(g_prof_ren, 815.0f, 307.0f, "Size:", th.normal.r, th.normal.g, th.normal.b);
+    for (int s = 1; s <= 4; s++) {
+        int bx = 860 + (s - 1) * 28;
+        bool is_cur = (g_edit_profile.window_scale == s) || (g_edit_profile.window_scale == 0 && s == 2);
+        draw_prof_rect(g_prof_ren, bx, 292, 24, 20,
+                       is_cur ? th.hover_bg.r : th.bg_box.r,
+                       is_cur ? th.hover_bg.g : th.bg_box.g,
+                       is_cur ? th.hover_bg.b : th.bg_box.b,
+                       true,
+                       is_cur ? th.bright.r : th.border.r,
+                       is_cur ? th.bright.g : th.border.g,
+                       is_cur ? th.bright.b : th.border.b);
+        char s_lbl[4];
+        snprintf(s_lbl, sizeof(s_lbl), "%dx", s);
+        draw_prof_text(g_prof_ren, (float)(bx + 3), 307.0f, s_lbl,
+                       is_cur ? th.bright.r : th.normal.r,
+                       is_cur ? th.bright.g : th.normal.g,
+                       is_cur ? th.bright.b : th.normal.b);
+    }
 
     /* Script Editor Box */
     int total_lines = get_total_script_lines(g_edit_profile.startup_script);

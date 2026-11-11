@@ -198,6 +198,7 @@ void plato_terminal_set_color_mode(plato_terminal_t *term, bool enabled) {
 }
 
 void plato_terminal_clear_text(plato_terminal_t *term) {
+    if (term) term->clear_count++;
     if (!term) return;
     for (int r = 0; r < PLATO_ROWS; r++) {
         for (int c = 0; c < PLATO_COLS; c++) {

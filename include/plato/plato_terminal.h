@@ -57,6 +57,7 @@ struct plato_terminal {
     plato_text_cell_t text_grid[PLATO_ROWS][PLATO_COLS];
     plato_microtutor_t mt;
     plato_vector_queue_t vector_queue;
+    uint32_t clear_count;
 };
 
 void plato_terminal_set_color_mode(plato_terminal_t *term, bool enabled);

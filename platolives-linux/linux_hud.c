@@ -187,7 +187,7 @@ void linux_hud_render(void) {
         /* Commodore 64 (VIC-II): MODE, BORDER, PALETTE, CPU */
         const char *presetStr = (g_hud_data.c64_preset == 0) ? "RF COMP" :
                                 (g_hud_data.c64_preset == 1) ? "1702 CRT" : "CRISP";
-        const char *borderStr = g_hud_data.c64_border ? "ENABLED" : "DISABLED";
+        const char *borderStr = (g_hud_data.c64_border == 2) ? "TURBO FX" : (g_hud_data.c64_border == 1 ? "ENABLED" : "DISABLED");
         const char *palStr = (g_hud_data.c64_color_scheme == 1) ? "VIC-II 16C" :
                              (g_hud_data.c64_color_scheme == 2) ? "AMBER P40" :
                              (g_hud_data.c64_color_scheme == 3) ? "GREEN P31" : "CLASSIC";

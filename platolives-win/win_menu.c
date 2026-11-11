@@ -119,6 +119,8 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hCrtDecay, MF_STRING, IDM_VIEW_CRT_DECAY_5000, L"5000 ms (5s Extreme)");
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hCrtDecay, L"CRT Persistence");
 
+    
+
     HMENU hCrtDist = CreatePopupMenu();
     AppendMenuW(hCrtDist, MF_STRING, IDM_VIEW_CRT_DIST_NONE, L"None (Flat)");
     AppendMenuW(hCrtDist, MF_STRING, IDM_VIEW_CRT_DIST_BARREL, L"Barrel (Curved Glass)");
@@ -171,7 +173,12 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hC64Preset, MF_STRING, IDM_VIEW_C64_PRESET_CRISP, L"Clean Crisp Hires");
     AppendMenuW(hView, MF_POPUP, (UINT_PTR)hC64Preset, L"C64 Display Mode");
 
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_C64_BORDER, L"C64 Border Frame (12.5%)");
+        HMENU hC64Border = CreatePopupMenu();
+    AppendMenuW(hC64Border, MF_STRING, IDM_VIEW_C64_BORDER_OFF, L"Disabled (Full Display)");
+    AppendMenuW(hC64Border, MF_STRING, IDM_VIEW_C64_BORDER_ON, L"Enabled (Static 12.5%)");
+    AppendMenuW(hC64Border, MF_STRING, IDM_VIEW_C64_BORDER_FX, L"Turbo Loader Border FX");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hC64Border, L"C64 Border Mode");
+    
 
     HMENU hC64Scheme = CreatePopupMenu();
     AppendMenuW(hC64Scheme, MF_STRING, IDM_VIEW_C64_SCHEME_CLASSIC, L"Classic Blue (Two-Tone Default)");
@@ -182,6 +189,13 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
 
 
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
+
+    HMENU hWindowScale = CreatePopupMenu();
+    AppendMenuW(hWindowScale, MF_STRING, IDM_VIEW_SCALE_1X, L"1x (512 x 512)");
+    AppendMenuW(hWindowScale, MF_STRING, IDM_VIEW_SCALE_2X, L"2x (1024 x 1024)");
+    AppendMenuW(hWindowScale, MF_STRING, IDM_VIEW_SCALE_3X, L"3x (1536 x 1536)");
+    AppendMenuW(hWindowScale, MF_STRING, IDM_VIEW_SCALE_4X, L"4x (2048 x 2048)");
+    AppendMenuW(hView, MF_POPUP, (UINT_PTR)hWindowScale, L"Window Size");
 
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FULLSCREEN, L"Full Screen\tF11");
     AppendMenuW(hView, MF_STRING, IDM_VIEW_FPS_HUD, L"Show Performance HUD (FPS/CPU)\tF12");
@@ -203,6 +217,8 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_CYCLE_ARROW_MODE, L"Cycle Profile (Next Preset)\tCtrl+Shift+G");
     AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_KEYMAP_MANAGE, L"Manage Keyboard Profiles...");
+    AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_TOGGLE_DOUBLE_TAP, L"Double-Tap for SHIFT");
     AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hKeyboard, MF_STRING, IDM_VIEW_KEYBOARD_REF, L"Keyboard Reference\tCtrl+K");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hKeyboard, L"Keyboard");
@@ -247,6 +263,25 @@ HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_l
     return hMenuBar;
 }
 
+void win_menu_update_scale(HMENU menu, int scale) {
+    if (!menu) return;
+    HMENU hView = GetSubMenu(menu, 2);
+    HMENU hScaleSub = hView ? GetSubMenu(hView, 27) : NULL;
+
+    if (scale >= 1 && scale <= 4) {
+        UINT target_id = IDM_VIEW_SCALE_BASE + scale;
+        if (hScaleSub) {
+            CheckMenuRadioItem(hScaleSub, IDM_VIEW_SCALE_1X, IDM_VIEW_SCALE_4X, target_id, MF_BYCOMMAND);
+        }
+        CheckMenuRadioItem(menu, IDM_VIEW_SCALE_1X, IDM_VIEW_SCALE_4X, target_id, MF_BYCOMMAND);
+    } else {
+        for (int i = 1; i <= 4; i++) {
+            if (hScaleSub) CheckMenuItem(hScaleSub, IDM_VIEW_SCALE_BASE + i, MF_BYCOMMAND | MF_UNCHECKED);
+            CheckMenuItem(menu, IDM_VIEW_SCALE_BASE + i, MF_BYCOMMAND | MF_UNCHECKED);
+        }
+    }
+}
+
 void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected, bool diag_log, bool renderer_log, bool fullscreen, const plato_profile_list_t *profiles, int current_profile_idx) {
     if (!menu || !p) return;
 
@@ -265,6 +300,7 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     else if (p->display_mode == 7) mode_id = IDM_VIEW_MODE_REAL_C64;
 
     CheckMenuRadioItem(menu, IDM_VIEW_MODE_REAL_PLASMA, IDM_VIEW_MODE_REAL_C64, mode_id, MF_BYCOMMAND);
+    win_menu_update_scale(menu, (p->window_scale >= 1 && p->window_scale <= 4) ? p->window_scale : 2);
 
     CheckMenuItem(menu, IDM_VIEW_TEK_ERASE_FLASH, p->tek_erase_flash ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
     CheckMenuItem(menu, IDM_VIEW_TEK_ACCURATE_BG, p->tek_accurate_bg ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
@@ -419,7 +455,12 @@ void win_menu_update_state(HMENU menu, const plato_profile_t *p, bool connected,
     CheckMenuRadioItem(menu, IDM_VIEW_C64_PRESET_RF, IDM_VIEW_C64_PRESET_CRISP, c64_pres_id, MF_BYCOMMAND);
 
     /* C64 Border Checkmark */
-    CheckMenuItem(menu, IDM_VIEW_C64_BORDER, p->c64_border ? (MF_BYCOMMAND | MF_CHECKED) : (MF_BYCOMMAND | MF_UNCHECKED));
+    UINT c64_border_id = IDM_VIEW_C64_BORDER_OFF + p->c64_border;
+    HMENU hC64BorderSub = hView ? GetSubMenu(hView, 24) : NULL;
+    if (hC64BorderSub) {
+        CheckMenuRadioItem(hC64BorderSub, IDM_VIEW_C64_BORDER_OFF, IDM_VIEW_C64_BORDER_FX, c64_border_id, MF_BYCOMMAND);
+    }
+    CheckMenuRadioItem(menu, IDM_VIEW_C64_BORDER_OFF, IDM_VIEW_C64_BORDER_FX, c64_border_id, MF_BYCOMMAND);
 
     /* C64 Color Scheme Checkmark */
     UINT c64_sch_id = IDM_VIEW_C64_SCHEME_CLASSIC + p->c64_color_scheme;

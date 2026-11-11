@@ -116,6 +116,57 @@ static void test_script_network_commands(void) {
     printf("       [PASS] Network Automation Commands OK\n");
 }
 
+static void test_script_keyboard_directive(void) {
+    printf("[TEST] Testing 'keyboard on/off' directive & lifecycle...\n");
+    plato_terminal_t term = {0};
+    plato_script_runner_t *runner = plato_script_create(&term);
+    assert(runner != NULL);
+    assert(plato_script_is_keyboard_enabled(runner) == true);
+
+    /* Test 1: Script senza comandi keyboard -> default deve essere false */
+    plato_script_t sc1 = {0};
+    snprintf(sc1.name, sizeof(sc1.name), "TestKbDefault");
+    sc1.char_delay_ms = 0; sc1.next_delay_ms = 0; sc1.command_delay_ms = 0;
+    snprintf(sc1.body, sizeof(sc1.body), "wait 100ms\nexit\n");
+    assert(plato_script_start_ex(runner, &sc1));
+    assert(plato_script_is_keyboard_enabled(runner) == false);
+    while (plato_script_is_running(runner)) {
+        struct timespec ts = { 0, 5000000L }; nanosleep(&ts, NULL);
+    }
+    assert(plato_script_is_keyboard_enabled(runner) == true);
+
+    /* Test 2: Script con transizioni esplicite keyboard on / keyboard off */
+    plato_script_t sc2 = {0};
+    snprintf(sc2.name, sizeof(sc2.name), "TestKbTransitions");
+    sc2.char_delay_ms = 0; sc2.next_delay_ms = 0; sc2.command_delay_ms = 0;
+    snprintf(sc2.body, sizeof(sc2.body),
+             "keyboard on\n"
+             "wait 60ms\n"
+             "keyboard off\n"
+             "wait 60ms\n"
+             "exit\n");
+    assert(plato_script_start_ex(runner, &sc2));
+    struct timespec ts_wait = { 0, 15000000L }; nanosleep(&ts_wait, NULL);
+    assert(plato_script_is_keyboard_enabled(runner) == true);
+    struct timespec ts_wait2 = { 0, 70000000L }; nanosleep(&ts_wait2, NULL);
+    assert(plato_script_is_keyboard_enabled(runner) == false);
+
+    while (plato_script_is_running(runner)) {
+        struct timespec ts = { 0, 5000000L }; nanosleep(&ts, NULL);
+    }
+    assert(plato_script_is_keyboard_enabled(runner) == true);
+
+    /* Test 3: Stop forzato ripristina la tastiera immediatamente */
+    snprintf(sc2.body, sizeof(sc2.body), "wait 2s\n");
+    assert(plato_script_start_ex(runner, &sc2));
+    assert(plato_script_is_keyboard_enabled(runner) == false);
+    plato_script_stop(runner);
+    assert(plato_script_is_keyboard_enabled(runner) == true);
+
+    plato_script_destroy(runner);
+    printf("       [PASS] Keyboard directive & lifecycle OK\n");
+}
+
 int main(void) {
     printf("========================================\n");
     printf(" RUNNING PLATO SCRIPT ENGINE UNIT TESTS \n");
@@ -123,6 +174,7 @@ int main(void) {
     test_script_store();
     test_script_runner();
     test_script_network_commands();
+    test_script_keyboard_directive();
     printf("========================================\n");
     printf(" ALL PLATO SCRIPT TESTS PASSED [100%%]   \n");
     printf("========================================\n");

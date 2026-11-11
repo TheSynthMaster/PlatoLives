@@ -41,6 +41,7 @@ typedef struct c64_context c64_context_t;
 c64_context_t *c64_create(void);
 void c64_destroy(c64_context_t *ctx);
 void c64_clear(c64_context_t *ctx);
+void c64_notify_rx(c64_context_t *ctx, size_t bytes);
 
 void c64_render(c64_context_t *ctx,
                 const plato_terminal_t *term,

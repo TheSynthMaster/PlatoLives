@@ -52,6 +52,7 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         snprintf(p->name, sizeof(p->name), "Standard PLATO");
         snprintf(p->description, sizeof(p->description), "Canonical pterm / TUTOR layout (standard arrow keys)");
         p->is_builtin = true;
+        p->double_tap_enabled = true;
         p->binding_count = 0; /* Nessun remapping; fallback canonico */
     }
 
@@ -62,6 +63,7 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         snprintf(p->name, sizeof(p->name), "WASD Gaming");
         snprintf(p->description, sizeof(p->description), "Directional arrow keys remapped to WASD for PLATO gaming");
         p->is_builtin = true;
+        p->double_tap_enabled = false;
 
         plato_key_binding_t b;
         memset(&b, 0, sizeof(b));
@@ -88,6 +90,7 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
         snprintf(p->name, sizeof(p->name), "WASX / Avatar");
         snprintf(p->description, sizeof(p->description), "Directional arrow keys remapped to WASX (Avatar/Oubliette)");
         p->is_builtin = true;
+        p->double_tap_enabled = false;
 
         plato_key_binding_t b;
         memset(&b, 0, sizeof(b));
@@ -180,6 +183,8 @@ static void init_builtin_profiles(plato_keymap_manager_t *mgr) {
     snprintf(mgr->active_profile_name, sizeof(mgr->active_profile_name), "%s", mgr->profiles[0].name);
 }
 
+
+
 void plato_keymap_manager_init(plato_keymap_manager_t *mgr) {
     if (!mgr) return;
     memset(mgr, 0, sizeof(*mgr));
@@ -255,7 +260,8 @@ int plato_keymap_add_profile(plato_keymap_manager_t *mgr, const plato_keymap_pro
     }
     int idx = mgr->profile_count++;
     mgr->profiles[idx] = *profile;
-    mgr->profiles[idx].is_builtin = false; /* I profili aggiunti dall'utente non sono mai built-in */
+    mgr->profiles[idx].is_builtin = false;
+    if (profile->binding_count == 0 && !profile->double_tap_enabled) mgr->profiles[idx].double_tap_enabled = true; /* I profili aggiunti dall'utente non sono mai built-in */
     return idx;
 }
 
@@ -414,6 +420,7 @@ bool plato_keymap_save_profile(const plato_keymap_profile_t *prof) {
     fprintf(f, "  \"name\": \"%s\",\n", prof->name);
     fprintf(f, "  \"description\": \"%s\",\n", prof->description);
     fprintf(f, "  \"is_builtin\": false,\n");
+    fprintf(f, "  \"double_tap_enabled\": %s,\n", prof->double_tap_enabled ? "true" : "false");
     fprintf(f, "  \"bindings\": [\n");
 
     for (int i = 0; i < prof->binding_count; i++) {
@@ -503,6 +510,12 @@ bool plato_keymap_load_profile(const char *filepath, plato_keymap_profile_t *out
 
     const char *k_desc = json_find_key(buf, "description");
     if (k_desc) json_parse_string(k_desc, out_prof->description, sizeof(out_prof->description));
+    out_prof->double_tap_enabled = true;
+    const char *k_dt = json_find_key(buf, "double_tap_enabled");
+    if (k_dt) {
+        if (strncmp(k_dt, "false", 5) == 0) out_prof->double_tap_enabled = false;
+        else if (strncmp(k_dt, "true", 4) == 0) out_prof->double_tap_enabled = true;
+    }
 
     /* Parse bindings array */
     const char *k_bind = json_find_key(buf, "bindings");
@@ -625,6 +638,7 @@ bool plato_keymap_load_all(plato_keymap_manager_t *mgr) {
             while (sl > 0 && (act[sl - 1] == '\r' || act[sl - 1] == '\n')) act[--sl] = '\0';
             plato_keymap_set_active_by_name(mgr, act);
         }
+
         fclose(fs);
     }
 

@@ -59,7 +59,19 @@ struct c64_context {
     uint8_t hires_grid[C64_HIRES_H][C64_HIRES_W];
     double last_time;
     uint32_t frame_count;
+    double last_rx_time;
+    size_t rx_accumulator;
+    size_t last_processed_rx;
+    uint32_t last_clear_count;
+    double fx_start_time;
+    double last_clear_time;
+    bool fx_running;
 };
+
+void c64_notify_rx(c64_context_t *ctx, size_t bytes) {
+    if (!ctx) return;
+    ctx->rx_accumulator += bytes;
+}
 
 c64_context_t *c64_create(void) {
     return (c64_context_t *)calloc(1, sizeof(c64_context_t));
@@ -94,12 +106,19 @@ void c64_unwarp_touch(int *x, int *y, bool border_enabled) {
     }
 }
 
-static inline uint32_t dim_bgra(uint32_t c, float factor) {
+static inline uint32_t safe_dim_pixel(uint32_t c, float factor) {
     uint32_t b = (uint32_t)((c & 0xFF) * factor);
     uint32_t g = (uint32_t)(((c >> 8) & 0xFF) * factor);
     uint32_t r = (uint32_t)(((c >> 16) & 0xFF) * factor);
     return 0xFF000000u | (r << 16) | (g << 8) | b;
 }
+
+#define SAFE_DIM(c, f, bx, by) \
+    ((border > 0 && ((bx) < BORDER_THICKNESS || \
+                     (bx) >= CANVAS_W - BORDER_THICKNESS || \
+                     (by) < BORDER_THICKNESS || \
+                     (by) >= CANVAS_H - BORDER_THICKNESS)) \
+         ? (c) : safe_dim_pixel((c), (f)))
 
 void c64_render(c64_context_t *ctx,
                 const plato_terminal_t *term,
@@ -111,7 +130,7 @@ void c64_render(c64_context_t *ctx,
     ctx->frame_count++;
     ctx->last_time = now_sec;
 
-    bool border = prof->c64_border;
+    int border = prof->c64_border;
     int preset = prof->c64_preset;
     int scheme = prof->c64_color_scheme;
 
@@ -139,26 +158,59 @@ void c64_render(c64_context_t *ctx,
         col_fg     = C64_COL_LIGHT_BLUE; 
     }
 
-        int active_w = border ? ACTIVE_W_BORDER : CANVAS_W;
-    int active_h = border ? ACTIVE_H_BORDER : CANVAS_H;
-    int base_x   = border ? BORDER_THICKNESS : 0;
-    int base_y   = border ? BORDER_THICKNESS : 0;
-    int scale    = border ? SCALE_BORDER : SCALE_NO_BORDER;
+        int active_w = border > 0 ? ACTIVE_W_BORDER : CANVAS_W;
+    int active_h = border > 0 ? ACTIVE_H_BORDER : CANVAS_H;
+    int base_x   = border > 0 ? BORDER_THICKNESS : 0;
+    int base_y   = border > 0 ? BORDER_THICKNESS : 0;
+    int scale    = border > 0 ? SCALE_BORDER : SCALE_NO_BORDER;
 
-    /* 1. Riempimento Bordo Perimetrale VIC-II ($D020) */
-    if (border) {
-        for (int y = 0; y < BORDER_THICKNESS; y++) {
-            uint32_t *top_row = out_bgra + y * CANVAS_W;
-            uint32_t *bot_row = out_bgra + (CANVAS_H - 1 - y) * CANVAS_W;
-            for (int x = 0; x < CANVAS_W; x++) {
-                top_row[x] = col_border;
-                bot_row[x] = col_border;
-            }
+    /* 1. Monitoraggio traffico RX: tiene vivo il loader durante il flusso dati */
+    if (ctx->rx_accumulator > ctx->last_processed_rx) {
+        ctx->last_processed_rx = ctx->rx_accumulator;
+        ctx->last_rx_time = now_sec;
+    }
+
+    /* 2. Logica Hardware Clear Screen + Ignore Continui (Anti-Asteroids Strobe) */
+    if (term->clear_count != ctx->last_clear_count) {
+        ctx->last_clear_count = term->clear_count;
+        
+        bool is_valid_trigger = (now_sec - ctx->last_clear_time >= 1.0);
+        ctx->last_clear_time = now_sec;
+        
+        if (is_valid_trigger) {
+            ctx->fx_start_time = now_sec;
+            ctx->last_rx_time = now_sec;
+            ctx->fx_running = true;
         }
-        for (int y = BORDER_THICKNESS; y < CANVAS_H - BORDER_THICKNESS; y++) {
+    }
+
+    /* 3. Stop e Hard Timeout 5.0s */
+    if (ctx->fx_running) {
+        if ((now_sec - ctx->fx_start_time >= 3.0) || (now_sec - ctx->last_rx_time >= 0.3)) {
+            ctx->fx_running = false;
+        }
+    }
+
+    bool is_loading = (border == 2) && ctx->fx_running;
+
+    if (border > 0) {
+        for (int y = 0; y < CANVAS_H; y++) {
+            bool is_top_bottom = (y < BORDER_THICKNESS) || (y >= CANVAS_H - BORDER_THICKNESS);
+            uint32_t line_color = col_border;
+            if (is_loading) {
+                int time_shift = (int)(now_sec * 8000.0);
+                int chunk = (y + time_shift) / 64;
+                int color_idx = ((chunk * 13) ^ (ctx->frame_count * 7)) & 15;
+                line_color = s_vic_palette[color_idx];
+            }
+            
             uint32_t *row = out_bgra + y * CANVAS_W;
-            for (int x = 0; x < BORDER_THICKNESS; x++) row[x] = col_border;
-            for (int x = CANVAS_W - BORDER_THICKNESS; x < CANVAS_W; x++) row[x] = col_border;
+            if (is_top_bottom) {
+                for (int x = 0; x < CANVAS_W; x++) row[x] = line_color;
+            } else {
+                for (int x = 0; x < BORDER_THICKNESS; x++) row[x] = line_color;
+                for (int x = CANVAS_W - BORDER_THICKNESS; x < CANVAS_W; x++) row[x] = line_color;
+            }
         }
     }
 
@@ -224,10 +276,10 @@ void c64_render(c64_context_t *ctx,
     /* 6. APPLICAZIONE PRESET OTTICI (RF COMPOSITE / 1702 CRT) */
     if (preset == 0) {
         /* PRESET 0: Authentic RF / Composite - Heavy Smear */
-        int start_y = border ? BORDER_THICKNESS : 0;
-        int end_y   = border ? (CANVAS_H - BORDER_THICKNESS) : CANVAS_H;
-        int start_x = border ? BORDER_THICKNESS : 0;
-        int end_x   = border ? (CANVAS_W - BORDER_THICKNESS) : CANVAS_W;
+        int start_y = border > 0 ? BORDER_THICKNESS : 0;
+        int end_y   = border > 0 ? (CANVAS_H - BORDER_THICKNESS) : CANVAS_H;
+        int start_x = border > 0 ? BORDER_THICKNESS : 0;
+        int end_x   = border > 0 ? (CANVAS_W - BORDER_THICKNESS) : CANVAS_W;
 
         for (int y = start_y; y < end_y; y++) {
             uint32_t *row = out_bgra + y * CANVAS_W;
@@ -253,22 +305,22 @@ void c64_render(c64_context_t *ctx,
                 c_prev2 = c_prev1;
                 c_prev1 = cur;
                 
-                if (is_scanline) blended = dim_bgra(blended, scan_factor);
+                if (is_scanline) blended = SAFE_DIM(blended, scan_factor, x, y);
                 row[x] = blended;
             }
         }
     } else if (preset == 1) {
         /* PRESET 1: Commodore 1702 CRT */
-        int start_y = border ? BORDER_THICKNESS : 0;
-        int end_y   = border ? (CANVAS_H - BORDER_THICKNESS) : CANVAS_H;
-        int start_x = border ? BORDER_THICKNESS : 0;
-        int end_x   = border ? (CANVAS_W - BORDER_THICKNESS) : CANVAS_W;
+        int start_y = border > 0 ? BORDER_THICKNESS : 0;
+        int end_y   = border > 0 ? (CANVAS_H - BORDER_THICKNESS) : CANVAS_H;
+        int start_x = border > 0 ? BORDER_THICKNESS : 0;
+        int end_x   = border > 0 ? (CANVAS_W - BORDER_THICKNESS) : CANVAS_W;
 
         for (int y = start_y; y < end_y; y++) {
             if (((y - start_y) % scale) == (scale - 1)) {
                 uint32_t *row = out_bgra + y * CANVAS_W;
                 for (int x = start_x; x < end_x; x++) {
-                    row[x] = dim_bgra(row[x], 0.78f);
+                    row[x] = SAFE_DIM(row[x], 0.78f, x, y);
                 }
             }
         }

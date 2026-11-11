@@ -267,10 +267,17 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     [_removeBindingBtn setAction:@selector(onRemoveBinding:)];
     [content addSubview:_removeBindingBtn];
 
+    _doubleTapCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(290, 34, 185, 24)];
+    [_doubleTapCheckbox setButtonType:NSButtonTypeSwitch];
+    [_doubleTapCheckbox setTitle:@"Double-Tap for SHIFT"];
+    [_doubleTapCheckbox setTarget:self];
+    [_doubleTapCheckbox setAction:@selector(onToggleDoubleTap:)];
+    [content addSubview:_doubleTapCheckbox];
+
     _statusInfoLabel = [NSTextField labelWithString:@""];
     [_statusInfoLabel setFont:[NSFont systemFontOfSize:11]];
     [_statusInfoLabel setTextColor:plasmaOrange];
-    [_statusInfoLabel setFrame:NSMakeRect(290, 36, 420, 20)];
+    [_statusInfoLabel setFrame:NSMakeRect(485, 36, 220, 20)];
     [content addSubview:_statusInfoLabel];
 
     _setActiveBtn = [[NSButton alloc] initWithFrame:NSMakeRect(710, 30, 150, 32)];
@@ -314,6 +321,7 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     [_profilesTable reloadData];
     [_profilesTable selectRowIndexes:[NSIndexSet indexSetWithIndex:_selectedProfileIndex] byExtendingSelection:NO];
     [self updateSelectedProfileView];
+
 }
 
 - (void)updateSelectedProfileView {
@@ -374,6 +382,7 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         if (c == 27) {
             _isRecordingKey = NO;
             [self updateSelectedProfileView];
+
             return;
         }
 
@@ -558,6 +567,7 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         plato_keymap_save_profile(p);
         [self updateSelectedProfileView];
 
+
         if ([self.delegate respondsToSelector:@selector(keyboardProfilesDidUpdate:)]) {
             [self.delegate keyboardProfilesDidUpdate:self];
         }
@@ -692,8 +702,23 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         plato_keymap_profile_remove_binding(p, (int)row);
         plato_keymap_save_profile(p);
         [self updateSelectedProfileView];
+
         if ([self.delegate respondsToSelector:@selector(keyboardProfilesDidUpdate:)]) {
             [self.delegate keyboardProfilesDidUpdate:self];
+        }
+    }
+}
+
+- (void)onToggleDoubleTap:(id)sender {
+    if (!_keymapManager || _selectedProfileIndex < 0 || _selectedProfileIndex >= _keymapManager->profile_count) return;
+    plato_keymap_profile_t *p = &_keymapManager->profiles[_selectedProfileIndex];
+    if (!p->is_builtin) {
+        p->double_tap_enabled = ([_doubleTapCheckbox state] == NSControlStateValueOn);
+        plato_keymap_save_profile(p);
+        if (_selectedProfileIndex == _keymapManager->active_profile_index) {
+            if ([self.delegate respondsToSelector:@selector(keyboardProfilesDidUpdate:)]) {
+                [self.delegate keyboardProfilesDidUpdate:self];
+            }
         }
     }
 }
@@ -704,6 +729,7 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
     plato_keymap_save_all(_keymapManager);
     [_profilesTable reloadData];
     [self updateSelectedProfileView];
+
     if ([self.delegate respondsToSelector:@selector(keyboardProfilesDidUpdate:)]) {
         [self.delegate keyboardProfilesDidUpdate:self];
     }
@@ -773,6 +799,7 @@ static NSString *formatTargetAction(const plato_key_binding_t *b) {
         if (row >= 0 && row < _keymapManager->profile_count) {
             _selectedProfileIndex = row;
             [self updateSelectedProfileView];
+
         }
     } else if ([notification object] == _bindingsTable) {
         if (_selectedProfileIndex >= 0 && _selectedProfileIndex < _keymapManager->profile_count) {

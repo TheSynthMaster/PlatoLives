@@ -47,12 +47,15 @@
 #define IDM_VIEW_C64_PRESET_CRT         1421
 #define IDM_VIEW_C64_PRESET_CRISP       1422
 
-#define IDM_VIEW_C64_BORDER             1423
+#define IDM_VIEW_C64_BORDER_OFF 1423
+#define IDM_VIEW_C64_BORDER_ON 1424
+#define IDM_VIEW_C64_BORDER_FX 1425
 
-#define IDM_VIEW_C64_SCHEME_CLASSIC     1424
-#define IDM_VIEW_C64_SCHEME_MC          1425
-#define IDM_VIEW_C64_SCHEME_AMBER       1426
-#define IDM_VIEW_C64_SCHEME_GREEN       1427
+
+#define IDM_VIEW_C64_SCHEME_CLASSIC     1426
+#define IDM_VIEW_C64_SCHEME_MC          1427
+#define IDM_VIEW_C64_SCHEME_AMBER       1428
+#define IDM_VIEW_C64_SCHEME_GREEN       1429
 
 #define IDM_VIEW_TEK_SPEED_INSTANT      1310
 #define IDM_VIEW_TEK_SPEED_110          1311
@@ -123,6 +126,7 @@
 #define IDM_TOOLS_WASD_MODE             1407
 #define IDM_TOOLS_WASX_MODE             1408
 #define IDM_TOOLS_CYCLE_ARROW_MODE      1409
+#define IDM_TOOLS_TOGGLE_DOUBLE_TAP     1410
 
 
 /* Menu Scripts */
@@ -137,6 +141,15 @@
 
 #include "plato/plato_script.h"
 HMENU win_menu_create(const plato_profile_list_t *profiles, const plato_script_list_t *scripts);
+
+/* Window Integer Scaling Presets */
+#define IDM_VIEW_SCALE_BASE             1440
+#define IDM_VIEW_SCALE_1X               1441
+#define IDM_VIEW_SCALE_2X               1442
+#define IDM_VIEW_SCALE_3X               1443
+#define IDM_VIEW_SCALE_4X               1444
+
+void win_menu_update_scale(HMENU menu, int scale);
 void win_menu_update_state(HMENU menu, const plato_profile_t *active_p, bool connected, bool diag_log, bool renderer_log, bool fullscreen, const plato_profile_list_t *profiles, int current_profile_idx);
 
 #define IDM_TOOLS_KEYMAP_MANAGE        405

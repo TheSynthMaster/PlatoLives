@@ -61,8 +61,9 @@ static void init_default_cyber1(plato_profile_list_t *list) {
     p->pdp1_refresh_rate = 45;
     p->pdp1_preset = 0;
     p->c64_preset = 0;
-    p->c64_border = true;
+    p->c64_border = 1;
     p->c64_color_scheme = 0;
+    p->window_scale = 2;        /* Default 2x (1024x1024) */
     p->full_screen = false;
     p->is_default = true;
     p->startup_script_enabled = false;
@@ -103,6 +104,7 @@ bool plato_profiles_load(plato_profile_list_t *list) {
                 snprintf(cur->name, sizeof(cur->name), "%s", p + 8);
                 snprintf(cur->id, sizeof(cur->id), "%s", p + 8);
                 cur->port = 8005;
+                cur->window_scale = 2;
                 cur->display_mode = 0;
                 cur->persistence_ms = 100;
                 cur->plasma_distortion = 2;
@@ -117,7 +119,7 @@ bool plato_profiles_load(plato_profile_list_t *list) {
                 cur->pdp1_refresh_rate = 45;
                 cur->pdp1_preset = 0;
                 cur->c64_preset = 0;
-                cur->c64_border = true;
+                cur->c64_border = 1;
                 cur->c64_color_scheme = 0;
             } else {
                 cur = NULL;
@@ -154,7 +156,7 @@ bool plato_profiles_load(plato_profile_list_t *list) {
         else if (strcmp(p, "pdp1_refresh_rate") == 0) { int r = atoi(val); cur->pdp1_refresh_rate = (r==60||r==45||r==30||r==15||r==10||r==5) ? r : 45; }
         else if (strcmp(p, "pdp1_preset") == 0) { int pr = atoi(val); cur->pdp1_preset = (pr>=0 && pr<=2) ? pr : 0; }
         else if (strcmp(p, "c64_preset") == 0) { int cp = atoi(val); cur->c64_preset = (cp>=0 && cp<=2) ? cp : 0; }
-        else if (strcmp(p, "c64_border") == 0) cur->c64_border = (atoi(val) != 0);
+        else if (strcmp(p, "c64_border") == 0) cur->c64_border = atoi(val);
         else if (strcmp(p, "c64_color_scheme") == 0) { int cs = atoi(val); cur->c64_color_scheme = (cs>=0 && cs<=2) ? cs : 0; }
         else if (strcmp(p, "full_screen") == 0) cur->full_screen = (atoi(val) != 0);
         else if (strcmp(p, "is_default") == 0) {
@@ -215,8 +217,9 @@ bool plato_profiles_save(const plato_profile_list_t *list) {
         fprintf(f, "pdp1_refresh_rate=%d\n", (p->pdp1_refresh_rate > 0) ? p->pdp1_refresh_rate : 45);
         fprintf(f, "pdp1_preset=%d\n", p->pdp1_preset);
         fprintf(f, "c64_preset=%d\n", p->c64_preset);
-        fprintf(f, "c64_border=%d\n", p->c64_border ? 1 : 0);
+        fprintf(f, "c64_border=%d", p->c64_border);
         fprintf(f, "c64_color_scheme=%d\n", p->c64_color_scheme);
+        fprintf(f, "window_scale=%d\n", p->window_scale);
         fprintf(f, "full_screen=%d\n", p->full_screen ? 1 : 0);
         fprintf(f, "is_default=%d\n", p->is_default ? 1 : 0);
         fprintf(f, "startup_script_enabled=%d\n", p->startup_script_enabled ? 1 : 0);

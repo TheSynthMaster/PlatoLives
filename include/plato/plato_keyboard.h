@@ -68,6 +68,9 @@ plato_arrow_mode_t plato_keyboard_cycle_arrow_mode(plato_keyboard_state_t *state
 void plato_keyboard_set_wasd_mode(plato_keyboard_state_t *state, bool enabled);
 bool plato_keyboard_get_wasd_mode(const plato_keyboard_state_t *state);
 bool plato_keyboard_toggle_wasd_mode(plato_keyboard_state_t *state);
+void plato_keyboard_set_double_tap(plato_keyboard_state_t *state, bool enabled);
+bool plato_keyboard_get_double_tap(const plato_keyboard_state_t *state);
+bool plato_keyboard_toggle_double_tap(plato_keyboard_state_t *state);
 void plato_keyboard_poll(plato_keyboard_state_t *state, plato_terminal_t *term, double now_sec);
 void plato_keyboard_flush(plato_keyboard_state_t *state, plato_terminal_t *term);
 

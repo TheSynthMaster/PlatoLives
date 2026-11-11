@@ -27,8 +27,9 @@ typedef struct {
     int pdp1_refresh_rate;
     int pdp1_preset;           /* 0: 1961 Codeword (Spacewar!), 1: 1964 Character (Type 33) */
     int c64_preset;            /* 0: Authentic RF / Composite, 1: 1702 CRT Monitor, 2: Crisp Hires */
-    bool c64_border;           /* true: VIC-II Border Enabled (12.5%), false: Full Display */
+    int c64_border;           /* 0: Disabled (Full Display), 1: Enabled (Static 12.5% Frame), 2: Turbo Loader FX */
     int c64_color_scheme;      /* 0: Classic Blue, 1: Amber Monitor, 2: Green Phosphor */
+    int window_scale;        /* 0: Default (2x), 1: 1x (512x512), 2: 2x (1024x1024), 3: 3x (1536x1536), 4: 4x (2048x2048) */
     bool full_screen;
     bool is_default;
     bool startup_script_enabled;

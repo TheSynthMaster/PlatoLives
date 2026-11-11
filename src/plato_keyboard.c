@@ -63,6 +63,33 @@ void plato_keyboard_state_init(plato_keyboard_state_t *state) {
     state->arrow_mode = PLATO_ARROW_MODE_STANDARD;
     state->arrows_wasd_mode = false;
     plato_keymap_manager_init(&state->keymap_mgr);
+    const plato_keymap_profile_t *p_act = plato_keymap_get_active_profile(&state->keymap_mgr);
+    state->double_tap_enabled = p_act ? p_act->double_tap_enabled : true;
+}
+
+
+void plato_keyboard_set_double_tap(plato_keyboard_state_t *state, bool enabled) {
+    if (!state) return;
+    state->double_tap_enabled = enabled;
+    if (!enabled) {
+        state->pending_key = PLATO_KEY_NONE;
+    }
+}
+
+bool plato_keyboard_get_double_tap(const plato_keyboard_state_t *state) {
+    return state ? state->double_tap_enabled : true;
+}
+
+bool plato_keyboard_toggle_double_tap(plato_keyboard_state_t *state) {
+    if (!state) return false;
+    bool new_val = !state->double_tap_enabled;
+    plato_keyboard_set_double_tap(state, new_val);
+    if (state->feedback_cb) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Double-Tap SHIFT: %s", new_val ? "Enabled" : "Disabled");
+        state->feedback_cb(msg, 1.5, state->user_data);
+    }
+    return new_val;
 }
 
 void plato_keyboard_set_feedback_cb(plato_keyboard_state_t *state, plato_feedback_callback_t cb, void *user_data) {
@@ -138,6 +165,7 @@ bool plato_keyboard_set_active_keymap_by_index(plato_keyboard_state_t *state, in
     if (ok) {
         const plato_keymap_profile_t *p = plato_keymap_get_profile(&state->keymap_mgr, index);
         if (p) {
+            state->double_tap_enabled = p->double_tap_enabled;
             if (strcmp(p->name, "WASD Gaming") == 0) state->arrow_mode = PLATO_ARROW_MODE_WASD;
             else if (strcmp(p->name, "WASX / Avatar") == 0) state->arrow_mode = PLATO_ARROW_MODE_WASX;
             else if (strcmp(p->name, "WADX") == 0) state->arrow_mode = PLATO_ARROW_MODE_WADX;

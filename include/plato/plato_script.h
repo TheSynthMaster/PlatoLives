@@ -116,6 +116,7 @@ bool plato_script_start(plato_script_runner_t *runner, const char *script_text);
 bool plato_script_start_ex(plato_script_runner_t *runner, const plato_script_t *script);
 void plato_script_stop(plato_script_runner_t *runner);
 bool plato_script_is_running(const plato_script_runner_t *runner);
+bool plato_script_is_keyboard_enabled(const plato_script_runner_t *runner);
 
 int64_t plato_script_get_var(plato_script_runner_t *runner, const char *name, bool *found);
 bool    plato_script_set_var(plato_script_runner_t *runner, const char *name, int64_t val);

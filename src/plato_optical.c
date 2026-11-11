@@ -33,6 +33,7 @@ struct PLATOPlasmaState {
     
     double lastTime;
     double animateUntil;
+    double last_render_time;
     
     double decayDuration;
     float decayTau;
@@ -54,7 +55,7 @@ struct PLATOPlasmaState {
     c64_context_t *c64_ctx;
     int pdp1_font_mode;
     int c64_preset;
-    bool c64_border;
+    int c64_border;
     int c64_color_scheme;
 
     /* Motore Fisico Tektronix 4014 (DVBST) */
@@ -1757,7 +1758,7 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
     } else if (prof->display_mode == 7) {
         if (!opt->state->c64_ctx) opt->state->c64_ctx = c64_create();
         c64_render(opt->state->c64_ctx, term, prof, out_bgra, now_sec);
-        opt->last_was_full = prof->c64_border;
+        opt->last_was_full = (prof->c64_border != 0);
     } else if (prof->display_mode == 6) {
         if (!opt->state->tilesInitialized) {
             pdp1_context_t *pdp = opt->state->pdp1_ctx;
@@ -1796,7 +1797,18 @@ bool plato_optical_render(plato_optical_t *opt, plato_terminal_t *term, const pl
             }
         }
     }
+    opt->state->last_render_time = now_sec;
     return was_dirty || (now_sec < opt->state->animateUntil);
+}
+
+void plato_optical_notify_rx(plato_optical_t *opt, size_t bytes) {
+    if (!opt || !opt->state) return;
+    if (opt->state->c64_ctx) {
+        c64_notify_rx(opt->state->c64_ctx, bytes);
+        if (opt->state->animateUntil < opt->state->last_render_time + 0.3) {
+            opt->state->animateUntil = opt->state->last_render_time + 0.3;
+        }
+    }
 }
 
 void plato_optical_unwarp_touch(int *x, int *y, int display_mode, int plasma_distortion, int crt_distortion) {

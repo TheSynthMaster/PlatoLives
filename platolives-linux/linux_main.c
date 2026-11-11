@@ -363,7 +363,8 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
             s_has_saved_bg = true;
 
             linux_theme_colors_t th = linux_theme_current();
-            uint32_t col = th.rgba_bright; /* Segue istantaneamente il tema attivo */
+            /* render_buffer opera in formato BGRA Little-Endian (GL_BGRA / GL_UNSIGNED_INT_8_8_8_8_REV) */
+            uint32_t col = (uint32_t)th.bright.b | ((uint32_t)th.bright.g << 8) | ((uint32_t)th.bright.r << 16) | ((uint32_t)th.bright.a << 24);
             for (int dy = -dot_r; dy <= dot_r; dy++) {
                 for (int dx = -dot_r; dx <= dot_r; dx++) {
                     if (dx * dx + dy * dy <= dot_r * dot_r) {
@@ -514,14 +515,18 @@ static bool update_and_render_frame(linux_client_t *app, double now_sec) {
     SDL_GetWindowSize(app->window, &win_w, &win_h);
 
     glViewport(0, 0, draw_w, draw_h);
-    glClearColor(0.06f, 0.04f, 0.03f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     float scale_y = (win_h > 0) ? ((float)draw_h / (float)win_h) : 1.0f;
     /* In modalità Hide Menu Bar, il terminale è SEMPRE a schermo intero senza sobbalzi */
     int menu_bar_pixels = (!app->menu_ctx.hide_menu_bar) ? (int)(MENU_BAR_HEIGHT * scale_y) : 0;
     int avail_h = draw_h - menu_bar_pixels;
-    app->vp_side = (draw_w < avail_h) ? draw_w : avail_h;
+    if (app->menu_ctx.current_scale >= 1 && app->menu_ctx.current_scale <= 4) {
+        app->vp_side = 512 * app->menu_ctx.current_scale;
+    } else {
+        app->vp_side = (draw_w < avail_h) ? draw_w : avail_h;
+    }
     app->vp_x = (draw_w - app->vp_side) / 2;
     app->vp_y = (avail_h - app->vp_side) / 2;
 
@@ -837,6 +842,7 @@ static int handle_network_io(linux_client_t *app, double now_sec) {
         app->terminal.delay_requested = false;
         size_t remaining = app->feed_len - app->feed_pos;
         size_t consumed = plato_terminal_feed(&app->terminal, &app->feed_buf[app->feed_pos], remaining);
+        if (consumed > 0) plato_optical_notify_rx(app->optical, consumed);
         app->feed_pos += consumed;
         total_processed += (int)consumed;
 
@@ -849,6 +855,23 @@ static int handle_network_io(linux_client_t *app, double now_sec) {
     }
 
     return total_processed;
+}
+
+static void linux_set_display_scale(linux_client_t *app, int scale) {
+    if (!app || !app->window || scale < 1 || scale > 4) return;
+    app->menu_ctx.current_scale = scale;
+    app->profile.window_scale = scale;
+    int menu_h = (!app->menu_ctx.hide_menu_bar) ? MENU_BAR_HEIGHT : 0;
+    
+    int target_w = 512 * scale;
+    int target_h = (512 * scale) + menu_h;
+    
+    if (scale == 1) {
+        target_w = 800;
+        target_h = 800;
+    }
+    
+    SDL_SetWindowSize(app->window, target_w, target_h);
 }
 
 static void linux_reset_terminal(linux_client_t *app) {
@@ -902,12 +925,17 @@ static void linux_connect_profile(linux_client_t *app, const plato_profile_t *p)
     }
 
     app->profile = *p;
+    if (p->window_scale >= 1 && p->window_scale <= 4) {
+        linux_set_display_scale(app, p->window_scale);
+    }
     if (app->profile.crt_persistence_ms == 0) app->profile.crt_persistence_ms = 20;
 
-    bool is_color = (app->profile.display_mode == 3 || app->profile.display_mode == 4);
+    bool is_color = (app->profile.display_mode == 3 || app->profile.display_mode == 4 || app->profile.display_mode == 7);
     plato_terminal_set_color_mode(&app->terminal, is_color);
     plato_terminal_set_palette(&app->terminal, (plato_palette_t)app->profile.phosphor_color);
+    linux_theme_set_current(app->profile.display_mode, app->profile.phosphor_color);
     plato_optical_invalidate(app->optical);
+    app->terminal.fb.dirty = true;
 
     if (app->profile.full_screen != app->menu_ctx.fullscreen) {
         app->menu_ctx.fullscreen = app->profile.full_screen;
@@ -1101,9 +1129,9 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
             goto sync_optical_view;
 
         /* C64 Border Frame */
-        case ACT_VIEW_C64_BORDER:
-            app->profile.c64_border = !app->profile.c64_border;
-            goto sync_optical_view;
+        case ACT_VIEW_C64_BORDER_OFF: app->profile.c64_border = 0; goto sync_optical_view;
+        case ACT_VIEW_C64_BORDER_ON:  app->profile.c64_border = 1; goto sync_optical_view;
+        case ACT_VIEW_C64_BORDER_FX:  app->profile.c64_border = 2; goto sync_optical_view;
 
         /* C64 Color Scheme */
         case ACT_VIEW_C64_SCHEME_CLASSIC:
@@ -1112,21 +1140,6 @@ static void apply_menu_action(linux_client_t *app, menu_action_code_t action) {
         case ACT_VIEW_C64_SCHEME_GREEN:
             app->profile.c64_color_scheme = action - ACT_VIEW_C64_SCHEME_CLASSIC;
             goto sync_optical_view;
-
-        /* PDP-1 Display Mode (Preset) */
-        case ACT_VIEW_PDP1_PRESET_HISTORIC: app->profile.pdp1_preset = 0; goto sync_optical_view;
-        case ACT_VIEW_PDP1_PRESET_FAST:     app->profile.pdp1_preset = 1; goto sync_optical_view;
-        case ACT_VIEW_PDP1_PRESET_MODERN:   app->profile.pdp1_preset = 2; goto sync_optical_view;
-
-        /* Phosphor Color Override */
-        case ACT_VIEW_COLOR_DEFAULT: app->profile.phosphor_color = 0; goto sync_optical_palette;
-        case ACT_VIEW_COLOR_GREEN:   app->profile.phosphor_color = 1; goto sync_optical_palette;
-        case ACT_VIEW_COLOR_AMBER:   app->profile.phosphor_color = 2; goto sync_optical_palette;
-        case ACT_VIEW_COLOR_WHITE:   app->profile.phosphor_color = 3; goto sync_optical_palette;
-
-        case ACT_VIEW_TEK_ERASE_FLASH:
-            app->profile.tek_erase_flash = !app->profile.tek_erase_flash;
-            break;
 
         case ACT_VIEW_TEK_ACCURATE_BG:
             app->profile.tek_accurate_bg = !app->profile.tek_accurate_bg;
@@ -1168,6 +1181,14 @@ sync_optical_view:
         case ACT_VIEW_KEYBOARD_REF:
             linux_keyref_toggle();
             break;
+        case ACT_VIEW_SCALE_1X:
+        case ACT_VIEW_SCALE_2X:
+        case ACT_VIEW_SCALE_3X:
+        case ACT_VIEW_SCALE_4X: {
+            int s = (int)(action - ACT_VIEW_SCALE_1X) + 1;
+            linux_set_display_scale(app, s);
+            break;
+        }
         case ACT_VIEW_FULLSCREEN:
             app->menu_ctx.fullscreen = !app->menu_ctx.fullscreen;
             SDL_SetWindowFullscreen(app->window, app->menu_ctx.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
@@ -1183,6 +1204,16 @@ sync_optical_view:
             } else {
                 app->menu_ctx.menu_bar_revealed = false;
                 app->menu_ctx.menu_hide_deadline = (double)SDL_GetTicks() / 1000.0;
+            }
+            /* Ricalibrazione geometrica canvas: mantiene la visualizzazione esatta a 512 * scale */
+            if (app->menu_ctx.current_scale >= 1 && app->menu_ctx.current_scale <= 4) {
+                int target_w = 512 * app->menu_ctx.current_scale;
+                int target_h = target_w + (!app->menu_ctx.hide_menu_bar ? MENU_BAR_HEIGHT : 0);
+                if (app->menu_ctx.current_scale == 1) {
+                    target_w = 800;
+                    target_h = 800;
+                }
+                SDL_SetWindowSize(app->window, target_w, target_h);
             }
             break;
 
@@ -1219,6 +1250,10 @@ sync_optical_view:
         }
                 case ACT_TOOLS_KEYMAP_MANAGE:
             linux_keymap_show(&app->kbd_state.keymap_mgr);
+            break;
+        case ACT_TOOLS_TOGGLE_DOUBLE_TAP:
+            plato_keyboard_toggle_double_tap(&app->kbd_state);
+            app->menu_ctx.double_tap_enabled = plato_keyboard_get_double_tap(&app->kbd_state);
             break;
         case ACT_TOOLS_CYCLE_ARROW_MODE: {
             plato_arrow_mode_t m = plato_keyboard_cycle_arrow_mode(&app->kbd_state);
@@ -1304,6 +1339,12 @@ static void handle_sdl_key(linux_client_t *app, SDL_KeyboardEvent *key, double n
     if ((ctrl || gui) && shift && key->keysym.sym == SDLK_x) {
         apply_menu_action(app, ACT_SCRIPTS_CANCEL);
         return;
+    }
+
+    if (app->script_runner && plato_script_is_running(app->script_runner)) {
+        if (!plato_script_is_keyboard_enabled(app->script_runner)) {
+            return;
+        }
     }
     if ((ctrl || gui) && shift && key->keysym.sym == SDLK_m) {
         apply_menu_action(app, ACT_VIEW_HIDE_MENU_BAR);
@@ -1482,6 +1523,12 @@ static void handle_sdl_key(linux_client_t *app, SDL_KeyboardEvent *key, double n
 static void handle_sdl_text(linux_client_t *app, const char *text, double now_sec) {
     if (!text || !text[0]) return;
 
+    if (app->script_runner && plato_script_is_running(app->script_runner)) {
+        if (!plato_script_is_keyboard_enabled(app->script_runner)) {
+            return;
+        }
+    }
+
     SDL_Keymod mod = SDL_GetModState();
     bool shift = (mod & KMOD_SHIFT) != 0;
     bool ctrl  = (mod & KMOD_CTRL) != 0;
@@ -1653,10 +1700,19 @@ int main(int argc, char *argv[]) {
     linux_client_t app;
     memset(&app, 0, sizeof(app));
 
+    int init_scale = (app.profile.window_scale >= 1 && app.profile.window_scale <= 4) ? app.profile.window_scale : 2;
+    app.menu_ctx.current_scale = init_scale;
+    int init_w = 512 * init_scale;
+    int init_h = (512 * init_scale) + (!app.menu_ctx.hide_menu_bar ? MENU_BAR_HEIGHT : 0);
+    if (init_scale == 1) {
+        init_w = 800;
+        init_h = 800;
+    }
+
     app.window = SDL_CreateWindow(
         "PlatoLives - Cyber1 Terminal (Linux/OpenGL)",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        WINDOW_WIDTH_INIT, WINDOW_HEIGHT_INIT,
+        init_w, init_h,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
     );
 
@@ -1813,7 +1869,27 @@ int main(int argc, char *argv[]) {
             if (event.type == SDL_TEXTINPUT && event.text.windowID != main_win_id) continue;
             if (event.type == SDL_TEXTEDITING && event.edit.windowID != main_win_id) continue;
 
-            if (event.type == SDL_QUIT) {
+            if (event.type == SDL_WINDOWEVENT) {
+                if (event.window.event == SDL_WINDOWEVENT_RESIZED || event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                    int w = event.window.data1;
+                    int h = event.window.data2;
+                    int menu_h = (!app.menu_ctx.hide_menu_bar) ? MENU_BAR_HEIGHT : 0;
+                    
+                    int matched_scale = 0;
+                    if (abs(w - 800) <= 16 && abs(h - 800) <= 16) {
+                        matched_scale = 1;
+                    } else {
+                        for (int sc = 2; sc <= 4; sc++) {
+                            if (abs(w - 512 * sc) <= 16 && abs(h - ((512 * sc) + menu_h)) <= 16) {
+                                matched_scale = sc;
+                                break;
+                            }
+                        }
+                    }
+                    app.menu_ctx.current_scale = matched_scale;
+                    app.profile.window_scale = matched_scale;
+                }
+            } else if (event.type == SDL_QUIT) {
                 app.running = false;
             } else if (event.type == SDL_KEYDOWN) {
                 handle_sdl_key(&app, &event.key, now_sec);
@@ -1850,6 +1926,7 @@ int main(int argc, char *argv[]) {
         plato_terminal_tick(&app.terminal, dt_ms);
 
         app.menu_ctx.is_script_running = (app.script_runner && plato_script_is_running(app.script_runner));
+        app.menu_ctx.double_tap_enabled = app.kbd_state.double_tap_enabled;
         static bool s_is_animating = true;
         static int s_redraw_cooldown = 0;
 

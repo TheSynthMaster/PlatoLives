@@ -23,6 +23,8 @@
 #define IDC_K_LBL_TITLE   811
 #define IDC_K_LBL_DESC    812
 #define IDC_K_LBL_STAT    813
+#define IDC_K_CHK_DOUBLE_TAP 815
+#define IDC_K_BTN_SAVE        816
 
 #define IDC_ACT_RADIO_CHAR  901
 #define IDC_ACT_RADIO_PLATO 902
@@ -41,8 +43,8 @@ typedef struct {
 
     HWND hListProf, hListBind;
     HWND hBtnNew, hBtnDup, hBtnRen, hBtnDel;
-    HWND hBtnRec, hBtnEdit, hBtnRem, hBtnSet, hBtnClose;
-    HWND hLblTitle, hLblDesc, hLblStat;
+    HWND hBtnRec, hBtnEdit, hBtnRem, hBtnSet, hBtnSave, hBtnClose;
+    HWND hLblTitle, hLblDesc, hLblStat, hChkDoubleTap;
 
     HBRUSH hbrBg, hbrBox, hbrHover;
     HPEN hPenBorder, hPenHighlight;
@@ -554,6 +556,9 @@ static bool win_rename_show(HWND hParent, const char *cur_name, const char *cur_
 /* MAIN DIALOG REFRESH & EVENTS                                              */
 /* ========================================================================= */
 static void k_refresh_prof(void) {
+    if (g_kdlg.hChkDoubleTap && g_kdlg.kstate) {
+        SendMessage(g_kdlg.hChkDoubleTap, BM_SETCHECK, plato_keyboard_get_double_tap(g_kdlg.kstate) ? BST_CHECKED : BST_UNCHECKED, 0);
+    }
     SendMessage(g_kdlg.hListProf, LB_RESETCONTENT, 0, 0);
     for (int i = 0; i < g_kdlg.mgr->profile_count; i++) {
         char buf[128];
@@ -576,6 +581,13 @@ static void k_refresh_bind(void) {
     EnableWindow(g_kdlg.hBtnNew, TRUE);
     EnableWindow(g_kdlg.hBtnDup, TRUE);
     EnableWindow(g_kdlg.hBtnRen, !p->is_builtin);
+    if (g_kdlg.hChkDoubleTap) {
+        SendMessage(g_kdlg.hChkDoubleTap, BM_SETCHECK, p->double_tap_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        EnableWindow(g_kdlg.hChkDoubleTap, !p->is_builtin);
+    }
+    if (g_kdlg.hBtnSave) {
+        EnableWindow(g_kdlg.hBtnSave, !p->is_builtin);
+    }
     EnableWindow(g_kdlg.hBtnDel, !p->is_builtin);
     EnableWindow(g_kdlg.hBtnRec, !p->is_builtin);
     bool can_edit_bind = (!p->is_builtin && g_kdlg.cur_bind >= 0 && g_kdlg.cur_bind < p->binding_count);
@@ -746,7 +758,7 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
                 if (win_action_picker_show(hwnd, &init_b, &new_b)) {
                     plato_keymap_profile_t *p = &ctx->mgr->profiles[ctx->cur_prof];
                     plato_keymap_profile_add_binding(p, &new_b);
-                    plato_keymap_save_profile(p);
+                    SetWindowTextW(g_kdlg.hLblStat, L"Modified (unsaved)");
                 }
                 k_refresh_bind();
                 return 0;
@@ -779,8 +791,36 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
                         plato_key_binding_t updated_b;
                         if (win_action_picker_show(hwnd, &p->bindings[ctx->cur_bind], &updated_b)) {
                             plato_keymap_profile_set_binding(p, ctx->cur_bind, &updated_b);
-                            plato_keymap_save_profile(p);
+                            SetWindowTextW(g_kdlg.hLblStat, L"Modified (unsaved)");
                             k_refresh_bind();
+                        }
+                    }
+                }
+                        } else if (wmId == IDC_K_CHK_DOUBLE_TAP) {
+                if (ctx->cur_prof >= 0 && ctx->cur_prof < ctx->mgr->profile_count) {
+                    plato_keymap_profile_t *p = &ctx->mgr->profiles[ctx->cur_prof];
+                    if (!p->is_builtin) {
+                        LRESULT chk = SendMessage(g_kdlg.hChkDoubleTap, BM_GETCHECK, 0, 0);
+                        p->double_tap_enabled = (chk == BST_CHECKED);
+                        SetWindowTextW(g_kdlg.hLblStat, L"Modified (unsaved)");
+                    }
+                }
+            } else if (wmId == IDC_K_BTN_SAVE) {
+                if (ctx->cur_prof >= 0 && ctx->cur_prof < ctx->mgr->profile_count) {
+                    plato_keymap_profile_t *p = &ctx->mgr->profiles[ctx->cur_prof];
+                    if (p->is_builtin) {
+                        MessageBoxW(hwnd, L"Built-in profiles are read-only.\nDuplicate the profile to customize and save.", L"PlatoLives", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        if (plato_keymap_save_profile(p)) {
+                            if (ctx->cur_prof == ctx->mgr->active_profile_index) {
+                                ctx->kstate->double_tap_enabled = p->double_tap_enabled;
+                                if (ctx->hMenu) {
+                                    win_update_keyboard_menu(ctx->hMenu, ctx->kstate);
+                                }
+                            }
+                            SetWindowTextW(g_kdlg.hLblStat, L"Profile saved.");
+                        } else {
+                            SetWindowTextW(g_kdlg.hLblStat, L"Error saving profile.");
                         }
                     }
                 }
@@ -851,7 +891,7 @@ static LRESULT CALLBACK KeymapDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             } else if (wmId == IDC_K_BTN_REM) {
                 if (ctx->cur_prof >= 0 && ctx->cur_bind >= 0 && !ctx->mgr->profiles[ctx->cur_prof].is_builtin) {
                     plato_keymap_profile_remove_binding(&ctx->mgr->profiles[ctx->cur_prof], ctx->cur_bind);
-                    plato_keymap_save_profile(&ctx->mgr->profiles[ctx->cur_prof]);
+                    SetWindowTextW(g_kdlg.hLblStat, L"Modified (unsaved)");
                     ctx->cur_bind = -1;
                     k_refresh_bind();
                 }
@@ -959,10 +999,12 @@ void win_keymap_show(HWND hParent, plato_keyboard_state_t *kstate, HMENU hMenu) 
     g_kdlg.hBtnEdit = CreateWindowW(L"BUTTON", L"✎ Edit Binding...", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 465, 500, 130, 30, hwnd, (HMENU)IDC_K_BTN_EDIT, wc.hInstance, NULL);
     g_kdlg.hBtnRem = CreateWindowW(L"BUTTON", L"- Remove Binding", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 605, 500, 140, 30, hwnd, (HMENU)IDC_K_BTN_REM, wc.hInstance, NULL);
 
-    g_kdlg.hLblStat = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 280, 545, 380, 25, hwnd, (HMENU)IDC_K_LBL_STAT, wc.hInstance, NULL);
+    g_kdlg.hChkDoubleTap = CreateWindowW(L"BUTTON", L"Double-Tap for SHIFT", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 280, 542, 165, 26, hwnd, (HMENU)IDC_K_CHK_DOUBLE_TAP, wc.hInstance, NULL);
+    g_kdlg.hLblStat = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 450, 545, 130, 25, hwnd, (HMENU)IDC_K_LBL_STAT, wc.hInstance, NULL);
 
-    g_kdlg.hBtnSet = CreateWindowW(L"BUTTON", L"Set as Active Profile", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 670, 540, 155, 30, hwnd, (HMENU)IDC_K_BTN_SET, wc.hInstance, NULL);
-    g_kdlg.hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 835, 540, 85, 30, hwnd, (HMENU)IDC_K_BTN_CLOSE, wc.hInstance, NULL);
+    g_kdlg.hBtnSet = CreateWindowW(L"BUTTON", L"Set as Active", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 585, 540, 115, 30, hwnd, (HMENU)IDC_K_BTN_SET, wc.hInstance, NULL);
+    g_kdlg.hBtnSave = CreateWindowW(L"BUTTON", L"Save Profile", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 705, 540, 110, 30, hwnd, (HMENU)IDC_K_BTN_SAVE, wc.hInstance, NULL);
+    g_kdlg.hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 820, 540, 75, 30, hwnd, (HMENU)IDC_K_BTN_CLOSE, wc.hInstance, NULL);
 
     HWND hChild = GetWindow(hwnd, GW_CHILD);
     while (hChild) {

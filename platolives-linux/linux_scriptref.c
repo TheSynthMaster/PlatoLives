@@ -258,7 +258,7 @@ void linux_scriptref_render(void) {
         } else if (line[0] == '@' || (strncmp(line, "===", 3) == 0)) {
             /* Label o Sezione principale */
             draw_sr_string(g_sr_ren, 28.0f, (float)(y + 14), line, th.bright.r, th.bright.g, th.bright.b);
-        } else if (strncmp(line, "wait_", 5) == 0 || strncmp(line, "send", 4) == 0 ||
+        } else if (strncmp(line, "- keyboard", 10) == 0 || strncmp(line, "wait_", 5) == 0 || strncmp(line, "send", 4) == 0 ||
                    strncmp(line, "key", 3) == 0 || strncmp(line, "let", 3) == 0 ||
                    strncmp(line, "for", 3) == 0 || strncmp(line, "if", 2) == 0 ||
                    strncmp(line, "find_text", 9) == 0 || strncmp(line, "exit", 4) == 0) {

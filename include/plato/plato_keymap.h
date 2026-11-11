@@ -49,6 +49,7 @@ typedef struct {
     char name[PLATO_KEYMAP_NAME_LEN];
     char description[PLATO_KEYMAP_DESC_LEN];
     bool is_builtin;                /* true = Read-only (Standard, WASD, WASX, Numpad, WADX); false = Utente */
+    bool double_tap_enabled;        /* Double-tap per lo shift specifico di questo profilo */
     int  binding_count;
     plato_key_binding_t bindings[PLATO_KEYMAP_MAX_BINDINGS];
 } plato_keymap_profile_t;

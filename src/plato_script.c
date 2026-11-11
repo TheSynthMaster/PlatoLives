@@ -200,6 +200,7 @@ struct plato_script_runner {
     pthread_t thread;
     volatile bool running;
     volatile bool active;
+    volatile bool keyboard_listening;
     int char_delay_ms;
     int next_delay_ms;
     int command_delay_ms;
@@ -596,6 +597,20 @@ static void* script_worker(void *arg) {
             while (r->running && ms > 0) {
                 int stp = (ms > 50) ? 50 : ms; plato_sleep_ms(stp); ms -= stp;
             }
+        } else if (strcmp(op, "keyboard") == 0 || strcmp(op, "tastiera") == 0) {
+            trim_s(av);
+            char av_low[64] = {0};
+            for (size_t k = 0; av[k] && k < sizeof(av_low) - 1; k++) {
+                av_low[k] = (char)tolower((unsigned char)av[k]);
+            }
+            if (strcmp(av_low, "on") == 0 || strcmp(av_low, "1") == 0 || strcmp(av_low, "enable") == 0 || strcmp(av_low, "true") == 0) {
+                r->keyboard_listening = true;
+            } else if (strcmp(av_low, "off") == 0 || strcmp(av_low, "0") == 0 || strcmp(av_low, "disable") == 0 || strcmp(av_low, "false") == 0) {
+                r->keyboard_listening = false;
+            } else {
+                fprintf(stderr, "[Script] Warning: unknown keyboard state '%s' (expected 'on' or 'off')\n", av);
+                fflush(stderr);
+            }
         } else if (strcmp(op, "send") == 0 || strcmp(op, "invia") == 0) {
             const char *to_send = plato_script_get_str_var(r, av);
             if (!to_send) { strip_q(av); to_send = av; }
@@ -867,13 +882,13 @@ static void* script_worker(void *arg) {
         }
         if (r->command_delay_ms > 0) plato_sleep_ms(r->command_delay_ms);
     }
-    free(tc); r->active = false;
+    free(tc); r->active = false; r->keyboard_listening = true;
     return NULL;
 }
 
 plato_script_runner_t* plato_script_create(plato_terminal_t *term) {
     plato_script_runner_t *r = (plato_script_runner_t *)calloc(1, sizeof(plato_script_runner_t));
-    if (r) { r->term = term; r->char_delay_ms = 250; r->next_delay_ms = 500; r->command_delay_ms = 0; }
+    if (r) { r->term = term; r->char_delay_ms = 250; r->next_delay_ms = 500; r->command_delay_ms = 0; r->keyboard_listening = true; }
     return r;
 }
 
@@ -893,6 +908,7 @@ bool plato_script_start_ex(plato_script_runner_t *runner, const plato_script_t *
     runner->var_count = 0;
     if (runner->script_text) free(runner->script_text);
     runner->script_text = strdup(script->body);
+    runner->keyboard_listening = false; /* Default: physical keyboard muted during script */
     runner->running = true; runner->active = true;
     if (pthread_create(&runner->thread, NULL, script_worker, runner) != 0) {
         runner->running = false; runner->active = false; return false;
@@ -913,10 +929,18 @@ void plato_script_stop(plato_script_runner_t *runner) {
         runner->running = false; pthread_join(runner->thread, NULL);
     }
     runner->active = false;
+    runner->keyboard_listening = true;
 }
 
 bool plato_script_is_running(const plato_script_runner_t *runner) {
     return runner && runner->active;
+}
+
+bool plato_script_is_keyboard_enabled(const plato_script_runner_t *runner) {
+    if (!runner || !runner->active || !runner->running) {
+        return true;
+    }
+    return runner->keyboard_listening;
 }
 
 #include "plato/plato_transport.h"
@@ -1097,6 +1121,12 @@ static const char *s_manual_part2 =
 "    Example: copy-area 0 0 63 4 compact console\n\n"
 "5. TERMINAL INPUT & KEYS\n"
 "--------------------------------------------------------------------------------\n"
+"- keyboard: keyboard on  |  keyboard off\n"
+"    Controls physical keyboard forwarding during script execution.\n"
+"    Default: OFF (all user keystrokes are discarded during script\n"
+"    to prevent session race conditions, except 'Ctrl+Shift+X' abort).\n"
+"    Use 'keyboard on' to enable interactive user typing during pauses.\n"
+"    Full interactive keyboard input is always restored upon exit.\n"
 "- send (Text & Variable Transmission): send \"<string>\"  |  send <variable>\n"
 "- send-env (Secure Environment Variable): send-env <ENV_VAR_NAME>\n"
 "    Transmits value securely and redacts passwords from script logs.\n"

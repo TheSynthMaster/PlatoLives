@@ -433,6 +433,7 @@ static void* network_worker(void *arg) {
             if (allowed > budget) allowed = budget;
         }
         size_t consumed = plato_terminal_feed(terminal, &feedBuffer[feedBufferPos], allowed);
+        if (consumed > 0) plato_optical_notify_rx(optical, consumed);
         feedBufferPos += consumed;
         if (tekBaud > 0) {
             sTekPacerCreditBits -= (double)consumed * 10.0;
@@ -684,15 +685,17 @@ static void* network_worker(void *arg) {
     return opticalProfile.c64_preset;
 }
 
-- (void)setC64Border:(BOOL)enabled {
-    opticalProfile.c64_border = enabled;
+- (void)setC64Border:(NSInteger)border {
+    opticalProfile.c64_border = (int)border;
     if (optical) plato_optical_invalidate(optical);
     [self refreshDisplay];
 }
 
-- (BOOL)c64Border {
-    return opticalProfile.c64_border;
-}
+- (NSInteger)c64Border { return opticalProfile.c64_border; }
+
+
+
+
 
 - (void)setC64ColorScheme:(NSInteger)scheme {
     opticalProfile.c64_color_scheme = (int)scheme;
@@ -1116,7 +1119,7 @@ static void* network_worker(void *arg) {
             /* Modalita Commodore 64 (VIC-II) */
             const char *presetStr = (opticalProfile.c64_preset == 0) ? "RF COMP" :
                                     (opticalProfile.c64_preset == 1) ? "1702 CRT" : "CRISP";
-            const char *borderStr = opticalProfile.c64_border ? "ENABLED" : "DISABLED";
+            const char *borderStr = (opticalProfile.c64_border == 2) ? "TURBO FX" : (opticalProfile.c64_border == 1 ? "ENABLED" : "DISABLED");
             const char *palStr = (opticalProfile.c64_color_scheme == 1) ? "AMBER P40" :
                                  (opticalProfile.c64_color_scheme == 2) ? "GREEN P31" : "VIC-II 16C";
             fpsText = [NSString stringWithFormat:@"%@FPS     %5.1f\nMODE    C64 %s\nBORDER  %s\nPALETTE %s\nCPU     %5.1f%%",
@@ -1226,7 +1229,7 @@ static void* network_worker(void *arg) {
         int plato_x = (int)((loc.x - drawX) / scale);
         int plato_y = (int)((loc.y - drawY) / scale);
 
-        if (opticalProfile.display_mode == 7) { int cx = plato_x * 4, cy = plato_y * 4; c64_unwarp_touch(&cx, &cy, opticalProfile.c64_border); plato_x = cx; plato_y = cy; } else { plato_optical_unwarp_touch(&plato_x, &plato_y, opticalProfile.display_mode, opticalProfile.plasma_distortion, opticalProfile.crt_distortion); }
+        if (opticalProfile.display_mode == 7) { int cx = plato_x * 4, cy = plato_y * 4; c64_unwarp_touch(&cx, &cy, opticalProfile.c64_border > 0); plato_x = cx; plato_y = cy; } else { plato_optical_unwarp_touch(&plato_x, &plato_y, opticalProfile.display_mode, opticalProfile.plasma_distortion, opticalProfile.crt_distortion); }
 
         if (plato_x < 0) plato_x = 0;
         if (plato_x >= PLATO_WIDTH) plato_x = PLATO_WIDTH - 1;
@@ -1263,12 +1266,15 @@ static void* network_worker(void *arg) {
         return;
     }
 
-    /* 1. Durante l'esecuzione dello script, blocca qualsiasi input tranne Ctrl+Shift+X */
+    /* 1. Durante l'esecuzione dello script, blocca l'input fisico se disabilitato tranne Ctrl+Shift+X */
     if (self.scriptRunner && plato_script_is_running(self.scriptRunner)) {
-        if (ev.ctrl && ev.shift && !ev.alt && (uc == 'x')) {
+        if ((ev.ctrl || ev.gui) && ev.shift && !ev.alt && (uc == 'x')) {
             plato_script_stop(self.scriptRunner);
+            return;
         }
-        return;
+        if (!plato_script_is_keyboard_enabled(self.scriptRunner)) {
+            return;
+        }
     }
 
     /* 2. Controllo e dispatching Hotkey Script Personalizzati */

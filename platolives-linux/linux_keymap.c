@@ -436,6 +436,12 @@ void linux_keymap_handle_event(const SDL_Event *ev) {
             }
 
             // Pulsanti Bottom Bar Destra (y: 568..598)
+            if (k_pt_in(x, y, 465, 568, 205, 30)) {
+                if (!g_kmgr->profiles[g_sel_prof].is_builtin) {
+                    g_kmgr->profiles[g_sel_prof].double_tap_enabled = !g_kmgr->profiles[g_sel_prof].double_tap_enabled;
+                    plato_keymap_save_profile(&g_kmgr->profiles[g_sel_prof]);
+                }
+            }
             if (k_pt_in(x, y, 680, 568, 155, 30)) {
                 plato_keymap_set_active_by_index(g_kmgr, g_sel_prof);
                 plato_keymap_save_all(g_kmgr);
@@ -707,6 +713,7 @@ void linux_keymap_render(void) {
     }
 
     bool is_act = (g_sel_prof == g_kmgr->active_profile_index);
+    k_draw_btn(465, 568, 205, 30, p->double_tap_enabled ? "[X] Double-Tap Shift" : "[ ] Double-Tap Shift", !p->is_builtin && p->double_tap_enabled);
     k_draw_btn(680, 568, 155, 30, is_act ? "✓ Active Profile" : "Set as Active Profile", is_act);
     k_draw_btn(850, 568, 90, 30, "Close", false);
 

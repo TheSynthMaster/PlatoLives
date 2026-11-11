@@ -1,10 +1,9 @@
-# PlatoLives v5.6
+# PlatoLives 5.7
 
-## What's New
+## What's new in PlatoLives 5.7
 
-- **Commodore 64 (VIC-II) Display Engine**: Brings the warmth and tactile nostalgia of the world's most beloved 8-bit home computer to PLATO. Sit in front of a virtual Commodore 1702 CRT monitor or experience the vintage softness of an authentic RF composite connection.
-- **Authentic C64 Color Schemes & Phosphors**: Choose between the iconic Two-Tone Classic Blue, full 16-color VIC-II graphics, or calibrated vintage P40 Amber and P31 Green monochrome monitor palettes.
-- **Authentic 12.5% Border Frame**: Features the unmistakable C64 outer border with seamless optical touch compensation, plus a full-screen toggle for maximum workspace.
-- **Clean Crisp Hires Option**: Enjoy high-contrast readability of PLATO lessons and notes while preserving authentic 8-bit character charm.
-- **Global Input System & Keymapper Refactoring**: Complete priority given to native PLATO keys across Windows, macOS, and Linux, eliminating OS shortcut conflicts (Ctrl+C, Alt mnemonics) and streamlining custom key remapping.
-- **Unified Multiplatform Release**: Native performance and parity across macOS (Metal/Cocoa), Windows (Direct3D 11, x86_64 & ARM64), Linux Desktop (OpenGL/SDL2), and Linux Headless Console.
+- **C64 TurboLoad Effect**: optional TurboLoad effect with stripes along the screen border in Commodore 64 mode. The effect can be enabled or disabled.
+- **Integer Window Size Presets**: predefined 1×, 2×, 3× and 4× window scales. The 1× preset corresponds to the native 512 × 512 resolution.
+- **Script Keyboard Control**: new `keyboard [on/off]` scripting command to enable or disable keyboard input listening while a script is running.
+
+See [README.md](https://github.com/TheSynthMaster/PlatoLives/blob/v5.7/README.md) for the project overview and documentation.

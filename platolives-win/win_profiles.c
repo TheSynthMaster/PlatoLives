@@ -55,6 +55,8 @@
 #define IDC_COMBO_C64_BORDER     243
 #define IDC_LBL_C64_SCHEME       244
 #define IDC_COMBO_C64_SCHEME     245
+#define IDC_LBL_SCALE            246
+#define IDC_COMBO_SCALE          247
 
 typedef struct {
     HWND hwnd;
@@ -75,7 +77,9 @@ typedef struct {
     HWND hLblC64Preset, hComboC64Preset;
     HWND hLblC64Border, hComboC64Border;
     HWND hLblC64Scheme, hComboC64Scheme;
+    
     HWND hChkFullscreen, hChkDefault, hChkScript, hEditScript;
+    HWND hLblScale, hComboScale;
     HWND hBtnNew, hBtnDelete, hBtnDefault, hBtnConnect, hBtnSave, hBtnClose;
 
     HBRUSH hbrBg;
@@ -179,8 +183,11 @@ static void dlg_populate_fields(dlg_ctx_t *ctx, int index) {
     int p_pres = (p->pdp1_preset >= 0 && p->pdp1_preset <= 2) ? p->pdp1_preset : 0;
     SendMessage(ctx->hComboPdp1Preset, CB_SETCURSEL, (WPARAM)p_pres, 0);
 
+    int sc_idx = (p->window_scale >= 0 && p->window_scale <= 4) ? p->window_scale : 0;
+    SendMessage(ctx->hComboScale, CB_SETCURSEL, (WPARAM)sc_idx, 0);
+
     SendMessage(ctx->hComboC64Preset, CB_SETCURSEL, (WPARAM)((p->c64_preset >= 0 && p->c64_preset <= 2) ? p->c64_preset : 0), 0);
-    SendMessage(ctx->hComboC64Border, CB_SETCURSEL, (WPARAM)(p->c64_border ? 0 : 1), 0);
+    SendMessage(ctx->hComboC64Border, CB_SETCURSEL, (WPARAM)p->c64_border, 0);
     SendMessage(ctx->hComboC64Scheme, CB_SETCURSEL, (WPARAM)((p->c64_color_scheme >= 0 && p->c64_color_scheme <= 3) ? p->c64_color_scheme : 0), 0);
 
     /* Plasma */
@@ -259,6 +266,8 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
     if (p->port <= 0) p->port = 8005;
 
     p->display_mode = (int)SendMessage(ctx->hComboMode, CB_GETCURSEL, 0, 0);
+    int sc_sel = (int)SendMessage(ctx->hComboScale, CB_GETCURSEL, 0, 0);
+    p->window_scale = (sc_sel >= 0 && sc_sel <= 4) ? sc_sel : 0;
     int ph_idx = (int)SendMessage(ctx->hComboPhosphor, CB_GETCURSEL, 0, 0);
     p->phosphor_color = (ph_idx >= 0 && ph_idx <= 3) ? ph_idx : 0;
     int pf_idx = (int)SendMessage(ctx->hComboPdp1Font, CB_GETCURSEL, 0, 0);
@@ -271,7 +280,7 @@ static void dlg_save_current(dlg_ctx_t *ctx) {
     int c64p_idx = (int)SendMessage(ctx->hComboC64Preset, CB_GETCURSEL, 0, 0);
     p->c64_preset = (c64p_idx >= 0 && c64p_idx <= 2) ? c64p_idx : 0;
     int c64b_idx = (int)SendMessage(ctx->hComboC64Border, CB_GETCURSEL, 0, 0);
-    p->c64_border = (c64b_idx == 0);
+    p->c64_border = (c64b_idx >= 0 && c64b_idx <= 2) ? c64b_idx : 1;
     int c64s_idx = (int)SendMessage(ctx->hComboC64Scheme, CB_GETCURSEL, 0, 0);
     p->c64_color_scheme = (c64s_idx >= 0 && c64s_idx <= 3) ? c64s_idx : 0;
 
@@ -717,8 +726,9 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
 
     g_dlg.hLblC64Border = CreateWindowW(L"STATIC", L"C64 Border Frame:", WS_CHILD, rx + 280, 156, 260, 18, hwnd, (HMENU)IDC_LBL_C64_BORDER, wc.hInstance, NULL);
     g_dlg.hComboC64Border = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx + 280, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_C64_BORDER, wc.hInstance, NULL);
-    SendMessageW(g_dlg.hComboC64Border, CB_ADDSTRING, 0, (LPARAM)L"Enabled (12.5% Frame)");
     SendMessageW(g_dlg.hComboC64Border, CB_ADDSTRING, 0, (LPARAM)L"Disabled (Full Display)");
+    SendMessageW(g_dlg.hComboC64Border, CB_ADDSTRING, 0, (LPARAM)L"Enabled (Static 12.5%)");
+    SendMessageW(g_dlg.hComboC64Border, CB_ADDSTRING, 0, (LPARAM)L"Turbo Loader Border FX");
 
     g_dlg.hLblC64Scheme = CreateWindowW(L"STATIC", L"C64 Color Scheme:", WS_CHILD, rx + 560, 156, 260, 18, hwnd, (HMENU)IDC_LBL_C64_SCHEME, wc.hInstance, NULL);
     g_dlg.hComboC64Scheme = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | CBS_DROPDOWNLIST, rx + 560, 174, 260, 150, hwnd, (HMENU)IDC_COMBO_C64_SCHEME, wc.hInstance, NULL);
@@ -728,6 +738,14 @@ void win_profiles_dialog_show(HWND hParent, plato_profile_list_t *list, win_prof
     SendMessageW(g_dlg.hComboC64Scheme, CB_ADDSTRING, 0, (LPARAM)L"Green Monitor (P31)");
 
     /* Checkbox Opzioni */
+    g_dlg.hLblScale = CreateWindowW(L"STATIC", L"Window Size:", WS_CHILD | WS_VISIBLE, rx + 530, 206, 95, 18, hwnd, (HMENU)IDC_LBL_SCALE, wc.hInstance, NULL);
+    g_dlg.hComboScale = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, rx + 630, 204, 190, 150, hwnd, (HMENU)IDC_COMBO_SCALE, wc.hInstance, NULL);
+    SendMessageW(g_dlg.hComboScale, CB_ADDSTRING, 0, (LPARAM)L"Default (2x)");
+    SendMessageW(g_dlg.hComboScale, CB_ADDSTRING, 0, (LPARAM)L"1x (512 x 512)");
+    SendMessageW(g_dlg.hComboScale, CB_ADDSTRING, 0, (LPARAM)L"2x (1024 x 1024)");
+    SendMessageW(g_dlg.hComboScale, CB_ADDSTRING, 0, (LPARAM)L"3x (1536 x 1536)");
+    SendMessageW(g_dlg.hComboScale, CB_ADDSTRING, 0, (LPARAM)L"4x (2048 x 2048)");
+
     g_dlg.hChkFullscreen = CreateWindowW(L"BUTTON", L"Launch in Full Screen", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 206, 240, 18, hwnd, (HMENU)IDC_CHK_FULLSCREEN, wc.hInstance, NULL);
     g_dlg.hChkDefault = CreateWindowW(L"BUTTON", L"Default profile at startup", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx + 260, 206, 260, 18, hwnd, (HMENU)IDC_CHK_DEFAULT, wc.hInstance, NULL);
     g_dlg.hChkScript = CreateWindowW(L"BUTTON", L"Run Startup Script on connect", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, rx, 228, 520, 18, hwnd, (HMENU)IDC_CHK_SCRIPT, wc.hInstance, NULL);

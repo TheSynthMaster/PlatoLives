@@ -46,7 +46,10 @@ typedef enum {
     ACT_VIEW_C64_PRESET_RF,
     ACT_VIEW_C64_PRESET_CRT,
     ACT_VIEW_C64_PRESET_CRISP,
-    ACT_VIEW_C64_BORDER,
+    ACT_VIEW_C64_BORDER_OFF,
+    ACT_VIEW_C64_BORDER_ON,
+    ACT_VIEW_C64_BORDER_FX,
+    
     ACT_VIEW_C64_SCHEME_CLASSIC,
     ACT_VIEW_C64_SCHEME_MC,
     ACT_VIEW_C64_SCHEME_AMBER,
@@ -83,7 +86,6 @@ typedef enum {
     ACT_VIEW_COLOR_GREEN,
     ACT_VIEW_COLOR_AMBER,
     ACT_VIEW_COLOR_WHITE,
-
     ACT_VIEW_REAL_PDP1 = 581,
     ACT_VIEW_PDP1_FONT_1961,
     ACT_VIEW_PDP1_FONT_1964,
@@ -96,6 +98,11 @@ typedef enum {
     ACT_VIEW_PDP1_PRESET_HISTORIC,
     ACT_VIEW_PDP1_PRESET_FAST,
     ACT_VIEW_PDP1_PRESET_MODERN,
+
+    ACT_VIEW_SCALE_1X = 594,
+    ACT_VIEW_SCALE_2X,
+    ACT_VIEW_SCALE_3X,
+    ACT_VIEW_SCALE_4X,
 
     ACT_EDIT_COPY_VERBATIM = 600,
     ACT_EDIT_COPY_COMPACT,
@@ -111,6 +118,7 @@ typedef enum {
     ACT_TOOLS_WASD_MODE,
     ACT_TOOLS_WASX_MODE,
     ACT_TOOLS_CYCLE_ARROW_MODE,
+    ACT_TOOLS_TOGGLE_DOUBLE_TAP = 805,
     ACT_TOOLS_KEYMAP_MANAGE,
     ACT_TOOLS_KEYMAP_PROFILE_BASE = 850, /* 850 .. 899 */
     ACT_TOOLS_DIAG_LOG,
@@ -143,6 +151,8 @@ typedef struct {
     bool renderer_log;
     bool wasd_mode;
     plato_arrow_mode_t arrow_mode;
+    bool double_tap_enabled;
+    int current_scale;
     bool z80_log;
     bool fps_hud;
     bool fullscreen;

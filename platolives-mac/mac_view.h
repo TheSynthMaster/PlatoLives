@@ -74,8 +74,9 @@ FOUNDATION_EXPORT NSString *PLATOKeyboardReferenceText(void);
 - (void)setDisplayRealC64;
 - (void)setC64Preset:(NSInteger)preset;
 - (NSInteger)c64Preset;
-- (void)setC64Border:(BOOL)enabled;
-- (BOOL)c64Border;
+- (void)setC64Border:(NSInteger)border;
+- (NSInteger)c64Border;
+
 - (void)setC64ColorScheme:(NSInteger)scheme;
 - (NSInteger)c64ColorScheme;
 - (void)setPDP1Font:(NSInteger)font;

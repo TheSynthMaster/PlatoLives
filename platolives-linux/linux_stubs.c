@@ -16,6 +16,7 @@ int  SDL_GL_SetAttribute(void) { return 0; }
 int  SDL_GL_SetSwapInterval(void) { return 0; }
 void SDL_GL_GetDrawableSize(void) {}
 void SDL_GetWindowSize(void) {}
+void SDL_SetWindowSize(void) {}
 int  SDL_PollEvent(void) { return 0; }
 uint32_t SDL_GetTicks(void) { return 0; }
 void SDL_Delay(void) {}

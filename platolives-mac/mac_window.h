@@ -36,6 +36,8 @@
 - (instancetype)initWithProfile:(NSDictionary *)profile;
 - (instancetype)initWithProfile:(NSDictionary *)profile tabbedWithWindow:(NSWindow *)hostWindow;
 - (void)applyProfile:(NSDictionary *)profile;
+@property (nonatomic, assign) NSInteger currentScale;
+- (void)applyWindowScale:(NSInteger)scale;
 - (void)updateTitleWithMetadata;
 - (void)runScriptText:(NSString *)scriptText;
 - (void)runScriptStruct:(const plato_script_t *)script;
@@ -48,6 +50,9 @@
 @property (nonatomic, assign) plato_script_list_t *scriptList;
 @property (nonatomic, strong) PLATOScriptsWindowController *scriptsController;
 @property (nonatomic, strong) NSMenu *scriptsSubmenu;
+@property (nonatomic, strong) NSMenu *windowScaleMenu;
+- (void)selectWindowScale:(id)sender;
+- (void)updateWindowScaleMenu:(NSInteger)scale;
 
 - (PLATOTerminalWindowController *)activeTerminalController;
 - (PLATOTerminalWindowController *)openNewWindowWithProfile:(NSDictionary *)profile;
@@ -97,9 +102,10 @@
 @property (nonatomic, strong) NSMenu *pdp1PresetMenu;
 @property (nonatomic, strong) NSMenu *c64PresetMenu;
 @property (nonatomic, strong) NSMenu *c64BorderMenu;
+
 @property (nonatomic, strong) NSMenu *c64ColorSchemeMenu;
 - (void)updateC64PresetMenu:(NSInteger)preset;
-- (void)updateC64BorderMenu:(BOOL)border;
+- (void)updateC64BorderMenu:(NSInteger)border;
 - (void)updateC64ColorSchemeMenu:(NSInteger)scheme;
 
 - (void)selectPDP1Refresh:(id)sender;

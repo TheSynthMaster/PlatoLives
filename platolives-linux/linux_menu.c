@@ -114,6 +114,7 @@ static void draw_text(uint32_t *surf, int sw, int sh, int x0, int y0, const char
 
 /* Simboli speciali grafici */
 static void draw_bullet(uint32_t *surf, int sw, int sh, int cx, int cy, uint32_t col) {
+    
     for (int dy = -2; dy <= 2; ++dy) {
         for (int dx = -2; dx <= 2; ++dx) {
             if (dx*dx + dy*dy <= 4) {
@@ -125,6 +126,7 @@ static void draw_bullet(uint32_t *surf, int sw, int sh, int cx, int cy, uint32_t
 }
 
 static void draw_check(uint32_t *surf, int sw, int sh, int x, int y, uint32_t col) {
+    
     /* Segno di spunta ✓ */
     static const int coords[][2] = {
         {0, 4}, {1, 5}, {2, 6}, {3, 5}, {4, 4}, {5, 3}, {6, 2}, {7, 1}
@@ -197,7 +199,9 @@ enum {
     SUB_VIEW_PDP1_REFRESH,
     SUB_VIEW_PDP1_PRESET,
     SUB_VIEW_C64_PRESET,
-    SUB_VIEW_C64_SCHEME
+    SUB_VIEW_C64_BORDER,
+    SUB_VIEW_C64_SCHEME,
+    SUB_VIEW_SCALE
 };
 
 void linux_menu_init(linux_menu_context_t *ctx) {
@@ -330,9 +334,10 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         bool isC64 = (p->display_mode == 7);
         it[n++] = (gui_menu_item_t){"Commodore 64 (VIC-II)", NULL, ACT_VIEW_REAL_C64, TYPE_ITEM, 0, true, isC64, false};
         it[n++] = (gui_menu_item_t){"C64 Display Mode", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_C64_PRESET, false, false, !isC64};
-        it[n++] = (gui_menu_item_t){"C64 Border Frame (12.5%)", NULL, ACT_VIEW_C64_BORDER, TYPE_ITEM, 0, true, p->c64_border, !isC64};
+        it[n++] = (gui_menu_item_t){"C64 Border Mode", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_C64_BORDER, false, false, !isC64};
         it[n++] = (gui_menu_item_t){"C64 Color Scheme", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_C64_SCHEME, false, false, !isC64};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Window Size", NULL, ACT_NONE, TYPE_SUBMENU, SUB_VIEW_SCALE, false, false, false};
         it[n++] = (gui_menu_item_t){"Full Screen", "F11", ACT_VIEW_FULLSCREEN, TYPE_ITEM, 0, false, ctx->fullscreen, false};
         it[n++] = (gui_menu_item_t){"Show Performance HUD (FPS/CPU)", "F12", ACT_VIEW_FPS_HUD, TYPE_ITEM, 0, false, linux_hud_is_open(), false};
         it[n++] = (gui_menu_item_t){"Hide Menu Bar", "Ctrl+Shift+M", ACT_VIEW_HIDE_MENU_BAR, TYPE_ITEM, 0, true, ctx->hide_menu_bar, false};
@@ -363,6 +368,8 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
         it[n++] = (gui_menu_item_t){"Cycle Profile (Next Preset)", "Ctrl+Shift+G", ACT_TOOLS_CYCLE_ARROW_MODE, TYPE_ITEM, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Manage Keyboard Profiles...", NULL, ACT_TOOLS_KEYMAP_MANAGE, TYPE_ITEM, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
+        it[n++] = (gui_menu_item_t){"Double-Tap for SHIFT", NULL, ACT_TOOLS_TOGGLE_DOUBLE_TAP, TYPE_ITEM, 0, false, ctx->double_tap_enabled, false};
         it[n++] = (gui_menu_item_t){"-", NULL, ACT_NONE, TYPE_SEPARATOR, 0, false, false, false};
         it[n++] = (gui_menu_item_t){"Keyboard Reference", "Ctrl+K", ACT_VIEW_KEYBOARD_REF, TYPE_ITEM, 0, false, ctx->show_keyref, false};
         top[3].item_count = n;
@@ -433,6 +440,15 @@ static int build_top_menus(linux_menu_context_t *ctx, const plato_profile_t *p, 
 static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, int sub_id, gui_menu_item_t *items) {
     int n = 0;
     switch (sub_id) {
+        case SUB_VIEW_SCALE: {
+            int cur_s = (ctx->current_scale >= 1 && ctx->current_scale <= 4) ? ctx->current_scale :
+                        ((p && p->window_scale >= 1 && p->window_scale <= 4) ? p->window_scale : 2);
+            items[n++] = (gui_menu_item_t){"1x (512 x 512)", NULL, ACT_VIEW_SCALE_1X, TYPE_ITEM, 0, true, cur_s == 1, false};
+            items[n++] = (gui_menu_item_t){"2x (1024 x 1024)", NULL, ACT_VIEW_SCALE_2X, TYPE_ITEM, 0, true, cur_s == 2, false};
+            items[n++] = (gui_menu_item_t){"3x (1536 x 1536)", NULL, ACT_VIEW_SCALE_3X, TYPE_ITEM, 0, true, cur_s == 3, false};
+            items[n++] = (gui_menu_item_t){"4x (2048 x 2048)", NULL, ACT_VIEW_SCALE_4X, TYPE_ITEM, 0, true, cur_s == 4, false};
+            break;
+        }
         case SUB_CONN_SAME_WIN:
         case SUB_CONN_NEW_WIN: {
             bool is_new = (sub_id == SUB_CONN_NEW_WIN);
@@ -527,7 +543,13 @@ static int build_submenu(linux_menu_context_t *ctx, const plato_profile_t *p, in
             items[n++] = (gui_menu_item_t){"Clean Crisp Hires", NULL, ACT_VIEW_C64_PRESET_CRISP, TYPE_ITEM, 0, true, p->c64_preset == 2, false};
             break;
         }
-        case SUB_VIEW_C64_SCHEME: {
+            case SUB_VIEW_C64_BORDER: {
+        items[n++] = (gui_menu_item_t){"Disabled (Full Display)", NULL, ACT_VIEW_C64_BORDER_OFF, TYPE_ITEM, 0, true, p->c64_border == 0, false};
+        items[n++] = (gui_menu_item_t){"Enabled (Static 12.5% Frame)", NULL, ACT_VIEW_C64_BORDER_ON, TYPE_ITEM, 0, true, p->c64_border == 1, false};
+        items[n++] = (gui_menu_item_t){"Turbo Loader Border FX", NULL, ACT_VIEW_C64_BORDER_FX, TYPE_ITEM, 0, true, p->c64_border == 2, false};
+        break;
+    }
+    case SUB_VIEW_C64_SCHEME: {
             items[n++] = (gui_menu_item_t){"Classic Blue (Two-Tone Default)", NULL, ACT_VIEW_C64_SCHEME_CLASSIC, TYPE_ITEM, 0, true, p->c64_color_scheme == 0, false};
             items[n++] = (gui_menu_item_t){"C64 Multi-Color (16-Color VIC-II)", NULL, ACT_VIEW_C64_SCHEME_MC, TYPE_ITEM, 0, true, p->c64_color_scheme == 1, false};
             items[n++] = (gui_menu_item_t){"Calibrated Amber Monitor (P40)", NULL, ACT_VIEW_C64_SCHEME_AMBER, TYPE_ITEM, 0, true, p->c64_color_scheme == 2, false};
@@ -628,11 +650,14 @@ menu_action_code_t linux_menu_handle_mouse(linux_menu_context_t *ctx, const plat
 
         /* Controllo se siamo nel sottomenu secondario */
         if (ctx->active_sub_menu > 0 && ctx->hover_main_item >= 0) {
+            int sub_w = SUB_POPUP_WIDTH;
             int sub_x = px + pw - 4;
+            if (ctx->ui_width > 0 && (sub_x + sub_w) > (ctx->ui_width - 6)) {
+                sub_x = px - sub_w + 4;
+            }
             int sub_y = py + ctx->hover_main_item * ITEM_HEIGHT;
             gui_menu_item_t sub_items[16];
             int sub_count = build_submenu(ctx, cur_p, ctx->active_sub_menu, sub_items);
-            int sub_w = SUB_POPUP_WIDTH;
             int sub_h = sub_count * ITEM_HEIGHT;
 
             /* Auto-flip verso l'alto se sfora in basso */
@@ -696,7 +721,7 @@ menu_action_code_t linux_menu_handle_mouse(linux_menu_context_t *ctx, const plat
 }
 
 void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t *p, const struct plato_terminal *term, int win_w, int win_h) {
-    int max_h = (win_h > 768) ? 768 : win_h;
+    int max_h = win_h;
 
     size_t req_size = (size_t)win_w * max_h;
     if (ctx->ui_width != win_w || ctx->ui_height != max_h || !ctx->ui_surface) {
@@ -779,11 +804,14 @@ void linux_menu_update_surface(linux_menu_context_t *ctx, const plato_profile_t 
 
         /* 4. Disegno Sottomenu Nidificato */
         if (ctx->active_sub_menu > 0 && ctx->hover_main_item >= 0) {
+            int sub_w = SUB_POPUP_WIDTH;
             int sub_x = px + pw - 4;
+            if ((sub_x + sub_w) > (win_w - 6)) {
+                sub_x = px - sub_w + 4;
+            }
             int sub_y = py + ctx->hover_main_item * ITEM_HEIGHT;
             gui_menu_item_t sub_items[16];
             int sub_count = build_submenu(ctx, p, ctx->active_sub_menu, sub_items);
-            int sub_w = SUB_POPUP_WIDTH;
             int sub_h = sub_count * ITEM_HEIGHT;
 
             /* Auto-flip verso l'alto se sfora in basso */

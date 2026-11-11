@@ -107,6 +107,7 @@ typedef struct {
     HMENU menu;
     int display_mode;
     int distortion;
+    int current_scale;
     bool diag_log;
     bool renderer_log;
     bool paste_cancelled;
@@ -184,6 +185,36 @@ static void win_apply_dark_theme(HWND hwnd) {
     win_refresh_window_theme(hwnd);
 }
 
+static void win_set_client_size(HWND hwnd, int target_w, int target_h) {
+    if (!hwnd || IsIconic(hwnd) || IsZoomed(hwnd)) return;
+    DWORD dwStyle = (DWORD)GetWindowLongPtrW(hwnd, GWL_STYLE);
+    DWORD dwExStyle = (DWORD)GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    BOOL bMenu = (GetMenu(hwnd) != NULL);
+
+    RECT wr = { 0, 0, target_w, target_h };
+    AdjustWindowRectEx(&wr, dwStyle, bMenu, dwExStyle);
+    int win_w = wr.right - wr.left;
+    int win_h = wr.bottom - wr.top;
+
+    SetWindowPos(hwnd, NULL, 0, 0, win_w, win_h,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+    RECT actual_rc;
+    GetClientRect(hwnd, &actual_rc);
+    int actual_w = actual_rc.right - actual_rc.left;
+    int actual_h = actual_rc.bottom - actual_rc.top;
+    int diff_x = target_w - actual_w;
+    int diff_y = target_h - actual_h;
+    if (diff_x != 0 || diff_y != 0) {
+        RECT cur_win;
+        GetWindowRect(hwnd, &cur_win);
+        SetWindowPos(hwnd, NULL, 0, 0,
+                     (cur_win.right - cur_win.left) + diff_x,
+                     (cur_win.bottom - cur_win.top) + diff_y,
+                     SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+}
+
 static void win_toggle_fullscreen(win_app_t *app);
 static void win_connect_profile(const plato_profile_t *p, void *user_data);
 static void win_launch_instance(const char *profile_name);
@@ -215,6 +246,9 @@ void win_update_keyboard_menu(HMENU menu, plato_keyboard_state_t *state) {
     AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_CYCLE_ARROW_MODE, L"Cycle Profile (Next Preset)\tCtrl+Shift+G");
     AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hKeyboard, MF_STRING, IDM_TOOLS_KEYMAP_MANAGE, L"Manage Keyboard Profiles...");
+    AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
+    UINT dt_flags = MF_STRING | (plato_keyboard_get_double_tap(state) ? MF_CHECKED : MF_UNCHECKED);
+    AppendMenuW(hKeyboard, dt_flags, IDM_TOOLS_TOGGLE_DOUBLE_TAP, L"Double-Tap for SHIFT");
     AppendMenuW(hKeyboard, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hKeyboard, MF_STRING, IDM_VIEW_KEYBOARD_REF, L"Keyboard Reference\tCtrl+K");
 }
@@ -512,7 +546,8 @@ static void win_render_hud_overlay(win_app_t *app, double now_sec, bool is_anima
         } else if (mode == 7) {
         const char *presetStr = (app->active_profile.c64_preset == 0) ? "RF COMP" :
                                 (app->active_profile.c64_preset == 1) ? "1702 CRT" : "CRISP";
-        const char *borderStr = app->active_profile.c64_border ? "ENABLED" : "DISABLED";
+        const char *borderStr = (app->active_profile.c64_border == 2) ? "TURBO FX" :
+                                (app->active_profile.c64_border == 1) ? "ENABLED" : "DISABLED";
         const char *palStr = (app->active_profile.c64_color_scheme == 1) ? "VIC-II 16C" :
                              (app->active_profile.c64_color_scheme == 2) ? "AMBER P40" :
                              (app->active_profile.c64_color_scheme == 3) ? "GREEN P31" : "CLASSIC";
@@ -610,6 +645,7 @@ static void win_render_frame(win_app_t *app) {
         app->terminal.delay_requested = false;
         size_t remaining = app->feed_len - app->feed_pos;
         size_t consumed = plato_terminal_feed(&app->terminal, &app->feed_buf[app->feed_pos], remaining);
+        if (consumed > 0) plato_optical_notify_rx(app->optical, consumed);
         app->feed_pos += consumed;
 
         if (app->terminal.delay_requested) {
@@ -794,6 +830,10 @@ static void win_toggle_fullscreen(win_app_t *app) {
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
                      SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
         app->is_fullscreen = false;
+        if (app->current_scale >= 1 && app->current_scale <= 4) {
+            win_set_client_size(app->hwnd, 512 * app->current_scale, 512 * app->current_scale);
+            win_menu_update_scale(app->menu, app->current_scale);
+        }
     }
     plato_profile_t *cur_p = &app->profile_list.profiles[app->current_profile_idx];
     win_menu_update_state(app->menu, cur_p,
@@ -1086,6 +1126,11 @@ static void win_connect_profile(const plato_profile_t *p, void *user_data) {
     }
 
     app->active_profile = *p;
+    if (p->window_scale >= 1 && p->window_scale <= 4) {
+        app->current_scale = p->window_scale;
+        win_set_client_size(app->hwnd, 512 * p->window_scale, 512 * p->window_scale);
+        win_menu_update_scale(app->menu, app->current_scale);
+    }
     app->display_mode = p->display_mode;
     app->distortion = p->plasma_distortion;
     plato_terminal_set_color_mode(&app->terminal, (p->display_mode == 3 || p->display_mode == 4 || p->display_mode == 7));
@@ -1122,8 +1167,11 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
     if (app->script_runner && plato_script_is_running(app->script_runner)) {
         if (ev.ctrl && ev.shift && !ev.alt && (wParam == 'X' || wParam == 'x')) {
             plato_script_stop(app->script_runner);
+            return;
         }
-        return;
+        if (!plato_script_is_keyboard_enabled(app->script_runner)) {
+            return;
+        }
     }
 
     if (app->script_list && app->script_list->count > 0) {
@@ -1201,7 +1249,9 @@ static void win_handle_keydown(win_app_t *app, WPARAM wParam, LPARAM lParam) {
 
 static void win_handle_char(win_app_t *app, WPARAM wParam) {
     if (app->script_runner && plato_script_is_running(app->script_runner)) {
-        return;
+        if (!plato_script_is_keyboard_enabled(app->script_runner)) {
+            return;
+        }
     }
     if (wParam >= 32 && wParam <= 126) {
         plato_key_event_t ev = {0};
@@ -1231,7 +1281,7 @@ static void win_handle_lbuttondown(win_app_t *app, LPARAM lParam) {
         int plato_y = 511 - py;
 
         plato_profile_t *cur_p = &app->profile_list.profiles[app->current_profile_idx];
-        if (app->display_mode == 7) { int cx = plato_x * 4, cy = plato_y * 4; c64_unwarp_touch(&cx, &cy, cur_p->c64_border); plato_x = cx; plato_y = cy; } else { plato_optical_unwarp_touch(&plato_x, &plato_y, app->display_mode, cur_p->plasma_distortion, cur_p->crt_distortion); }
+        if (app->display_mode == 7) { int cx = plato_x * 4, cy = plato_y * 4; c64_unwarp_touch(&cx, &cy, cur_p->c64_border > 0); plato_x = cx; plato_y = cy; } else { plato_optical_unwarp_touch(&plato_x, &plato_y, app->display_mode, cur_p->plasma_distortion, cur_p->crt_distortion); }
 
         if (plato_x < 0) plato_x = 0;
         if (plato_x >= PLATO_WIDTH) plato_x = PLATO_WIDTH - 1;
@@ -1479,6 +1529,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 mi.hbrBack = CreateSolidBrush(PLATO_BG_DARK);
                 SetMenuInfo(hMenu, &mi);
                 win_setup_ownerdraw_menu(hMenu, false);
+                win_menu_update_scale(g_app.menu, g_app.current_scale);
             }
             win_apply_menu_border();
             return 0;
@@ -1580,16 +1631,18 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     }
 
                     if (data->hSubMenu) {
-                        RECT rcArrow = rc;
-                        rcArrow.right -= 10;
-                        COLORREF arrCol = is_dis ? PLATO_PLASMA_DISABLED : (is_sel ? PLATO_PLASMA_BRIGHT : PLATO_PLASMA_COLOR);
-                        SetTextColor(hdc, arrCol);
-                        DrawTextW(hdc, L"\x203A", -1, &rcArrow, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+                    RECT rcArrow = rc;
+                    rcArrow.right -= 10;
+                    COLORREF arrCol = is_dis ? PLATO_PLASMA_DISABLED : (is_sel ? PLATO_PLASMA_BRIGHT : PLATO_PLASMA_COLOR);
+                    SetTextColor(hdc, arrCol);
+                    DrawTextW(hdc, L"\x203A", -1, &rcArrow, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
                     }
 
                     SelectObject(hdc, oldFont);
-                }
-                return TRUE;
+                    }
+                    /* Impedisce a Windows di sovrascrivere l'item disegnando la freccia di sistema nativa */
+                    ExcludeClipRect(hdc, rc.left, rc.top, rc.right, rc.bottom);
+                    return TRUE;
             }
             break;
         }
@@ -1861,8 +1914,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             }
 
             /* Menu C64 Border */
-            if (cmdId == IDM_VIEW_C64_BORDER) {
-                g_app.active_profile.c64_border = !g_app.active_profile.c64_border;
+            if (cmdId >= IDM_VIEW_C64_BORDER_OFF && cmdId <= IDM_VIEW_C64_BORDER_FX) {
+                g_app.active_profile.c64_border = cmdId - IDM_VIEW_C64_BORDER_OFF;
                 plato_optical_invalidate(g_app.optical);
                 g_app.terminal.fb.dirty = true;
                 win_menu_update_state(g_app.menu, &g_app.active_profile, g_app.transport && g_app.transport->connected,
@@ -2023,7 +2076,17 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 case IDM_VIEW_KEYBOARD_REF:
                     win_keyref_show(hwnd);
                     return 0;
-                case IDM_VIEW_FULLSCREEN:
+                case IDM_VIEW_SCALE_1X:
+        case IDM_VIEW_SCALE_2X:
+        case IDM_VIEW_SCALE_3X:
+        case IDM_VIEW_SCALE_4X: {
+            int s = cmdId - IDM_VIEW_SCALE_BASE;
+            g_app.current_scale = s;
+            win_set_client_size(hwnd, 512 * s, 512 * s);
+            win_menu_update_scale(g_app.menu, g_app.current_scale);
+            break;
+        }
+        case IDM_VIEW_FULLSCREEN:
                     win_toggle_fullscreen(&g_app);
                     return 0;
                 case IDM_VIEW_FPS_HUD:
@@ -2037,6 +2100,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                     return 0;
                 case IDM_TOOLS_KEYMAP_MANAGE:
                     win_keymap_show(hwnd, &g_app.keyboard_state, g_app.menu);
+                    return 0;
+
+                case IDM_TOOLS_TOGGLE_DOUBLE_TAP:
+                    plato_keyboard_toggle_double_tap(&g_app.keyboard_state);
+                    win_update_arrow_menu_items(g_app.menu, plato_keyboard_get_arrow_mode(&g_app.keyboard_state));
                     return 0;
 
                 case IDM_TOOLS_CYCLE_ARROW_MODE:
@@ -2292,8 +2360,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.lpszClassName = L"PlatoLivesWinClass";
     RegisterClassExW(&wc);
 
-    RECT wr = { 0, 0, 768, 768 };
-    AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+    int init_scale = (g_app.active_profile.window_scale >= 1 && g_app.active_profile.window_scale <= 4) ? g_app.active_profile.window_scale : 2;
+    g_app.current_scale = init_scale;
+    RECT wr = { 0, 0, 512 * init_scale, 512 * init_scale };
+    AdjustWindowRectEx(&wr, WS_OVERLAPPEDWINDOW, TRUE, 0);
 
     win_apply_dark_theme(NULL);
     g_app.menu = win_menu_create(&g_app.profile_list, g_app.script_list);
