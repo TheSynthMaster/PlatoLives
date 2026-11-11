@@ -2,179 +2,84 @@
 
 ## Latest Changes (v5.7)
 
--   **C64 TurboLoad Effect**: Adds an optional TurboLoad effect to
-    Commodore 64 mode, displaying stripes along the screen border. The
-    effect can be enabled or disabled.
--   **Integer Window Size Presets**: Quickly select predefined window
-    scales from 1× to 4×. The 1× preset corresponds to the native 512 ×
-    512 resolution.
--   **Script Keyboard Control**: Introduces the `keyboard [on/off]`
-    scripting command to enable or disable keyboard input listening
-    while a script is running.
-
-## Previous Changes (v5.6)
-
--   **Commodore 64 (VIC-II) Display Emulation**: Experience PLATO
-    through the warm, nostalgic lens of the iconic Commodore 64,
-    complete with the famous two-tone blue palette, 1702 CRT monitor
-    simulation, and authentic composite RF warmth.
--   **Iconic C64 Border & Color Schemes**: Features the authentic 12.5%
-    VIC-II outer border frame, 16-color Multi-Color graphics, and
-    calibrated P40 Amber and P31 Green phosphor monitor options.
--   **Clean Crisp Hires Mode**: Offers sharp, modern legibility of
-    terminal lessons while preserving authentic 8-bit character shapes.
--   **Global Input System Refactoring**: Resolves keyboard shortcut
-    collisions across macOS, Windows, and Linux, ensuring native PLATO
-    keys (COPY, DATA, EDIT, HELP, etc.) always have absolute precedence.
+- **C64 TurboLoad Effect**: Adds an optional TurboLoad effect to Commodore 64 mode, displaying stripes along the screen border. The effect can be enabled or disabled.
+- **Window Size Presets**: Adds predefined 1×, 2×, 3×, and 4× window-size presets. The 1× preset corresponds to the native 512 × 512 resolution.
+- **Script Keyboard Control**: Adds the `keyboard [on/off]` scripting command to enable or disable keyboard input listening while a script is running.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Windows%20(x86__64%20%26%20ARM64)%20%7C%20Linux%20(ARM64%20%26%20x86__64)-orange.svg)](#)
 [![Language](https://img.shields.io/badge/language-C11%20%7C%20Direct3D%2011%20%7C%20Cocoa%2FMetal%20%7C%20OpenGL%203.3-blue.svg)](#)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-red.svg)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-CDC%20IST--III%20%2F%20CERL%20X--20%20%2F%20CDC%20721%20%2F%20Tektronix%204014%20%2F%20DEC%20PDP--1-brightgreen.svg)](#)
 
-::: {align="center"}
-```{=html}
+<div align="center">
 <table width="80%">
-```
-```{=html}
-<tr>
-```
-```{=html}
-<td colspan="2" align="center">
-```
-`<img src="https://github.com/user-attachments/assets/8b8e7e8c-1219-4be6-82f9-b20b1591509c" alt="PlatoLives Banner" width="100%">`{=html}
-```{=html}
-</td>
-```
-```{=html}
-</tr>
-```
-```{=html}
-<tr>
-```
-```{=html}
-<td width="50%">
-```
-`<img src="https://github.com/user-attachments/assets/bb3890bf-e8cd-4251-bcef-6e796084fd9c" alt="Tektronix 4014" width="100%">`{=html}
-```{=html}
-</td>
-```
-```{=html}
-<td width="50%">
-```
-`<img src="https://github.com/user-attachments/assets/8b501627-32f3-41a7-82fd-c2298d36a3dc" alt="DEC PDP-1" width="100%">`{=html}
-```{=html}
-</td>
-```
-```{=html}
-</tr>
-```
-```{=html}
+  <tr>
+    <td colspan="2" align="center">
+      <img src="https://github.com/user-attachments/assets/8b8e7e8c-1219-4be6-82f9-b20b1591509c" alt="PlatoLives Banner" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="https://github.com/user-attachments/assets/bb3890bf-e8cd-4251-bcef-6e796084fd9c" alt="Tektronix 4014" width="100%">
+    </td>
+    <td width="50%">
+      <img src="https://github.com/user-attachments/assets/8b501627-32f3-41a7-82fd-c2298d36a3dc" alt="DEC PDP-1" width="100%">
+    </td>
+  </tr>
 </table>
-```
-:::
+</div>
 
-**PlatoLives** is a modern native client for **PLATO**, the legendary
-computer-based education and social system that originated at the
-University of Illinois.
+**PlatoLives** is a modern native client for **PLATO**, the legendary computer-based education and social system that originated at the University of Illinois.
 
-It connects to PLATO systems such as **Cyber1/CYBIS** and
-**IRATA.ONLINE**, while preserving something often lost in modern PLATO
-clients: the tactile, optical, and physical feeling of sitting in front
-of real vintage terminal hardware.
+It connects to PLATO systems such as **Cyber1/CYBIS** and **IRATA.ONLINE**, while preserving something often lost in modern PLATO clients: the tactile, optical, and physical feeling of sitting in front of real vintage terminal hardware.
 
-The display can be rendered as an authentic **orange gas-plasma
-display**, a **color CRT**, a **Tektronix 4014 Direct View Bistable
-Storage Tube (DVBST)**, a **DEC PDP-1 Type 30 Precision CRT Display**,
-or a **Commodore 64 (VIC-II)**. Each mode models the physical properties
-of the original hardware---cell illumination, electron beam flare,
-cascade phosphors, dielectric storage charge, scanlines, and subtle
-glass curvature. The result is not simply a terminal window displaying
-PLATO graphics, but an authentic reproduction of the computing hardware
-that originally displayed them.
+The display can be rendered as an authentic **orange gas-plasma display**, a **color CRT**, a **Tektronix 4014 Direct View Bistable Storage Tube (DVBST)**, a **DEC PDP-1 Type 30 Precision CRT Display**, or a **Commodore 64 (VIC-II)**. Each mode models the physical properties of the original hardware—cell illumination, electron beam flare, cascade phosphors, dielectric storage charge, scanlines, and subtle glass curvature. The result is not simply a terminal window displaying PLATO graphics, but an authentic reproduction of the computing hardware that originally displayed them.
 
-At the same time, PlatoLives is a modern client. It supports copy and
-paste, scripting, automation, SSH/headless operation, modern Unicode
-text, customizable keyboard profiles, and native cross-platform
-execution on macOS, Windows (x86_64 & ARM64), and Linux.
+At the same time, PlatoLives is a modern client. It supports copy and paste, scripting, automation, SSH/headless operation, modern Unicode text, customizable keyboard profiles, and native cross-platform execution on macOS, Windows (x86_64 & ARM64), and Linux.
 
-In addition, PlatoLives includes **local MicroTutor emulation**,
-allowing it to execute standalone MicroTutor floppy disk images locally
-without connecting to a host, returning cleanly to an online PLATO
-session when finished.
+In addition, PlatoLives includes **local MicroTutor emulation**, allowing it to execute standalone MicroTutor floppy disk images locally without connecting to a host, returning cleanly to an online PLATO session when finished.
 
-📖 **Documentation:** [User and Technical Manual
-(PDF)](docs/PlatoLives_5.0.0_User_and_Technical_Manual.pdf)
+📖 **Documentation:** [User and Technical Manual (PDF)](docs/PlatoLives_5.0.0_User_and_Technical_Manual.pdf)
 
-------------------------------------------------------------------------
+---
 
 # What's new in v5.7
 
-Version 5.7 builds on the Commodore 64 display mode and adds more
-control over window sizing and script keyboard input.
+Version 5.7 adds a new C64 display effect, predefined window-size presets, and control over keyboard input during script execution.
 
--   **C64 TurboLoad Effect**: An optional loading-style effect draws
-    stripes along the border in Commodore 64 mode. It can be switched on
-    or off.
--   **Integer Window Scaling**: New 1×, 2×, 3×, and 4× window-size
-    presets provide predictable integer scaling. The 1× preset is 512 ×
-    512 pixels.
--   **Keyboard Listening During Scripts**: The new `keyboard [on/off]`
-    script command controls whether keyboard input is listened to while
-    the script executes. Use `keyboard off` to suspend keyboard
-    listening and `keyboard on` to re-enable it.
+- **C64 TurboLoad Effect**: An optional loading-style effect draws stripes along the screen border in Commodore 64 mode. It can be switched on or off.
+- **Window Size Presets**: Select predefined window scales of 1×, 2×, 3×, or 4×. The 1× preset corresponds to 512 × 512 pixels.
+- **Keyboard Listening During Scripts**: The `keyboard [on/off]` script command controls whether keyboard input is listened to while a script executes. Use `keyboard off` to suspend keyboard listening and `keyboard on` to re-enable it.
 
-------------------------------------------------------------------------
+---
 
 # What's new in v5.6
 
-Version 5.6 introduces emulation of the **Commodore 64 (VIC-II)**,
-recreating the feeling of using PLATO on the world's most iconic 8-bit
-home computer.
+Version 5.6 introduces emulation of the **Commodore 64 (VIC-II)**, recreating the feeling of using PLATO on the world's most iconic 8-bit home computer.
 
--   **The Authentic 8-bit Experience**: Sit in front of a warm Commodore
-    1702 CRT monitor or switch to the soft, nostalgic analog bloom of an
-    authentic RF composite TV connection.
--   **Classic Two-Tone Blue & Color Palettes**: Switch effortlessly
-    between the beloved two-tone blue boot screen palette, rich 16-color
-    VIC-II graphics, or monochrome amber/green phosphor monitors.
--   **Signature 12.5% Border Frame**: Displays the classic Commodore 64
-    border, complete with touch coordinate compensation, with the option
-    to disable the border for an edge-to-edge view.
--   **Clean Crisp Hires**: A specialized high-contrast mode for crisp
-    readability during long reading and coding sessions.
--   **Input System Refactoring**: Complete overhaul of shortcut handling
-    and keymapper recording across Windows, macOS, and Linux.
+- **The Authentic 8-bit Experience**: Sit in front of a warm Commodore 1702 CRT monitor or switch to the soft, nostalgic analog bloom of an authentic RF composite TV connection.
+- **Classic Two-Tone Blue & Color Palettes**: Switch effortlessly between the beloved two-tone blue boot screen palette, rich 16-color VIC-II graphics, or monochrome amber/green phosphor monitors.
+- **Signature 12.5% Border Frame**: Displays the classic Commodore 64 border, complete with touch coordinate compensation, with the option to disable the border for an edge-to-edge view.
+- **Clean Crisp Hires**: A specialized high-contrast mode for crisp readability during long reading and coding sessions.
+- **Input System Refactoring**: Complete overhaul of shortcut handling and keymapper recording across Windows, macOS, and Linux.
 
-------------------------------------------------------------------------
+---
 
 # What's new in v5.5 (Historic)
 
-Version 5.5 introduces emulation of the **DEC PDP-1 Type 30 Precision
-CRT Display**, adding a point-plotting display model alongside the
-existing terminal display options.
+Version 5.5 introduces emulation of the **DEC PDP-1 Type 30 Precision CRT Display**, adding a point-plotting display model alongside the existing terminal display options.
 
--   **PDP-1 Display Engine**: Models point plotting using a 1024×1024
-    native coordinate space, supersampled to a 2048×2048 optical canvas,
-    with sub-pixel beam placement.
--   **P7 Phosphor Simulation**: Reproduces the blue/cyan prompt flash
-    and its transition into a longer-lasting golden-amber glow.
--   **Historic Character Generators**: Includes the 1961 MIT Codeword
-    font and the 1964 DEC Type 33 character generator.
--   **Display Controls**: Configurable refresh rates (60, 45, 30, 15,
-    10, and 5 Hz), plus Historic (15s), Historic Fast Decay (5s), and
-    Modern (2s) response presets.
+- **PDP-1 Display Engine**: Models point plotting using a 1024×1024 native coordinate space, supersampled to a 2048×2048 optical canvas, with sub-pixel beam placement.
+- **P7 Phosphor Simulation**: Reproduces the blue/cyan prompt flash and its transition into a longer-lasting golden-amber glow.
+- **Historic Character Generators**: Includes the 1961 MIT Codeword font and the 1964 DEC Type 33 character generator.
+- **Display Controls**: Configurable refresh rates (60, 45, 30, 15, 10, and 5 Hz), plus Historic (15s), Historic Fast Decay (5s), and Modern (2s) response presets.
 
-------------------------------------------------------------------------
+---
 
 # Authentic DEC PDP-1 Type 30 CRT Display Emulation
 
-The defining milestone of PlatoLives 5.5 is the physical emulation of
-the **DEC PDP-1 Type 30 Precision Display**, the display on which
-computer graphics history and the first video game (*Spacewar!*, 1962)
-were born.
-
-``` text
+The defining milestone of PlatoLives 5.5 is the physical emulation of the **DEC PDP-1 Type 30 Precision Display**, the display on which computer graphics history and the first video game (*Spacewar!*, 1962) were born.
+```text
 +-------------------------------------------------------------------------+
 | DEC PDP-1 TYPE 30 PHYSICAL PIPELINE |
 | |
@@ -208,272 +113,183 @@ Code
 
 ### Point-Plotting Precision CRT Architecture
 
-Unlike raster displays that sweep an electron beam line by line across a
-phosphor grid, the DEC Type 30 was a **point-plotting vector display**.
-The computer addressed points individually using two 10-bit
-digital-to-analog converters, projecting an electron beam onto a
-circular 16-inch cathode ray tube.
+Unlike raster displays that sweep an electron beam line by line across a phosphor grid, the DEC Type 30 was a **point-plotting vector display**. The computer addressed points individually using two 10-bit digital-to-analog converters, projecting an electron beam onto a circular 16-inch cathode ray tube.
 
-PlatoLives faithfully models this architecture: - **Decoupled
-Framebuffers**: The terminal maintains an internal $512 \times 512$
-PLATO logic coordinate system alongside an independent
-$1024 \times 1024$ PDP-1 physical landing buffer (`fb_pdp`), preventing
-ghosting and coordinate aliasing. - **$2\times$ Optical Supersampling**:
-To capture the microscopic optical blooming of individual CRT points,
-the rendering pipeline rasterizes into a continuous $2048 \times 2048$
-high-resolution canvas before presenting to the GPU backbuffer. -
-**Point Spread Function (PSF) Bloom**: Beam intensity follows a Gaussian
-point spread profile. The *Historic* preset utilizes
-$\sigma = 1.100\text{f}$ for authentic CRT beam dispersion, while the
-*Modern* preset offers $\sigma = 0.450\text{f}$ for ultra-sharp dot
-isolation.
+PlatoLives faithfully models this architecture:
+- **Decoupled Framebuffers**: The terminal maintains an internal $512 \times 512$ PLATO logic coordinate system alongside an independent $1024 \times 1024$ PDP-1 physical landing buffer (`fb_pdp`), preventing ghosting and coordinate aliasing.
+- **$2\times$ Optical Supersampling**: To capture the microscopic optical blooming of individual CRT points, the rendering pipeline rasterizes into a continuous $2048 \times 2048$ high-resolution canvas before presenting to the GPU backbuffer.
+- **Point Spread Function (PSF) Bloom**: Beam intensity follows a Gaussian point spread profile. The *Historic* preset utilizes $\sigma = 1.100\text{f}$ for authentic CRT beam dispersion, while the *Modern* preset offers $\sigma = 0.450\text{f}$ for ultra-sharp dot isolation.
 
 ### Physical P7 Cascade Phosphor & Chromatic Shift
 
-The PDP-1 Type 30 utilized a **P7 cascade phosphor**, originally
-designed for radar displays during World War II: 1. **Prompt Excitation
-Layer ($\text{ZnS:Ag}$)**: When hit by the electron beam, the base layer
-instantly emits an intense, short-lived blue/cyan flash
-($\tau = 350\text{ ms}$). 2. **Persistent Phosphorescent Layer
-($\text{ZnS:Cu}$)**: This prompt light excites a second phosphor layer
-that emits a long-lasting yellow-green/golden-amber glow, persisting for
-several seconds.
+The PDP-1 Type 30 utilized a **P7 cascade phosphor**, originally designed for radar displays during World War II:
+1. **Prompt Excitation Layer ($\text{ZnS:Ag}$)**: When hit by the electron beam, the base layer instantly emits an intense, short-lived blue/cyan flash ($\tau = 350\text{ ms}$).
+2. **Persistent Phosphorescent Layer ($\text{ZnS:Cu}$)**: This prompt light excites a second phosphor layer that emits a long-lasting yellow-green/golden-amber glow, persisting for several seconds.
 
-PlatoLives simulates both layers independently, reproducing the
-distinctive historical chromatic shift: plotted points ignite with a
-bright cyan-blue flare, transitioning smoothly into a warm golden-amber
-trail as they decay.
+PlatoLives simulates both layers independently, reproducing the distinctive historical chromatic shift: plotted points ignite with a bright cyan-blue flare, transitioning smoothly into a warm golden-amber trail as they decay.
 
 ### Hardware Font Generators: 1961 Codeword vs 1964 Type 33
 
-PlatoLives includes two distinct historical font implementations: -
-**1961 Codeword (Spacewar!)**: The original 5x7 stroke font crafted by
-Steve Russell, Martin Graetz, and Wayne Wiitanen at MIT. - **1964
-Character Generator (Type 33)**: The hardware-driven character generator
-option introduced for production DEC PDP-1 terminals.
+PlatoLives includes two distinct historical font implementations:
+- **1961 Codeword (Spacewar!)**: The original 5x7 stroke font crafted by Steve Russell, Martin Graetz, and Wayne Wiitanen at MIT.
+- **1964 Character Generator (Type 33)**: The hardware-driven character generator option introduced for production DEC PDP-1 terminals.
 
 ### Configurable Refresh & Presets
 
--   **Dynamic Refresh Pacing**: 60 Hz, 45 Hz (historical default), 30
-    Hz, 15 Hz, 10 Hz, and 5 Hz.
--   **Presets**:
-    -   `Historic (15s)`: Full 15-second natural P7 persistence and wide
-        beam bloom.
-    -   `Historic Fast Decay (5s)`: Balanced persistence for high-speed
-        terminal interaction.
-    -   `Modern (2s)`: Sharp, separated points with rapid settling.
+- **Dynamic Refresh Pacing**: 60 Hz, 45 Hz (historical default), 30 Hz, 15 Hz, 10 Hz, and 5 Hz.
+- **Presets**:
+  - `Historic (15s)`: Full 15-second natural P7 persistence and wide beam bloom.
+  - `Historic Fast Decay (5s)`: Balanced persistence for high-speed terminal interaction.
+  - `Modern (2s)`: Sharp, separated points with rapid settling.
 
-------------------------------------------------------------------------
+---
 
 # What makes PlatoLives different?
 
-There are plenty of ways to connect to PLATO. PlatoLives is intended for
-people who want something closer to **using a physical PLATO terminal**,
-rather than simply accessing a PLATO server.
+There are plenty of ways to connect to PLATO. PlatoLives is intended for people who want something closer to **using a physical PLATO terminal**, rather than simply accessing a PLATO server.
 
 ### Five Authentic Hardware Display Models
 
-1.  **Real Plasma**: Recreates the iconic orange gas-plasma panels
-    developed for PLATO IV at the University of Illinois, simulating
-    micro-cell ionization, neon glow, and bistable discharge.
-2.  **Real Color CRT**: Recreates the CDC color terminals, featuring RGB
-    phosphors, electron beam blooming, scanline structures, and
-    configurable CRT profiles.
-3.  **Real Tektronix 4014 (DVBST)**: Vector storage-tube experience with
-    progressive line tracing, P31 phosphors, slow electron background
-    noise, and full-screen flash erase.
-4.  **Real DEC PDP-1 Type 30 (1964)**: Precision point-plotting CRT
-    display featuring P7 cascade phosphors, chromatic decay shift, and
-    historic MIT font generators.
-5.  **Real Commodore 64 (VIC-II)**: Brings the world's most beloved
-    8-bit computer to PLATO. Features the classic two-tone blue scheme,
-    16-color VIC-II palettes, warm Commodore 1702 CRT scanlines,
-    composite RF bloom, and the iconic 12.5% border frame.
+1. **Real Plasma**: Recreates the iconic orange gas-plasma panels developed for PLATO IV at the University of Illinois, simulating micro-cell ionization, neon glow, and bistable discharge.
+2. **Real Color CRT**: Recreates the CDC color terminals, featuring RGB phosphors, electron beam blooming, scanline structures, and configurable CRT profiles.
+3. **Real Tektronix 4014 (DVBST)**: Vector storage-tube experience with progressive line tracing, P31 phosphors, slow electron background noise, and full-screen flash erase.
+4. **Real DEC PDP-1 Type 30 (1964)**: Precision point-plotting CRT display featuring P7 cascade phosphors, chromatic decay shift, and historic MIT font generators.
+5. **Real Commodore 64 (VIC-II)**: Brings the world's most beloved 8-bit computer to PLATO. Features the classic two-tone blue scheme, 16-color VIC-II palettes, warm Commodore 1702 CRT scanlines, composite RF bloom, and the iconic 12.5% border frame.
 
-Each mode supports glass curvature simulation, optical touch
-compensation, and phosphor overrides (P31 Green, P40 Amber, P4 White).
+Each mode supports glass curvature simulation, optical touch compensation, and phosphor overrides (P31 Green, P40 Amber, P4 White).
 
 ### Modern hardware, native applications
 
 PlatoLives is a native application rather than a web wrapper:
 
--   **macOS 13+**, native Cocoa application running on Apple Silicon and
-    Intel Macs (Metal / Core Animation)
--   **Windows 10/11**, native Win32 application for **x86_64** and
-    **ARM64** (Direct3D 11)
--   **Linux ARM64 & x86_64 Desktop GUI** (OpenGL 3.3 Core Profile +
-    SDL2 + vector TrueType typography)
--   **Linux Standalone Console CLI** (Static, zero-dependency ANSI
-    TrueColor binaries for Raspberry Pi, NAS, and remote servers)
+- **macOS 13+**, native Cocoa application running on Apple Silicon and Intel Macs (Metal / Core Animation)
+- **Windows 10/11**, native Win32 application for **x86_64** and **ARM64** (Direct3D 11)
+- **Linux ARM64 & x86_64 Desktop GUI** (OpenGL 3.3 Core Profile + SDL2 + vector TrueType typography)
+- **Linux Standalone Console CLI** (Static, zero-dependency ANSI TrueColor binaries for Raspberry Pi, NAS, and remote servers)
 
 ### Keyboard Profiles & Double-Tap Emulation
 
-PlatoLives ships with five built-in keyboard profiles and full custom
-remapping:
+PlatoLives ships with five built-in keyboard profiles and full custom remapping:
 
--   **Standard PLATO** --- the canonical PLATO keyboard layout.
--   **WASD Gaming** --- directional navigation with action shortcuts.
--   **WASX Avatar** --- layout tailored for Avatar and early dungeon
-    crawlers.
--   **WADX** --- classic PLATO/TUTOR directional matrix (W=Up, A=Left,
-    D=Right, X=Down).
--   **Numpad Roguelike** --- eight-way directional movement using keys
-    1--9, plus 13 configurable game actions for *Avatar*, *Oubliette*,
-    *dnd*, and *Moria*.
+- **Standard PLATO** — the canonical PLATO keyboard layout.
+- **WASD Gaming** — directional navigation with action shortcuts.
+- **WASX Avatar** — layout tailored for Avatar and early dungeon crawlers.
+- **WADX** — classic PLATO/TUTOR directional matrix (W=Up, A=Left, D=Right, X=Down).
+- **Numpad Roguelike** — eight-way directional movement using keys 1–9, plus 13 configurable game actions for *Avatar*, *Oubliette*, *dnd*, and *Moria*.
 
-When dedicated PLATO keys are unavailable, the double-tap input system
-provides immediate access: - double Return → **SHIFT-NEXT** - double F4
-→ **SHIFT-STOP** - double F8 → **SHIFT-BACK** - double F1 →
-**SHIFT-HELP** - double F2 → **SHIFT-LAB** - double F3 →
-**SHIFT-DATA** - double F5 → **SHIFT-EDIT**
+When dedicated PLATO keys are unavailable, the double-tap input system provides immediate access:
+- double Return → **SHIFT-NEXT**
+- double F4 → **SHIFT-STOP**
+- double F8 → **SHIFT-BACK**
+- double F1 → **SHIFT-HELP**
+- double F2 → **SHIFT-LAB**
+- double F3 → **SHIFT-DATA**
+- double F5 → **SHIFT-EDIT**
 
-------------------------------------------------------------------------
+---
 
 # Local MicroTutor
 
-PlatoLives includes support for running **MicroTutor floppy images
-locally**.
+PlatoLives includes support for running **MicroTutor floppy images locally**.
 
-MicroTutor was one of the premier educational environments built for
-PLATO, distributed as standalone floppy disk images containing the
-interpreter and lesson data.
+MicroTutor was one of the premier educational environments built for PLATO, distributed as standalone floppy disk images containing the interpreter and lesson data.
 
-PlatoLives can load supported `.mte` floppy images and execute them
-locally, without requiring a network connection to Cyber1 or another
-host:
+PlatoLives can load supported `.mte` floppy images and execute them locally, without requiring a network connection to Cyber1 or another host:
 
--   load a local MicroTutor floppy image
--   start the lesson directly from the application
--   interact using the authentic PLATO display and keyboard
--   run lessons completely offline
--   return to a normal online PLATO session cleanly
+- load a local MicroTutor floppy image
+- start the lesson directly from the application
+- interact using the authentic PLATO display and keyboard
+- run lessons completely offline
+- return to a normal online PLATO session cleanly
 
-The environment includes emulation of the original Z80 processor and
-floppy controller environment required by the interpreter. MicroTutor is
-automatically bypassed when operating in Tektronix 4014 or DEC PDP-1
-mode, matching historical hardware limits.
+The environment includes emulation of the original Z80 processor and floppy controller environment required by the interpreter. MicroTutor is automatically bypassed when operating in Tektronix 4014 or DEC PDP-1 mode, matching historical hardware limits.
 
-------------------------------------------------------------------------
+---
 
 # Automation, Scripting & Recovery
 
 PlatoLives features a built-in state-aware scripting system.
 
-PLATO sessions often involve repetitive sequences: logging in, waiting
-for prompts, navigating menus, or recovering from connection drops.
+PLATO sessions often involve repetitive sequences: logging in, waiting for prompts, navigating menus, or recovering from connection drops.
 
 ### Network Automation Commands
 
--   `disconnect`: Gracefully closes active network transports, resets
-    the protocol decoder, and clears the terminal.
--   `reconnect`: Atomically reconnects to the active host and port,
-    providing immediate self-healing recovery if a session
-    desynchronizes.
--   `connect <profile_name>`: Connects to a named connection profile
-    from the Profile Manager.
--   `connect standard`: Connects directly to the primary default server
-    (Cyber1).
--   `connect last`: Reconnects to the most recently active session
-    endpoint.
+- `disconnect`: Gracefully closes active network transports, resets the protocol decoder, and clears the terminal.
+- `reconnect`: Atomically reconnects to the active host and port, providing immediate self-healing recovery if a session desynchronizes.
+- `connect <profile_name>`: Connects to a named connection profile from the Profile Manager.
+- `connect standard`: Connects directly to the primary default server (Cyber1).
+- `connect last`: Reconnects to the most recently active session endpoint.
 
-The standard auto-login script (`PLATO_DEFAULT_AUTOLOGIN_SCRIPT`)
-utilizes `reconnect` in its `@reset` recovery branch, ensuring
-deterministic recovery without manual intervention.
+### Keyboard Listening Control
 
-------------------------------------------------------------------------
+- `keyboard off`: Disables keyboard input listening while a script is running.
+- `keyboard on`: Re-enables keyboard input listening while a script is running.
+
+The standard auto-login script (`PLATO_DEFAULT_AUTOLOGIN_SCRIPT`) utilizes `reconnect` in its `@reset` recovery branch, ensuring deterministic recovery without manual intervention.
+
+---
 
 # Connection Management & Diagnostics
 
-Connecting to remote PLATO systems is handled through an asynchronous,
-non-blocking architecture: - **Immediate Cancellation**: During
-connection attempts, pressing `ESC` or clicking `[ Cancel ]` aborts
-socket operations immediately without freezing the user interface. -
-**Detailed Error Diagnostics**: In the event of network failure
-(unreachable host, refused connection, timeout), the connection dialog
-reports the specific cause of error. - **Instant Retry**: Pressing
-`Enter` or clicking `[ Retry ]` initiates an immediate reconnection
-attempt. - **Theme-Synchronized Interface**: Connection windows are
-rendered natively (GDI double-buffering on Windows, Cocoa on macOS, SDL2
-vector text on Linux) and dynamically inherit the active terminal
-phosphor palette.
+Connecting to remote PLATO systems is handled through an asynchronous, non-blocking architecture:
+- **Immediate Cancellation**: During connection attempts, pressing `ESC` or clicking `[ Cancel ]` aborts socket operations immediately without freezing the user interface.
+- **Detailed Error Diagnostics**: In the event of network failure (unreachable host, refused connection, timeout), the connection dialog reports the specific cause of error.
+- **Instant Retry**: Pressing `Enter` or clicking `[ Retry ]` initiates an immediate reconnection attempt.
+- **Theme-Synchronized Interface**: Connection windows are rendered natively (GDI double-buffering on Windows, Cocoa on macOS, SDL2 vector text on Linux) and dynamically inherit the active terminal phosphor palette.
 
-------------------------------------------------------------------------
+---
 
 # Menus and Navigation
 
 Unified menu structure across macOS, Windows, and Linux:
 
--   **Connection**: Connect, Switch Profile, New Window, Reconnect,
-    Disconnect, Profiles Manager, Close Window, Quit
--   **Keyboard**: Standard PLATO, WASD Gaming, WASX Avatar, WADX, Numpad
-    Roguelike, Manage Keyboard Profiles..., Keyboard Reference (`Cmd+K`
-    / `Ctrl+K`)
--   **Scripts**: Run, Manage Scripts, Scripting Reference
--   **View**:
-    -   Real Plasma, Crisp Mono, Split Mono, Crisp Color, Real CRT
-    -   Real Tektronix 4014 (DVBST), Tektronix Connection Speed, Erase
-        Flash, Accurate Background
-    -   Real DEC PDP-1 Type 30 (1964), PDP-1 Font Generator, PDP-1
-        Refresh Rate, PDP-1 Display Mode
-    -   Full Screen (`F11`), Show Performance HUD (`F12`), Hide Menu Bar
-        (`Ctrl+Shift+M`), Override Color
--   **Edit**: Copy Text, Copy Screen, Paste Text, Cancel Paste
--   **Micro Tutor**: Load and Boot from MTE..., Stop MicroTutor, Z80
-    Diagnostics
--   **Window (macOS)**: Tab management and window controls
--   **Tools**: Diagnostic and Protocol Logging
--   **Help**: Keyboard Reference, About PlatoLives
+- **Connection**: Connect, Switch Profile, New Window, Reconnect, Disconnect, Profiles Manager, Close Window, Quit
+- **Keyboard**: Standard PLATO, WASD Gaming, WASX Avatar, WADX, Numpad Roguelike, Manage Keyboard Profiles..., Keyboard Reference (`Cmd+K` / `Ctrl+K`)
+- **Scripts**: Run, Manage Scripts, Scripting Reference
+- **View**:
+  - Real Plasma, Crisp Mono, Split Mono, Crisp Color, Real CRT
+  - Real Tektronix 4014 (DVBST), Tektronix Connection Speed, Erase Flash, Accurate Background
+  - Real DEC PDP-1 Type 30 (1964), PDP-1 Font Generator, PDP-1 Refresh Rate, PDP-1 Display Mode
+  - Full Screen (`F11`), Show Performance HUD (`F12`), Hide Menu Bar (`Ctrl+Shift+M`), Override Color
+- **Edit**: Copy Text, Copy Screen, Paste Text, Cancel Paste
+- **Micro Tutor**: Load and Boot from MTE..., Stop MicroTutor, Z80 Diagnostics
+- **Window (macOS)**: Tab management and window controls
+- **Tools**: Diagnostic and Protocol Logging
+- **Help**: Keyboard Reference, About PlatoLives
 
-------------------------------------------------------------------------
+---
 
 # Supported Systems
 
-  -----------------------------------------------------------------------
-  Platform                Interface               Rendering Engine
-  ----------------------- ----------------------- -----------------------
-  **macOS 13+**           Cocoa Native Desktop    Metal / Core Animation
+| Platform | Interface | Rendering Engine |
+| :--- | :--- | :--- |
+| **macOS 13+** | Cocoa Native Desktop | Metal / Core Animation |
+| **Windows 10/11 (x86_64)** | Win32 Native Desktop | Direct3D 11 |
+| **Windows 10/11 (ARM64)** | Win32 Native Desktop | Direct3D 11 (Native AArch64) |
+| **Linux ARM64 & x86_64** | Native Desktop GUI | OpenGL 3.3 Core + SDL2 |
+| **Linux Console (ARM64 & x86_64)** | ANSI TrueColor CLI | Headless / Terminal (Static musl) |
+| **Cyber1 / CYBIS** | Supported | Full IST-III, Color, Tektronix & PDP-1 Protocols |
+| **IRATA.ONLINE** | Supported | Standard ASCII / PLATO |
+| **MicroTutor Floppy Images** | Local Emulation | Integrated Z80 CPU & Disk Controller |
 
-  **Windows 10/11         Win32 Native Desktop    Direct3D 11
-  (x86_64)**                                      
-
-  **Windows 10/11         Win32 Native Desktop    Direct3D 11 (Native
-  (ARM64)**                                       AArch64)
-
-  **Linux ARM64 &         Native Desktop GUI      OpenGL 3.3 Core + SDL2
-  x86_64**                                        
-
-  **Linux Console (ARM64  ANSI TrueColor CLI      Headless / Terminal
-  & x86_64)**                                     (Static musl)
-
-  **Cyber1 / CYBIS**      Supported               Full IST-III, Color,
-                                                  Tektronix & PDP-1
-                                                  Protocols
-
-  **IRATA.ONLINE**        Supported               Standard ASCII / PLATO
-
-  **MicroTutor Floppy     Local Emulation         Integrated Z80 CPU &
-  Images**                                        Disk Controller
-  -----------------------------------------------------------------------
-
-------------------------------------------------------------------------
+---
 
 # Building
 
-PlatoLives can be built natively on macOS or cross-compiled for all
-supported platforms using Zig.
+PlatoLives can be built natively on macOS or cross-compiled for all supported platforms using Zig.
 
 ### Build all platforms
 
 With Zig installed:
 
-``` bash
+```bash
 brew install zig
 ./build_all.sh
 ```
 
 Build artifacts are output to `build/`:
 
-``` text
+```text
 PlatoLives.app
 PlatoLives-windows-x86_64.exe
 PlatoLives-windows-arm64.exe
@@ -488,7 +304,7 @@ build/linux_desktop_install/
 
 Requirements: macOS 13+, Xcode Command Line Tools, CMake 3.16+.
 
-``` bash
+```bash
 git clone git@github.com:TheSynthMaster/PlatoLives.git
 cd PlatoLives
 mkdir build
@@ -498,70 +314,33 @@ make -j$(sysctl -n hw.ncpu)
 ctest --output-on-failure
 ```
 
-------------------------------------------------------------------------
+---
 
 # Technical Details
 
-  -----------------------------------------------------------------------
-  Component                           Details
-  ----------------------------------- -----------------------------------
-  Core                                Portable C11
+| Component | Details |
+| :--- | :--- |
+| Core | Portable C11 |
+| Display Modes | Real Gas-Plasma, Color CRT, Real Tektronix 4014 (DVBST), DEC PDP-1 Type 30 (1964), Commodore 64 (VIC-II) |
+| Logical Display | 512 × 512 PLATO vector and text grid |
+| Window Size Presets | 1×, 2×, 3×, and 4× (1× = 512 × 512 pixels) |
+| C64 TurboLoad Effect | Optional border-stripe effect in Commodore 64 mode |
+| PDP-1 Optical Canvas | 1024 × 1024 native point space, supersampled to a 2048 × 2048 canvas |
+| PDP-1 Phosphor Model | P7 cascade: ZnS:Ag prompt flash (τ = 350 ms) and ZnS:Cu yellow-amber phosphorescence |
+| Vector Engine | Lock-free 8192-slot ring buffer with hardware bit-credit pacer |
+| DVBST Physics | Dual-layer dielectric charge (`tek_stored`) and writing-beam flare (`tek_flare`) |
+| Text Matrix | 64 × 32 character matrix with downloadable font recognition |
+| macOS Rendering | Cocoa / Core Animation / Metal |
+| Windows Rendering | Win32 / Direct3D 11 (Native x86_64 and ARM64) |
+| Linux Rendering | OpenGL 3.3 Core / SDL2 / stb_truetype |
+| Input Engine | 5 built-in layouts (Standard, WASD, WASX, WADX, Numpad), custom remapping |
+| Networking | Non-blocking BSD/WinSock2 TCP with immediate cancel and auto-retry |
+| Automation | State-aware scripting interpreter with network session control and `keyboard [on/off]` input-listening control |
+| MicroTutor | Pure C11 Z80 CPU and floppy controller emulation |
+| Versioning | Single source of truth via root `VERSION` file |
 
-  Display Modes                       Real Gas-Plasma, Color CRT, Real
-                                      Tektronix 4014 (DVBST), DEC PDP-1
-                                      Type 30 (1964), Commodore 64
-                                      (VIC-II)
-
-  Logical Display                     512 × 512 PLATO vector and text
-                                      grid
-
-  PDP-1 Optical Canvas                1024 × 1024 native point space,
-                                      supersampled to a 2048 × 2048
-                                      canvas
-
-  PDP-1 Phosphor Model                P7 cascade: ZnS:Ag prompt flash (τ
-                                      = 350 ms) and ZnS:Cu yellow-amber
-                                      phosphorescence
-
-  Vector Engine                       Lock-free 8192-slot ring buffer
-                                      with hardware bit-credit pacer
-
-  DVBST Physics                       Dual-layer dielectric charge
-                                      (`tek_stored`) and writing-beam
-                                      flare (`tek_flare`)
-
-  Text Matrix                         64 × 32 character matrix with
-                                      downloadable font recognition
-
-  macOS Rendering                     Cocoa / Core Animation / Metal
-
-  Windows Rendering                   Win32 / Direct3D 11 (Native x86_64
-                                      and ARM64)
-
-  Linux Rendering                     OpenGL 3.3 Core / SDL2 /
-                                      stb_truetype
-
-  Input Engine                        5 built-in layouts (Standard, WASD,
-                                      WASX, WADX, Numpad), custom
-                                      remapping
-
-  Networking                          Non-blocking BSD/WinSock2 TCP with
-                                      immediate cancel and auto-retry
-
-  Automation                          State-aware scripting interpreter
-                                      with network session control and
-                                      keyboard listening control
-                                      (`keyboard [on/off]`)
-
-  MicroTutor                          Pure C11 Z80 CPU and floppy
-                                      controller emulation
-
-  Versioning                          Single source of truth via root
-                                      `VERSION` file
-  -----------------------------------------------------------------------
 
 # License
 
-PlatoLives is released under the Creative Commons
-Attribution-NonCommercial-ShareAlike 4.0 International license. See
-LICENSE for the complete license text.
+PlatoLives is released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license.
+See LICENSE for the complete license text.
